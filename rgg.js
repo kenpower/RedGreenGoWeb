@@ -1,7 +1,7 @@
 var states = [
-    { name: "Red", class: "red", next: 1, description:"Write the simplest test you can think of that will fail" },
-    { name: "Green", class: "green", next: 2 , description:"Write just enough code to make the failing test pass" },
-    { name: "Refactor", class: "refactor", next: 0,  description:"Clean up the code you've just written" }
+    { name: "Red", ping_pong_swap:false, class: "red", next: 1, description:"Write the simplest test you can think of that will fail" },
+    { name: "Green", ping_pong_swap:true, class: "green", next: 2 , description:"Write just enough code to make the failing test pass" },
+    { name: "Refactor", ping_pong_swap:false, class: "refactor", next: 0,  description:"Clean up the code you've just written" }
   ];
 
 var players = ["John", "Jane"];
@@ -10,16 +10,28 @@ var curState = states[0];
 var curDriver = 0;
 var curNavigator = 1;
 var stepNumber = 1;
-  
-  function nextStep() {
-    addStep(curState, stepNumber, players[curDriver], players[curNavigator]);
-    curState=states[curState.next];
+
+function startGame(){
+    nextStep();
+    //todo: disable start button
+}
+function swapPairRoles() {
     curDriver++;
     curNavigator++;
     curDriver %= 2;
     curNavigator %= 2;
+    alert("Swapped roles");
+}
+
+function nextStep() {
+    if(curState.ping_pong_swap){
+        swapPairRoles()
+    }
+    addStep(curState, stepNumber, players[curDriver], players[curNavigator]);
+    curState=states[curState.next];
+
     stepNumber++;
-  }
+}
   
   function addStep(state, stepNumber, driverName, navigatorName) {
     // create a new div element
@@ -27,12 +39,14 @@ var stepNumber = 1;
     newStep.classList.add(state.class);
     newStep.classList.add("step");
   
-    // and give it some content
-    const newContent = document.createTextNode(state.name);
+    const newStepBody = document.createElement("div");
+    newStepBody.classList.add("stepBody");
  
     const stepP = document.createElement("p");
     stepP.appendChild(document.createTextNode("Step:" + stepNumber));
     stepP.appendChild(document.createTextNode(" "+state.name));
+    stepP.classList.add("title");
+ 
  
     const descP = document.createElement("p");
     descP.appendChild(document.createTextNode(state.description));
@@ -45,11 +59,13 @@ var stepNumber = 1;
     doneBtn.innerHTML = "Done " + "step " + stepNumber;
     doneBtn.onclick = nextStep;
     // add the text node to the newly created div
-    newStep.appendChild(stepP);
-    newStep.appendChild(descP);
-    newStep.appendChild(roleP);
-    newStep.appendChild(doneBtn);
     
+    newStepBody.appendChild(descP);
+    newStepBody.appendChild(roleP);
+    newStepBody.appendChild(doneBtn);
+    
+    newStep.appendChild(stepP);
+    newStep.appendChild(newStepBody);
     document.body.appendChild(newStep);
   
   }

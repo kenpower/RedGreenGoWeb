@@ -1,21 +1,59 @@
+body {
+  font-family: Tahoma, Geneva, sans-serif;
+}
 section.step{
-  padding: 5px;
-  color: gray;
+  color: lightgray;
   width: 100%;
+  border-radius: 5px;
+  border-width: 2px;
+  border-style: solid;
+}
+
+section.step p{
+  margin: 2;
+}
+
+section.step > .stepBody{
+  padding: 5px;
+  display: none;
 }
 
 section.step:last-of-type{
-  color: black;
-  font-weight: bold;
+color: black;
+
+margin-top: 8px;
 }
-.red {
-    background-color: #FFAAAA;
+
+section.step:last-of-type > .stepBody{
+  display:block;
+}
+
+.step .title{
+  font-weight: bold;
+  padding : 4px;
+  margin: 0;
+}
+section.red .title {
+    background-color: #FC9999;
   }
 
-.green {
-    background-color: lightgreen;
+section.green .title {
+    background-color: #99FC99;
   }
 
-.refactor {
-    background-color: yellowgreen;
+section.refactor .title{
+    background-color: #9999FC;
   } 
+
+section.red{
+  border-color: red;
+}
+
+section.green{
+  border-color:green;
+}
+
+section.refactor{
+  border-color:blue;
+}
+
