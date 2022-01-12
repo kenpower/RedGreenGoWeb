@@ -1,0 +1,21 @@
+section.step{
+  padding: 5px;
+  color: gray;
+  width: 100%;
+}
+
+section.step:last-of-type{
+  color: black;
+  font-weight: bold;
+}
+.red {
+    background-color: #FFAAAA;
+  }
+
+.green {
+    background-color: lightgreen;
+  }
+
+.refactor {
+    background-color: yellowgreen;
+  } 
