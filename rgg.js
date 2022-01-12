@@ -16,22 +16,6 @@ function startGame(){
     nextStep();
     document.getElementById("startBtn").disabled = true;
 }
-function swapPairRoles() {
-    curDriver++;
-    curNavigator++;
-    curDriver %= 2;
-    curNavigator %= 2;
-    const swapEl = document.createElement("section");
-    swapEl.classList.add("swap");
-    swapEl.classList.add("step");
-    swapEl.appendChild(document.createTextNode(curState.description));
-    swapBtn = document.createElement("button") ;
-    swapBtn.innerHTML = "OK";
-    swapBtn.onclick = nextStep;
-    swapEl.appendChild(swapBtn);
-    document.body.appendChild(swapEl);
-}
-
 
 function nextStep() {
     if(curState.name=="Swap") {
@@ -42,45 +26,64 @@ function nextStep() {
         stepNumber++;
     }
     curState=states[curState.next];
+    
+}
 
+function swapPairRoles() {
+    curDriver++;
+    curNavigator++;
+    curDriver %= 2;
+    curNavigator %= 2;
+    const newStep=buildStepElement(
+        "Swap pair programming roles",
+        players[curDriver] + " is now the driver and " + players[curNavigator] + " is the navigator",
+        "OK",
+        nextStep,
+        [curState.class, "step", "swap"]
+    );
+
+    document.body.appendChild(newStep);
 }
   
   function addStep(state, stepNumber, driverName, navigatorName) {
-    // create a new div element
+    const newStep=buildStepElement(
+        "Step:" + stepNumber + " " +state.name,
+        (state.description + "    ("+ driverName + " is driving" 
+        + "," + navigatorName + " is navigating)"),
+        "OK",
+        nextStep,
+        [state.class, "step"]
+    );
+
+
+    document.body.appendChild(newStep);
+  }
+
+  const buildStepElement = (title, bodyText, buttonText, buttonAction, classes) => {
+
     const newStep = document.createElement("section");
-    newStep.classList.add(state.class);
-    newStep.classList.add("step");
-  
+    classes.forEach(c => {
+        newStep.classList.add(c);
+    });
+
     const newStepBody = document.createElement("div");
     newStepBody.classList.add("stepBody");
  
     const stepP = document.createElement("p");
-    stepP.appendChild(document.createTextNode("Step:" + stepNumber));
-    stepP.appendChild(document.createTextNode(" "+state.name));
+    stepP.appendChild(document.createTextNode(title));
     stepP.classList.add("title");
  
- 
     const descP = document.createElement("p");
-    descP.appendChild(document.createTextNode(state.description));
- 
-
-    const roleP = document.createElement("p");
-    roleP.appendChild(document.createTextNode("Driver is : "+driverName+",      Navigator is : "+navigatorName));
+    descP.appendChild(document.createTextNode(bodyText));
   
     doneBtn = document.createElement("button") ;
-    doneBtn.innerHTML = "Done " + "step " + stepNumber;
-    doneBtn.onclick = nextStep;
-    // add the text node to the newly created div
+    doneBtn.innerHTML = buttonText;
+    doneBtn.onclick = buttonAction;
     
     newStepBody.appendChild(descP);
-    newStepBody.appendChild(roleP);
     newStepBody.appendChild(doneBtn);
     
     newStep.appendChild(stepP);
     newStep.appendChild(newStepBody);
-    document.body.appendChild(newStep);
-  
-  }
-
-  const buildStepElement = (title, bodyText, buttonText, buttonAction, classes) => {
+    return newStep;
   }
