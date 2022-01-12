@@ -18,7 +18,7 @@ section.step > .stepBody{
   display: none;
 }
 
-section.step:last-of-type{
+.step:last-of-type{
 color: black;
 
 margin-top: 8px;

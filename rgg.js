@@ -1,8 +1,9 @@
 var states = [
-    { name: "Red", ping_pong_swap:false, class: "red", next: 1, description:"Write the simplest test you can think of that will fail" },
-    { name: "Green", ping_pong_swap:true, class: "green", next: 2 , description:"Write just enough code to make the failing test pass" },
-    { name: "Refactor", ping_pong_swap:false, class: "refactor", next: 0,  description:"Clean up the code you've just written" }
-  ];
+    { name: "Red",  class: "red", next: 1, description:"Write the simplest test you can think of that will fail" },
+    { name: "Swap", class: "swap", next: 2, description:"Swap the roles of driver and navigator" },
+    { name: "Green",  class: "green", next: 3 , description:"Write just enough code to make the failing test pass" },
+    { name: "Refactor",  class: "refactor", next: 0,  description:"Clean up the code you've just written" },
+];
 
 var players = ["John", "Jane"];
   
@@ -13,24 +14,35 @@ var stepNumber = 1;
 
 function startGame(){
     nextStep();
-    //todo: disable start button
+    document.getElementById("startBtn").disabled = true;
 }
 function swapPairRoles() {
     curDriver++;
     curNavigator++;
     curDriver %= 2;
     curNavigator %= 2;
-    alert("Swapped roles");
+    const swapEl = document.createElement("section");
+    swapEl.classList.add("swap");
+    swapEl.classList.add("step");
+    swapEl.appendChild(document.createTextNode(curState.description));
+    swapBtn = document.createElement("button") ;
+    swapBtn.innerHTML = "OK";
+    swapBtn.onclick = nextStep;
+    swapEl.appendChild(swapBtn);
+    document.body.appendChild(swapEl);
 }
 
+
 function nextStep() {
-    if(curState.ping_pong_swap){
-        swapPairRoles()
+    if(curState.name=="Swap") {
+        swapPairRoles();
     }
-    addStep(curState, stepNumber, players[curDriver], players[curNavigator]);
+    else{
+        addStep(curState, stepNumber, players[curDriver], players[curNavigator]);
+        stepNumber++;
+    }
     curState=states[curState.next];
 
-    stepNumber++;
 }
   
   function addStep(state, stepNumber, driverName, navigatorName) {
@@ -68,4 +80,7 @@ function nextStep() {
     newStep.appendChild(newStepBody);
     document.body.appendChild(newStep);
   
+  }
+
+  const buildStepElement = (title, bodyText, buttonText, buttonAction, classes) => {
   }

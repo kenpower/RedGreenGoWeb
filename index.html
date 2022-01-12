@@ -1,16 +1,17 @@
 <html>
     <script src="rgg.js"></script>
     <link rel="stylesheet" href="style.css">
-    <title>Red-Green-Go!</title>
+    <title>Red-Green-Go! </title>
     <body>
         <h1>Red-Green-Go!</h1>
+        <h2>A game of TDD & Pairing</h2>    
         <section>
-        <form action="javascript:nextStep()">
+        <form action="javascript:startGame()">
             <label for="fname">Player 1 name:</label>
             <input type="text" id="fname" name="fname" value="John"><br>
             <label for="lname">Player 2 name:</label>
             <input type="text" id="lname" name="lname" value="Jane"><br>
-            <input name="Submit" type="submit" value="Start" />
+            <input id="startBtn" name="Submit" type="submit" value="Start" />
           </form>
         </section>
     </body>
