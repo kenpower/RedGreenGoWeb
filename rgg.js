@@ -11,13 +11,27 @@ var curState = states[0];
 var curDriver = 0;
 var curNavigator = 1;
 var stepNumber = 1;
+var iterationCounter = 1;
+var iterationEl;
+var curStep;
 
 function startGame(){
-    nextStep();
     document.getElementById("startBtn").disabled = true;
+    document.getElementById("startBtn").style.display = "none";
+    nextStep();
+
 }
 
 function nextStep() {
+    if(curStep){
+        iterationEl.removeChild(iterationEl.lastChild);
+        addStepToIteration(curStep);
+    }
+    if(curState.name=="Red") {
+        iterationEl = buildIterationElement();
+        iterationCounter++;
+        document.body.appendChild(iterationEl);
+    }
     if(curState.name=="Swap") {
         swapPairRoles();
     }
@@ -42,26 +56,27 @@ function swapPairRoles() {
         [curState.class, "step", "swap"]
     );
 
-    document.body.appendChild(newStep);
+    curStep=newStep;
+    iterationEl.appendChild(newStep);
 }
   
   function addStep(state, stepNumber, driverName, navigatorName) {
     const newStep=buildStepElement(
         "Step:" + stepNumber + " " +state.name,
         (state.description + "    ("+ driverName + " is driving" 
-        + "," + navigatorName + " is navigating)"),
+        + ", " + navigatorName + " is navigating)"),
         "OK",
         nextStep,
         [state.class, "step"]
     );
 
-
-    document.body.appendChild(newStep);
+    curStep=newStep;
+    iterationEl.appendChild(newStep);
   }
 
   const buildStepElement = (title, bodyText, buttonText, buttonAction, classes) => {
 
-    const newStep = document.createElement("section");
+    const newStep = document.createElement("div");
     classes.forEach(c => {
         newStep.classList.add(c);
     });
@@ -87,3 +102,23 @@ function swapPairRoles() {
     newStep.appendChild(newStepBody);
     return newStep;
   }
+
+  const buildIterationElement = () => {
+    const iteration = document.createElement("div");
+    iteration.classList.add("iteration");
+    const stepP = document.createElement("p");
+    stepP.appendChild(document.createTextNode("Iteration: "+ iterationCounter));
+    stepP.classList.add("title");
+    const container = document.createElement("div");
+    container.classList.add("container");
+    container.id = "container";
+ 
+    iteration.appendChild(stepP);
+    iteration.appendChild(container);
+    return iteration;
+  }
+
+  const addStepToIteration = (step)=>{
+      iterationEl.children.namedItem("container").appendChild(step);
+  }
+

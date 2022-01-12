@@ -1,30 +1,33 @@
 body {
   font-family: Tahoma, Geneva, sans-serif;
 }
-section.step{
+.step{
   color: lightgray;
   width: 100%;
   border-radius: 5px;
   border-width: 2px;
   border-style: solid;
+  max-width: 25%;
 }
 
-section.step p{
+.step p{
   margin: 2;
 }
 
-section.step > .stepBody{
+
+.container .step .stepBody{
   padding: 5px;
   display: none;
+
 }
 
-.step:last-of-type{
+.iteration > .step{
 color: black;
-
+max-width: 100%;
 margin-top: 8px;
 }
 
-section.step:last-of-type > .stepBody{
+iteration > .step > .stepBody{
   display:block;
 }
 
@@ -33,27 +36,39 @@ section.step:last-of-type > .stepBody{
   padding : 4px;
   margin: 0;
 }
-section.red .title {
+.red .title {
     background-color: #FC9999;
   }
 
-section.green .title {
+.green .title {
     background-color: #99FC99;
   }
 
-section.refactor .title{
+.refactor .title{
     background-color: #9999FC;
   } 
 
-section.red{
+.red{
   border-color: red;
 }
 
-section.green{
+.green{
   border-color:green;
 }
 
-section.refactor{
+.refactor{
   border-color:blue;
+}
+
+.iteration{
+  border-color: black;
+  border-radius: 5px;
+  border-width: 2px;
+  border-style: solid;
+  background-color: white;
+  padding: 8px;
+}
+.iteration #container{
+  display: flex;
 }
 
