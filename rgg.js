@@ -1,8 +1,8 @@
 var states = [
-    { name: "Red",  class: "red", next: 1, description:"Write the simplest test you can think of that will fail" },
-    { name: "Swap", class: "swap", next: 2, description:"Swap the roles of driver and navigator" },
-    { name: "Green",  class: "green", next: 3 , description:"Write just enough code to make the failing test pass" },
-    { name: "Refactor",  class: "refactor", next: 0,  description:"Clean up the code you've just written" },
+    { name: "Red",  class: "red", next: 1, description:"Write the simplest test you can think of that will fail" , buttonText: "Done: There is ONE failing (red) test"},
+    { name: "Swap", class: "swap", next: 2, description:"Swap the roles of driver and navigator", buttonText: "Done: All the test are now passing (green)" },
+    { name: "Green",  class: "green", next: 3 , description:"Write just enough code to make the failing test pass",  },
+    { name: "Refactor",  class: "refactor", next: 0,  description:"Clean up the code you've just written" ,buttonText: "Done: The code is better and all tests are still passing!"},
 ];
 
 var players = ["John", "Jane"];
@@ -51,7 +51,7 @@ function swapPairRoles() {
     const newStep=buildStepElement(
         "Swap pair programming roles",
         players[curDriver] + " is now the driver and " + players[curNavigator] + " is the navigator",
-        "OK",
+        "Done:" + players[curDriver] + " has the keyboard",
         nextStep,
         [curState.class, "step", "swap"]
     );
@@ -65,7 +65,7 @@ function swapPairRoles() {
         "Step:" + stepNumber + " " +state.name,
         (state.description + "    ("+ driverName + " is driving" 
         + ", " + navigatorName + " is navigating)"),
-        "OK",
+        state.buttonText,
         nextStep,
         [state.class, "step"]
     );
