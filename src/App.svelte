@@ -1,10 +1,12 @@
 <script>
-	export let name;
+	import Game from "./components/Game.svelte";
+	//export let name;
+
 </script>
 
+<title>Red Green Go!</title>
 <main>
-	<h1>Hello {name}!</h1>
-	<p>Visit the <a href="https://svelte.dev/tutorial">Svelte tutorial</a> to learn how to build Svelte apps.</p>
+	<Game/>
 </main>
 
 <style>
