@@ -91,21 +91,6 @@ function swapPairRoles() {
 
   }
 
-//   const buildIterationElement = () => {
-//     const iteration = document.createElement("div");
-//     iteration.classList.add("iteration");
-//     const stepP = document.createElement("p");
-//     stepP.appendChild(document.createTextNode("Iteration: "+ iterationCounter));
-//     stepP.classList.add("title");
-//     const container = document.createElement("div");
-//     container.classList.add("container");
-//     container.id = "container";
- 
-//     iteration.appendChild(stepP);
-//     iteration.appendChild(container);
-//     return iteration;
-//   }
-
   const addStepToIteration = (step)=>{
       //iterationEl.children.namedItem("container").appendChild(step);
   }
@@ -134,80 +119,4 @@ function swapPairRoles() {
 </div>
 
 <style>
-body {
-    font-family: Tahoma, Geneva, sans-serif;
-  }
-  
-  
-  .step{
-    color: lightgray;
-    width: 100%;
-    border-radius: 5px;
-    border-width: 2px;
-    border-style: solid;
-    max-width: 25%;
-  }
-  
-  .step p{
-    margin: 2;
-  }
-  
-  
-  .container .step .stepBody{
-    padding: 5px;
-    display: none;
-  
-  }
-  
-  .iteration > .step{
-  color: black;
-  max-width: 100%;
-  margin-top: 8px;
-  }
-  
-  iteration > .step > .stepBody{
-    display:block;
-  }
-  
-  .step .title{
-    font-weight: bold;
-    padding : 4px;
-    margin: 0;
-  }
-  .red .title {
-      background-color: #FC9999;
-    }
-  
-  .green .title {
-      background-color: #99FC99;
-    }
-  
-  .refactor .title{
-      background-color: #9999FC;
-    } 
-  
-  .red{
-    border-color: red;
-  }
-  
-  .green{
-    border-color:green;
-  }
-  
-  .refactor{
-    border-color:blue;
-  }
-  
-  .iteration{
-    border-color: black;
-    border-radius: 5px;
-    border-width: 2px;
-    border-style: solid;
-    background-color: white;
-    padding: 8px;
-  }
-  .iteration #container{
-    display: flex;
-  }
-
 </style>

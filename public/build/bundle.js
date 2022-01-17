@@ -27,6 +27,9 @@ var app = (function () {
     function is_empty(obj) {
         return Object.keys(obj).length === 0;
     }
+    function null_to_empty(value) {
+        return value == null ? '' : value;
+    }
     function append(target, node) {
         target.appendChild(node);
     }
@@ -419,6 +422,7 @@ var app = (function () {
     	let p1;
     	let t3;
     	let button;
+    	let div1_class_value;
     	let mounted;
     	let dispose;
 
@@ -434,13 +438,14 @@ var app = (function () {
     			t3 = space();
     			button = element("button");
     			button.textContent = `${/*buttonText*/ ctx[3]}`;
-    			attr_dev(p0, "class", "title");
+    			attr_dev(p0, "class", "title svelte-1ppxaxr");
     			add_location(p0, file$3, 12, 4, 262);
+    			attr_dev(p1, "class", "svelte-1ppxaxr");
     			add_location(p1, file$3, 15, 8, 337);
     			add_location(button, file$3, 16, 8, 364);
-    			attr_dev(div0, "class", "stepBody");
+    			attr_dev(div0, "class", "stepBody svelte-1ppxaxr");
     			add_location(div0, file$3, 14, 4, 304);
-    			attr_dev(div1, "class", /*classesStr*/ ctx[0]);
+    			attr_dev(div1, "class", div1_class_value = "" + (null_to_empty(/*classesStr*/ ctx[0]) + " svelte-1ppxaxr"));
     			add_location(div1, file$3, 11, 0, 230);
     		},
     		l: function claim(nodes) {
@@ -461,8 +466,8 @@ var app = (function () {
     			}
     		},
     		p: function update(ctx, [dirty]) {
-    			if (dirty & /*classesStr*/ 1) {
-    				attr_dev(div1, "class", /*classesStr*/ ctx[0]);
+    			if (dirty & /*classesStr*/ 1 && div1_class_value !== (div1_class_value = "" + (null_to_empty(/*classesStr*/ ctx[0]) + " svelte-1ppxaxr"))) {
+    				attr_dev(div1, "class", div1_class_value);
     			}
     		},
     		i: noop,
@@ -576,10 +581,10 @@ var app = (function () {
     			div0 = element("div");
     			attr_dev(p, "class", "title");
     			add_location(p, file$2, 5, 4, 85);
-    			attr_dev(div0, "class", "container");
+    			attr_dev(div0, "class", "container svelte-ibrt7i");
     			attr_dev(div0, "id", "container");
     			add_location(div0, file$2, 8, 4, 157);
-    			attr_dev(div1, "class", "iteration");
+    			attr_dev(div1, "class", "iteration svelte-ibrt7i");
     			add_location(div1, file$2, 4, 0, 56);
     		},
     		l: function claim(nodes) {
@@ -685,7 +690,7 @@ var app = (function () {
     	return child_ctx;
     }
 
-    // (127:0) {#each iterations as i}
+    // (112:0) {#each iterations as i}
     function create_each_block_1(ctx) {
     	let iteration;
     	let current;
@@ -726,14 +731,14 @@ var app = (function () {
     		block,
     		id: create_each_block_1.name,
     		type: "each",
-    		source: "(127:0) {#each iterations as i}",
+    		source: "(112:0) {#each iterations as i}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (131:0) {#each steps as step}
+    // (116:0) {#each steps as step}
     function create_each_block(ctx) {
     	let step;
     	let current;
@@ -774,7 +779,7 @@ var app = (function () {
     		block,
     		id: create_each_block.name,
     		type: "each",
-    		source: "(131:0) {#each steps as step}",
+    		source: "(116:0) {#each steps as step}",
     		ctx
     	});
 
@@ -865,32 +870,32 @@ var app = (function () {
     				each_blocks[i].c();
     			}
 
-    			add_location(h1, file$1, 114, 0, 3614);
-    			add_location(h2, file$1, 115, 0, 3638);
+    			add_location(h1, file$1, 99, 0, 3035);
+    			add_location(h2, file$1, 100, 0, 3059);
     			attr_dev(label0, "for", "fname");
-    			add_location(label0, file$1, 118, 4, 3700);
+    			add_location(label0, file$1, 103, 4, 3121);
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "id", "fname");
     			attr_dev(input0, "name", "fname");
     			input0.value = "John";
-    			add_location(input0, file$1, 119, 4, 3747);
-    			add_location(br0, file$1, 119, 60, 3803);
+    			add_location(input0, file$1, 104, 4, 3168);
+    			add_location(br0, file$1, 104, 60, 3224);
     			attr_dev(label1, "for", "lname");
-    			add_location(label1, file$1, 120, 4, 3813);
+    			add_location(label1, file$1, 105, 4, 3234);
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "id", "lname");
     			attr_dev(input1, "name", "lname");
     			input1.value = "Jane";
-    			add_location(input1, file$1, 121, 4, 3860);
-    			add_location(br1, file$1, 121, 60, 3916);
+    			add_location(input1, file$1, 106, 4, 3281);
+    			add_location(br1, file$1, 106, 60, 3337);
     			attr_dev(input2, "id", "startBtn");
     			attr_dev(input2, "name", "Submit");
     			attr_dev(input2, "type", "submit");
     			input2.value = "Start";
-    			add_location(input2, file$1, 122, 4, 3926);
-    			add_location(form, file$1, 117, 0, 3687);
-    			add_location(section, file$1, 116, 0, 3676);
-    			add_location(div, file$1, 125, 0, 4038);
+    			add_location(input2, file$1, 107, 4, 3347);
+    			add_location(form, file$1, 102, 0, 3108);
+    			add_location(section, file$1, 101, 0, 3097);
+    			add_location(div, file$1, 110, 0, 3459);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -1145,19 +1150,6 @@ var app = (function () {
     		$$invalidate(0, steps);
     	};
 
-    	//   const buildIterationElement = () => {
-    	//     const iteration = document.createElement("div");
-    	//     iteration.classList.add("iteration");
-    	//     const stepP = document.createElement("p");
-    	//     stepP.appendChild(document.createTextNode("Iteration: "+ iterationCounter));
-    	//     stepP.classList.add("title");
-    	//     const container = document.createElement("div");
-    	//     container.classList.add("container");
-    	//     container.id = "container";
-    	//     iteration.appendChild(stepP);
-    	//     iteration.appendChild(container);
-    	//     return iteration;
-    	//   }
     	const addStepToIteration = step => {
     		
     	}; //iterationEl.children.namedItem("container").appendChild(step);
@@ -1243,9 +1235,9 @@ var app = (function () {
     			t1 = space();
     			main = element("main");
     			create_component(game.$$.fragment);
-    			add_location(title, file, 6, 0, 87);
+    			add_location(title, file, 6, 0, 93);
     			attr_dev(main, "class", "svelte-1tky8bj");
-    			add_location(main, file, 7, 0, 116);
+    			add_location(main, file, 7, 0, 123);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");

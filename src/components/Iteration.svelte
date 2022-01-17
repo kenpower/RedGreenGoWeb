@@ -10,15 +10,19 @@
 
     </div>
 </div>
-<!-- const iteration = document.createElement("div");
-iteration.classList.add("iteration"); -->
-<!-- const stepP = document.createElement("p");
-stepP.appendChild(document.createTextNode("Iteration: "+ iterationCounter));
-stepP.classList.add("title"); -->
-<!-- const container = document.createElement("div");
-container.classList.add("container");
-container.id = "container"; -->
 
-<!-- iteration.appendChild(stepP);
-iteration.appendChild(container);
-return iteration; -->
+<style>
+.iteration{
+  border-color: black;
+  border-radius: 5px;
+  border-width: 2px;
+  border-style: solid;
+  background-color: white;
+  padding: 8px;
+}
+.iteration #container{
+  display: flex;
+}
+
+
+</style>

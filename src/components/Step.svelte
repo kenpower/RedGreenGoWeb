@@ -17,29 +17,65 @@
         <button on:click={buttonAction}>{buttonText}</button>
     </div>
 </div>
-    <!-- const newStep = document.createElement("div");
-    classes.forEach(c => {
-        newStep.classList.add(c);
-    }); -->
 
-    <!-- const newStepBody = document.createElement("div");
-    newStepBody.classList.add("stepBody"); -->
- 
-    <!-- const stepP = document.createElement("p");
-    stepP.appendChild(document.createTextNode(title));
-    stepP.classList.add("title"); -->
- 
-    <!-- const descP = document.createElement("p");
-    descP.appendChild(document.createTextNode(bodyText)); -->
-  
-    <!-- doneBtn = document.createElement("button") ;
-    doneBtn.innerHTML = buttonText;
-    doneBtn.onclick = buttonAction; -->
-    
-    <!-- newStepBody.appendChild(descP);
-    newStepBody.appendChild(doneBtn); -->
-    
-    <!-- newStep.appendChild(stepP);
-    newStep.appendChild(newStepBody);
-    return newStep;
-  } -->
+<style>
+
+.step{
+  color: lightgray;
+  width: 100%;
+  border-radius: 5px;
+  border-width: 2px;
+  border-style: solid;
+  max-width: 25%;
+}
+
+.step p{
+  margin: 2;
+}
+
+
+.container .step .stepBody{
+  padding: 5px;
+  display: none;
+
+}
+
+
+.step .title{
+  font-weight: bold;
+  padding : 4px;
+  margin: 0;
+}
+.red .title {
+    background-color: #FC9999;
+  }
+
+.green .title {
+    background-color: #99FC99;
+  }
+
+.refactor .title{
+    background-color: #9999FC;
+  } 
+
+.red{
+  border-color: red;
+}
+
+.green{
+  border-color:green;
+}
+
+.refactor{
+  border-color:blue;
+}
+
+.iteration{
+  border-color: black;
+  border-radius: 5px;
+  border-width: 2px;
+  border-style: solid;
+  background-color: white;
+  padding: 8px;
+}
+</style>
