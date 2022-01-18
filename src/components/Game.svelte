@@ -1,7 +1,7 @@
 <script>
 import  Step  from './Step.svelte';
 import  Iteration  from './Iteration.svelte';
-import  Temp  from './Temp.svelte';
+import { SvelteComponentTyped } from 'svelte/internal';
 
 //export const iterations = writable([]);
 
@@ -40,7 +40,9 @@ function nextStep() {
     }
 
     if(curState.name=="Red") {
-        if(curIteration) curIteration.phase=4;
+        if(curIteration){
+           curIteration.phase=4;
+        }
         curIteration =  {phase:1, index:iterationCounter}
         iterations=[...iterations, curIteration]
         iterationCounter++;
@@ -54,6 +56,7 @@ function nextStep() {
     }
     if(curState.name=="Refactor") {
         curIteration.phase = 3
+       
     }
 
     if(curState.name=="Swap") {

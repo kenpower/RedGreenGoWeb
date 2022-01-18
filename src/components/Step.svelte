@@ -1,12 +1,14 @@
 
 <script>
-    import refactorCards from "../content/refactorCards.json";
+    import HintCard from "./HintCard.svelte";
+    import { tick } from 'svelte';
     export let step;
+    let showHint = false;
 
-    console.log(cards)
-
-    const showCard= () =>{
-
+    async function showCard(){
+        showHint = true;
+        await tick()
+        showHint = false
     }
 </script>
 
@@ -16,7 +18,9 @@
     <div class ="stepBody">
         <p>{step.bodyText}</p>
         <button on:click={step.buttonAction}>{step.buttonText}</button>
+        <button on:click={showCard}>Hint</button>
     </div>
+    <HintCard {showHint}/>
 </div>
 
 <style>
@@ -27,6 +31,7 @@
   border-radius: 5px;
   border-width: 2px;
   border-style: solid;
+  margin-top:10px;
 }
 
 .step p{
