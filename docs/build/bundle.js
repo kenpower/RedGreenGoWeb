@@ -488,10 +488,12 @@ var app = (function () {
     	let div5;
     	let div4;
     	let div1;
+    	let t1;
     	let t2;
-    	let div2;
     	let t3;
+    	let div2;
     	let t4;
+    	let t5;
     	let div3;
     	let mounted;
     	let dispose;
@@ -503,29 +505,30 @@ var app = (function () {
     			div5 = element("div");
     			div4 = element("div");
     			div1 = element("div");
-    			div1.textContent = "REFACTOR?";
-    			t2 = space();
+    			t1 = text(/*typeText*/ ctx[3]);
+    			t2 = text("?");
+    			t3 = space();
     			div2 = element("div");
-    			t3 = text(/*titleText*/ ctx[2]);
-    			t4 = space();
+    			t4 = text(/*titleText*/ ctx[2]);
+    			t5 = space();
     			div3 = element("div");
     			attr_dev(div0, "id", "background");
     			set_style(div0, "display", /*isOpenModal*/ ctx[0] ? 'block' : 'none');
     			attr_dev(div0, "class", "svelte-w4z33m");
-    			add_location(div0, file$5, 18, 0, 361);
+    			add_location(div0, file$5, 20, 0, 398);
     			attr_dev(div1, "class", "cardType svelte-w4z33m");
-    			add_location(div1, file$5, 26, 16, 628);
+    			add_location(div1, file$5, 28, 16, 665);
     			attr_dev(div2, "class", "title svelte-w4z33m");
-    			add_location(div2, file$5, 28, 16, 702);
+    			add_location(div2, file$5, 30, 16, 741);
     			attr_dev(div3, "class", "bodyText svelte-w4z33m");
-    			add_location(div3, file$5, 29, 16, 759);
+    			add_location(div3, file$5, 31, 16, 798);
     			attr_dev(div4, "id", "modal");
     			attr_dev(div4, "class", "svelte-w4z33m");
-    			add_location(div4, file$5, 25, 12, 594);
+    			add_location(div4, file$5, 27, 12, 631);
     			attr_dev(div5, "id", "frame");
     			set_style(div5, "display", /*isOpenModal*/ ctx[0] ? 'block' : 'none');
     			attr_dev(div5, "class", "svelte-w4z33m");
-    			add_location(div5, file$5, 23, 0, 500);
+    			add_location(div5, file$5, 25, 0, 537);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -536,15 +539,17 @@ var app = (function () {
     			insert_dev(target, div5, anchor);
     			append_dev(div5, div4);
     			append_dev(div4, div1);
-    			append_dev(div4, t2);
+    			append_dev(div1, t1);
+    			append_dev(div1, t2);
+    			append_dev(div4, t3);
     			append_dev(div4, div2);
-    			append_dev(div2, t3);
-    			append_dev(div4, t4);
+    			append_dev(div2, t4);
+    			append_dev(div4, t5);
     			append_dev(div4, div3);
     			div3.innerHTML = /*bodyText*/ ctx[1];
 
     			if (!mounted) {
-    				dispose = listen_dev(div0, "click", /*closeModal*/ ctx[3], false, false, false);
+    				dispose = listen_dev(div0, "click", /*closeModal*/ ctx[4], false, false, false);
     				mounted = true;
     			}
     		},
@@ -553,7 +558,8 @@ var app = (function () {
     				set_style(div0, "display", /*isOpenModal*/ ctx[0] ? 'block' : 'none');
     			}
 
-    			if (dirty & /*titleText*/ 4) set_data_dev(t3, /*titleText*/ ctx[2]);
+    			if (dirty & /*typeText*/ 8) set_data_dev(t1, /*typeText*/ ctx[3]);
+    			if (dirty & /*titleText*/ 4) set_data_dev(t4, /*titleText*/ ctx[2]);
     			if (dirty & /*bodyText*/ 2) div3.innerHTML = /*bodyText*/ ctx[1];
     			if (dirty & /*isOpenModal*/ 1) {
     				set_style(div5, "display", /*isOpenModal*/ ctx[0] ? 'block' : 'none');
@@ -587,6 +593,7 @@ var app = (function () {
     	let { isOpenModal } = $$props;
     	let { bodyText = "" } = $$props;
     	let { titleText = "" } = $$props;
+    	let { typeText = "" } = $$props;
     	const dispatch = createEventDispatcher();
 
     	function closeModal() {
@@ -594,7 +601,7 @@ var app = (function () {
     		dispatch('closeModal', { isOpenModal });
     	}
 
-    	const writable_props = ['isOpenModal', 'bodyText', 'titleText'];
+    	const writable_props = ['isOpenModal', 'bodyText', 'titleText', 'typeText'];
 
     	Object.keys($$props).forEach(key => {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Modal> was created with unknown prop '${key}'`);
@@ -604,6 +611,7 @@ var app = (function () {
     		if ('isOpenModal' in $$props) $$invalidate(0, isOpenModal = $$props.isOpenModal);
     		if ('bodyText' in $$props) $$invalidate(1, bodyText = $$props.bodyText);
     		if ('titleText' in $$props) $$invalidate(2, titleText = $$props.titleText);
+    		if ('typeText' in $$props) $$invalidate(3, typeText = $$props.typeText);
     	};
 
     	$$self.$capture_state = () => ({
@@ -611,6 +619,7 @@ var app = (function () {
     		isOpenModal,
     		bodyText,
     		titleText,
+    		typeText,
     		dispatch,
     		closeModal
     	});
@@ -619,13 +628,14 @@ var app = (function () {
     		if ('isOpenModal' in $$props) $$invalidate(0, isOpenModal = $$props.isOpenModal);
     		if ('bodyText' in $$props) $$invalidate(1, bodyText = $$props.bodyText);
     		if ('titleText' in $$props) $$invalidate(2, titleText = $$props.titleText);
+    		if ('typeText' in $$props) $$invalidate(3, typeText = $$props.typeText);
     	};
 
     	if ($$props && "$$inject" in $$props) {
     		$$self.$inject_state($$props.$$inject);
     	}
 
-    	return [isOpenModal, bodyText, titleText, closeModal];
+    	return [isOpenModal, bodyText, titleText, typeText, closeModal];
     }
 
     class Modal extends SvelteComponentDev {
@@ -635,7 +645,8 @@ var app = (function () {
     		init(this, options, instance$6, create_fragment$6, safe_not_equal, {
     			isOpenModal: 0,
     			bodyText: 1,
-    			titleText: 2
+    			titleText: 2,
+    			typeText: 3
     		});
 
     		dispatch_dev("SvelteRegisterComponent", {
@@ -674,6 +685,14 @@ var app = (function () {
     	}
 
     	set titleText(value) {
+    		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get typeText() {
+    		throw new Error("<Modal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set typeText(value) {
     		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
     }
@@ -741,9 +760,87 @@ var app = (function () {
     	}
     ];
 
+    var testCards = [
+    	{
+    		id: "1",
+    		title: "Simplest Happy Path Test",
+    		description: "Choose the simplest 'Happy Path' case for your first test",
+    		url: "https://github.com/redgreengo/Red-Green-Go/wiki/T-1"
+    	},
+    	{
+    		id: "2",
+    		title: "Simplest Next Test",
+    		description: "Always aim to write the simplest test you can think of that will fail against the current production code.",
+    		url: "https://github.com/redgreengo/Red-Green-Go/wiki/T-2"
+    	},
+    	{
+    		id: "3",
+    		title: "Assertion First",
+    		description: "Stuck when writing a test? Try writing the assertion first, and filling in backwards from there..",
+    		url: "https://github.com/redgreengo/Red-Green-Go/wiki/T-3"
+    	},
+    	{
+    		id: "4",
+    		title: " Test Case Method Names",
+    		description: "A handy trick for naming unit test methods is to start them with the word “should” and follow with a description of the requirement that is being tested.",
+    		url: "https://github.com/redgreengo/Red-Green-Go/wiki/T-4"
+    	},
+    	{
+    		id: "5",
+    		title: "Use Boundary Values",
+    		description: "Write test cases at the boundaries of the different types of behaviour that you need to support.",
+    		url: "https://github.com/redgreengo/Red-Green-Go/wiki/T-5"
+    	},
+    	{
+    		id: "6",
+    		title: "Finish Feature Groups",
+    		description: "The order in which you tackle the tests is important. Finish all the tests in one feature group before moving on to a new one.",
+    		url: "https://github.com/redgreengo/Red-Green-Go/wiki/T-6"
+    	},
+    	{
+    		id: "7",
+    		title: "Sad Path Tests",
+    		description: "Write test cases for sad path cases, too. We expect good quality code to deal gracefully with unexpected and invalid cases, too. And, in TDD, that means we must write test cases to cover these requirements.",
+    		url: "https://github.com/redgreengo/Red-Green-Go/wiki/T-7"
+    	}
+    ];
+
+    var codeCards = [
+    	{
+    		id: "1",
+    		title: "Simplest Implementation",
+    		description: "Take the simplest route to making the current failing test pass. So, in the code step, we want to write production code that does exactly what the new test asks for, no more than that and no less.  We want to match the specification, as given by the test suite, as closely as we can.",
+    		url: "https://github.com/redgreengo/Red-Green-Go/wiki/C-1"
+    	},
+    	{
+    		id: "2",
+    		title: "Hardcode the Result",
+    		description: "If you have just one test case, the simplest way to make it pass is to hard-code its expected result as the return value of the method under test.",
+    		url: "https://github.com/redgreengo/Red-Green-Go/wiki/C-2"
+    	},
+    	{
+    		id: "3",
+    		title: "Use If-Statements",
+    		description: "Use if-statements to allow the production code to return two or three different hard-coded results, satisfying two or three tests quickly.",
+    		url: "https://github.com/redgreengo/Red-Green-Go/wiki/C-3"
+    	},
+    	{
+    		id: "4",
+    		title: "Generalise Existing Code",
+    		description: "To get back to green quickly, look for parts of the existing code that can also handle your new case, if generalised appropriately. In the code step of the TDD cycle, we are looking to make a small set of changes to the code that will cause the test we have just written to pass. We aren't concerned with making the code beautiful and elegant, as we are in the refactoring step. We just need to get back to a green test result as fast and as simply as we can. In TDD, we try to write tests that tackle very closely related functionalities, one after another. Therefore, it is often the case that the code we need to implement is more or less already written, because it was needed for the previous test case. And this previous test case is very similar to the current test case, except that it is slightly simpler.",
+    		url: "https://github.com/redgreengo/Red-Green-Go/wiki/C-4"
+    	},
+    	{
+    		id: "5",
+    		title: "Keep Distinct Code Separate",
+    		description: "When implementing a case that is quite different from anything the code currently does, try to keep the new code clearly separate from the old code.",
+    		url: "https://github.com/redgreengo/Red-Green-Go/wiki/C-5"
+    	}
+    ];
+
     /* src\components\HintCard.svelte generated by Svelte v3.46.2 */
 
-    const { console: console_1$1 } = globals;
+    const { console: console_1$2 } = globals;
 
     function create_fragment$5(ctx) {
     	let modal;
@@ -753,12 +850,13 @@ var app = (function () {
     			props: {
     				isOpenModal: /*show*/ ctx[0],
     				titleText: /*titleText*/ ctx[2],
-    				bodyText: /*bodyText*/ ctx[1]
+    				bodyText: /*bodyText*/ ctx[1],
+    				typeText: /*typeText*/ ctx[3]
     			},
     			$$inline: true
     		});
 
-    	modal.$on("closeModal", /*closeModal*/ ctx[3]);
+    	modal.$on("closeModal", /*closeModal*/ ctx[4]);
 
     	const block = {
     		c: function create() {
@@ -776,6 +874,7 @@ var app = (function () {
     			if (dirty & /*show*/ 1) modal_changes.isOpenModal = /*show*/ ctx[0];
     			if (dirty & /*titleText*/ 4) modal_changes.titleText = /*titleText*/ ctx[2];
     			if (dirty & /*bodyText*/ 2) modal_changes.bodyText = /*bodyText*/ ctx[1];
+    			if (dirty & /*typeText*/ 8) modal_changes.typeText = /*typeText*/ ctx[3];
     			modal.$set(modal_changes);
     		},
     		i: function intro(local) {
@@ -807,39 +906,63 @@ var app = (function () {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('HintCard', slots, []);
     	let { showHint = false } = $$props;
+    	let { cardType = "" } = $$props;
+
+    	const allCards = {
+    		refactor: refactorCards,
+    		test: testCards,
+    		code: codeCards
+    	};
+
+    	const typeTexts = {
+    		refactor: "REFACTOR?",
+    		test: "TEST!",
+    		code: "IMPLEMENTATION!"
+    	};
+
     	let show = false;
     	let bodyText = "";
     	let titleText = "";
+    	let typeText = "";
 
     	function closeModal() {
     		$$invalidate(0, show = false);
     	}
 
-    	const writable_props = ['showHint'];
+    	const writable_props = ['showHint', 'cardType'];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console_1$1.warn(`<HintCard> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console_1$2.warn(`<HintCard> was created with unknown prop '${key}'`);
     	});
 
     	$$self.$$set = $$props => {
-    		if ('showHint' in $$props) $$invalidate(4, showHint = $$props.showHint);
+    		if ('showHint' in $$props) $$invalidate(5, showHint = $$props.showHint);
+    		if ('cardType' in $$props) $$invalidate(6, cardType = $$props.cardType);
     	};
 
     	$$self.$capture_state = () => ({
     		Modal,
     		refactorCards,
+    		testCards,
+    		codeCards,
     		showHint,
+    		cardType,
+    		allCards,
+    		typeTexts,
     		show,
     		bodyText,
     		titleText,
+    		typeText,
     		closeModal
     	});
 
     	$$self.$inject_state = $$props => {
-    		if ('showHint' in $$props) $$invalidate(4, showHint = $$props.showHint);
+    		if ('showHint' in $$props) $$invalidate(5, showHint = $$props.showHint);
+    		if ('cardType' in $$props) $$invalidate(6, cardType = $$props.cardType);
     		if ('show' in $$props) $$invalidate(0, show = $$props.show);
     		if ('bodyText' in $$props) $$invalidate(1, bodyText = $$props.bodyText);
     		if ('titleText' in $$props) $$invalidate(2, titleText = $$props.titleText);
+    		if ('typeText' in $$props) $$invalidate(3, typeText = $$props.typeText);
     	};
 
     	if ($$props && "$$inject" in $$props) {
@@ -847,25 +970,30 @@ var app = (function () {
     	}
 
     	$$self.$$.update = () => {
-    		if ($$self.$$.dirty & /*showHint*/ 16) {
+    		if ($$self.$$.dirty & /*cardType, showHint*/ 96) {
     			{
-    				if (showHint) $$invalidate(0, show = true);
-    				let idx = Math.round((refactorCards.length - 1) * Math.random());
-    				console.log(idx);
-    				let card = refactorCards[idx];
-    				$$invalidate(1, bodyText = card.description);
-    				$$invalidate(2, titleText = card.title);
+    				const cards = allCards[cardType];
+
+    				if (cards) {
+    					if (showHint) $$invalidate(0, show = true);
+    					$$invalidate(3, typeText = typeTexts[cardType]);
+    					let idx = Math.round((cards.length - 1) * Math.random());
+    					console.log(idx);
+    					let card = cards[idx];
+    					$$invalidate(1, bodyText = card.description);
+    					$$invalidate(2, titleText = card.title);
+    				}
     			}
     		}
     	};
 
-    	return [show, bodyText, titleText, closeModal, showHint];
+    	return [show, bodyText, titleText, typeText, closeModal, showHint, cardType];
     }
 
     class HintCard extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$5, create_fragment$5, safe_not_equal, { showHint: 4 });
+    		init(this, options, instance$5, create_fragment$5, safe_not_equal, { showHint: 5, cardType: 6 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -882,9 +1010,19 @@ var app = (function () {
     	set showHint(value) {
     		throw new Error("<HintCard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
+
+    	get cardType() {
+    		throw new Error("<HintCard>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set cardType(value) {
+    		throw new Error("<HintCard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
     }
 
     /* src\components\Step.svelte generated by Svelte v3.46.2 */
+
+    const { console: console_1$1 } = globals;
     const file$4 = "src\\components\\Step.svelte";
 
     function create_fragment$4(ctx) {
@@ -911,7 +1049,10 @@ var app = (function () {
     	let dispose;
 
     	hintcard = new HintCard({
-    			props: { showHint: /*showHint*/ ctx[1] },
+    			props: {
+    				showHint: /*showHint*/ ctx[1],
+    				cardType: /*step*/ ctx[0].helpName
+    			},
     			$$inline: true
     		});
 
@@ -933,15 +1074,15 @@ var app = (function () {
     			t7 = space();
     			create_component(hintcard.$$.fragment);
     			attr_dev(p0, "class", "title svelte-16pc8zp");
-    			add_location(p0, file$4, 15, 4, 306);
+    			add_location(p0, file$4, 20, 4, 377);
     			attr_dev(p1, "class", "svelte-16pc8zp");
-    			add_location(p1, file$4, 18, 8, 386);
-    			add_location(button0, file$4, 19, 8, 418);
-    			add_location(button1, file$4, 20, 8, 491);
+    			add_location(p1, file$4, 23, 8, 457);
+    			add_location(button0, file$4, 24, 8, 489);
+    			add_location(button1, file$4, 25, 8, 562);
     			attr_dev(div0, "class", "stepBody svelte-16pc8zp");
-    			add_location(div0, file$4, 17, 4, 353);
+    			add_location(div0, file$4, 22, 4, 424);
     			attr_dev(div1, "class", div1_class_value = "" + (null_to_empty(/*step*/ ctx[0].classes) + " svelte-16pc8zp"));
-    			add_location(div1, file$4, 14, 0, 272);
+    			add_location(div1, file$4, 19, 0, 343);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -988,6 +1129,7 @@ var app = (function () {
     			if ((!current || dirty & /*step*/ 1) && t4_value !== (t4_value = /*step*/ ctx[0].buttonText + "")) set_data_dev(t4, t4_value);
     			const hintcard_changes = {};
     			if (dirty & /*showHint*/ 2) hintcard_changes.showHint = /*showHint*/ ctx[1];
+    			if (dirty & /*step*/ 1) hintcard_changes.cardType = /*step*/ ctx[0].helpName;
     			hintcard.$set(hintcard_changes);
 
     			if (!current || dirty & /*step*/ 1 && div1_class_value !== (div1_class_value = "" + (null_to_empty(/*step*/ ctx[0].classes) + " svelte-16pc8zp"))) {
@@ -1037,7 +1179,7 @@ var app = (function () {
     	const writable_props = ['step'];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Step> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console_1$1.warn(`<Step> was created with unknown prop '${key}'`);
     	});
 
     	$$self.$$set = $$props => {
@@ -1054,6 +1196,15 @@ var app = (function () {
     	if ($$props && "$$inject" in $$props) {
     		$$self.$inject_state($$props.$$inject);
     	}
+
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty & /*step*/ 1) {
+    			{
+    				console.log("step");
+    				console.log(step);
+    			}
+    		}
+    	};
 
     	return [step, showHint, showCard];
     }
@@ -1074,7 +1225,7 @@ var app = (function () {
     		const props = options.props || {};
 
     		if (/*step*/ ctx[0] === undefined && !('step' in props)) {
-    			console.warn("<Step> was created without expected prop 'step'");
+    			console_1$1.warn("<Step> was created without expected prop 'step'");
     		}
     	}
 
@@ -1691,7 +1842,7 @@ var app = (function () {
     	return child_ctx;
     }
 
-    // (127:0) {#each iterations as i}
+    // (129:0) {#each iterations as i}
     function create_each_block(ctx) {
     	let iteration;
     	let current;
@@ -1736,14 +1887,14 @@ var app = (function () {
     		block,
     		id: create_each_block.name,
     		type: "each",
-    		source: "(127:0) {#each iterations as i}",
+    		source: "(129:0) {#each iterations as i}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (132:0) {#if step}
+    // (134:0) {#if step}
     function create_if_block(ctx) {
     	let step_1;
     	let current;
@@ -1784,7 +1935,7 @@ var app = (function () {
     		block,
     		id: create_if_block.name,
     		type: "if",
-    		source: "(132:0) {#if step}",
+    		source: "(134:0) {#if step}",
     		ctx
     	});
 
@@ -1863,34 +2014,34 @@ var app = (function () {
     			t11 = space();
     			div1 = element("div");
     			if (if_block) if_block.c();
-    			add_location(h1, file$1, 114, 0, 3421);
-    			add_location(h2, file$1, 115, 0, 3445);
+    			add_location(h1, file$1, 116, 0, 3558);
+    			add_location(h2, file$1, 117, 0, 3582);
     			attr_dev(label0, "for", "fname");
-    			add_location(label0, file$1, 118, 4, 3507);
+    			add_location(label0, file$1, 120, 4, 3644);
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "id", "fname");
     			attr_dev(input0, "name", "fname");
     			input0.value = "John";
-    			add_location(input0, file$1, 119, 4, 3554);
-    			add_location(br0, file$1, 119, 60, 3610);
+    			add_location(input0, file$1, 121, 4, 3691);
+    			add_location(br0, file$1, 121, 60, 3747);
     			attr_dev(label1, "for", "lname");
-    			add_location(label1, file$1, 120, 4, 3620);
+    			add_location(label1, file$1, 122, 4, 3757);
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "id", "lname");
     			attr_dev(input1, "name", "lname");
     			input1.value = "Jane";
-    			add_location(input1, file$1, 121, 4, 3667);
-    			add_location(br1, file$1, 121, 60, 3723);
+    			add_location(input1, file$1, 123, 4, 3804);
+    			add_location(br1, file$1, 123, 60, 3860);
     			attr_dev(input2, "id", "startBtn");
     			attr_dev(input2, "name", "Submit");
     			attr_dev(input2, "type", "submit");
     			input2.value = "Start";
-    			add_location(input2, file$1, 122, 4, 3733);
-    			add_location(form, file$1, 117, 0, 3494);
-    			add_location(section, file$1, 116, 0, 3483);
+    			add_location(input2, file$1, 124, 4, 3870);
+    			add_location(form, file$1, 119, 0, 3631);
+    			add_location(section, file$1, 118, 0, 3620);
     			attr_dev(div0, "class", "iterations svelte-14wazpl");
-    			add_location(div0, file$1, 125, 0, 3845);
-    			add_location(div1, file$1, 130, 0, 3978);
+    			add_location(div0, file$1, 127, 0, 3982);
+    			add_location(div1, file$1, 132, 0, 4115);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -2037,6 +2188,7 @@ var app = (function () {
     	var states = [
     		{
     			name: "Red",
+    			helpName: "test",
     			class: "red",
     			next: 1,
     			description: "Write the simplest test you can think of that will fail",
@@ -2044,6 +2196,7 @@ var app = (function () {
     		},
     		{
     			name: "Swap",
+    			helpName: "swap",
     			class: "swap",
     			next: 2,
     			description: "Swap the roles of driver and navigator",
@@ -2051,6 +2204,7 @@ var app = (function () {
     		},
     		{
     			name: "Green",
+    			helpName: "code",
     			class: "green",
     			next: 3,
     			description: "Write just enough code to make the failing test pass",
@@ -2058,6 +2212,7 @@ var app = (function () {
     		},
     		{
     			name: "Refactor",
+    			helpName: "refactor",
     			class: "refactor",
     			next: 0,
     			description: "Clean up the code you've just written",
@@ -2127,14 +2282,14 @@ var app = (function () {
     		curNavigator++;
     		curDriver %= 2;
     		curNavigator %= 2;
-    		$$invalidate(0, step = buildStepObject("Swap pair programming roles", players[curDriver] + " is now the driver and " + players[curNavigator] + " is the navigator", "Done:" + players[curDriver] + " has the keyboard", nextStep, "" + curState.class + " step swap"));
+    		$$invalidate(0, step = buildStepObject("Swap pair programming roles", players[curDriver] + " is now the driver and " + players[curNavigator] + " is the navigator", "Done:" + players[curDriver] + " has the keyboard", nextStep, "" + curState.class + " step swap", "swap"));
     	}
 
     	function addStep(state, stepNumber, driverName, navigatorName) {
-    		$$invalidate(0, step = buildStepObject("Step:" + stepNumber + " " + state.name, state.description + "    (" + driverName + " is driving" + ", " + navigatorName + " is navigating)", state.buttonText, nextStep, "" + state.class + " step"));
+    		$$invalidate(0, step = buildStepObject("Step:" + stepNumber + " " + state.name, state.description + "    (" + driverName + " is driving" + ", " + navigatorName + " is navigating)", state.buttonText, nextStep, "" + state.class + " step", state.helpName));
     	}
 
-    	function buildStepObject(title, bodyText, buttonText, buttonAction, classes) {
+    	function buildStepObject(title, bodyText, buttonText, buttonAction, classes, helpName) {
     		$$invalidate(0, step = new Object());
 
     		$$invalidate(0, step = {
@@ -2142,7 +2297,8 @@ var app = (function () {
     			bodyText,
     			buttonText,
     			buttonAction,
-    			classes
+    			classes,
+    			helpName
     		});
 
     		$$invalidate(0, step.x = 42, step);

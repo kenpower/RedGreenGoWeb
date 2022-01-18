@@ -6,10 +6,10 @@ import { SvelteComponentTyped } from 'svelte/internal';
 //export const iterations = writable([]);
 
 var states = [
-    { name: "Red",  class: "red", next: 1, description:"Write the simplest test you can think of that will fail" , buttonText: "Done: There is ONE failing (red) test"},
-    { name: "Swap", class: "swap", next: 2, description:"Swap the roles of driver and navigator", buttonText: "" },
-    { name: "Green",  class: "green", next: 3 , description:"Write just enough code to make the failing test pass",  buttonText: "Done: All the test are now passing (green)" },
-    { name: "Refactor",  class: "refactor", next: 0,  description:"Clean up the code you've just written" ,buttonText: "Done: The code is better and all tests are still passing!"},
+    { name: "Red", helpName: "test", class: "red", next: 1, description:"Write the simplest test you can think of that will fail" , buttonText: "Done: There is ONE failing (red) test"},
+    { name: "Swap", helpName: "swap", class: "swap", next: 2, description:"Swap the roles of driver and navigator", buttonText: "" },
+    { name: "Green",  helpName: "code", class: "green", next: 3 , description:"Write just enough code to make the failing test pass",  buttonText: "Done: All the test are now passing (green)" },
+    { name: "Refactor",  helpName: "refactor", class: "refactor", next: 0,  description:"Clean up the code you've just written" ,buttonText: "Done: The code is better and all tests are still passing!"},
 ];
 
 var players = ["John", "Jane"];
@@ -80,7 +80,8 @@ function swapPairRoles() {
         players[curDriver] + " is now the driver and " + players[curNavigator] + " is the navigator",
         "Done:" + players[curDriver] + " has the keyboard",
         nextStep,
-        ""+ curState.class+" step swap"
+        ""+ curState.class+" step swap",
+        "swap"
     );
 }
   
@@ -90,14 +91,15 @@ function swapPairRoles() {
         (state.description + "    ("+ driverName + " is driving" + ", " + navigatorName + " is navigating)"),
         state.buttonText,
         nextStep,
-        ""+state.class+ " step"
+        ""+state.class+ " step",
+        state.helpName
     );
 
   }
 
-  function buildStepObject(title, bodyText, buttonText, buttonAction, classes) {
+  function buildStepObject(title, bodyText, buttonText, buttonAction, classes, helpName) {
         step= new Object();
-        step = {title, bodyText, buttonText, buttonAction, classes};
+        step = {title, bodyText, buttonText, buttonAction, classes, helpName};
         step.x=42
         //steps.push(step)
         steps=[...steps, step]

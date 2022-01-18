@@ -5,6 +5,8 @@
     export let isOpenModal;
     export let bodyText = "";
     export let titleText = "";
+    export let typeText = "";
+    
   
 
   const dispatch = createEventDispatcher();
@@ -24,7 +26,7 @@
 <div    id="frame" 
         style="display: {isOpenModal ? 'block' : 'none'};">
             <div id="modal">
-                <div class = "cardType" >REFACTOR?</div>
+                <div class = "cardType" >{typeText}?</div>
               
                 <div class = "title" >{titleText}</div>
                 <div class = "bodyText" >{@html bodyText}</div>

@@ -10,6 +10,11 @@
         await tick()
         showHint = false
     }
+
+    $: {
+      console.log("step")
+      console.log(step)
+    }
 </script>
 
 <div class = {step.classes}>
@@ -20,7 +25,7 @@
         <button on:click={step.buttonAction}>{step.buttonText}</button>
         <button on:click={showCard}>Hint</button>
     </div>
-    <HintCard {showHint}/>
+    <HintCard {showHint} cardType = {step.helpName}/>
 </div>
 
 <style>
