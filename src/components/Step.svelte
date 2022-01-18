@@ -1,5 +1,13 @@
+
 <script>
+    import refactorCards from "../content/refactorCards.json";
     export let step;
+
+    console.log(cards)
+
+    const showCard= () =>{
+
+    }
 </script>
 
 <div class = {step.classes}>
