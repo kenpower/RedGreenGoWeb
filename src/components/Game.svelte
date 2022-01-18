@@ -1,56 +1,70 @@
 <script>
 import  Step  from './Step.svelte';
 import  Iteration  from './Iteration.svelte';
+import  Temp  from './Temp.svelte';
 
 //export const iterations = writable([]);
 
 var states = [
     { name: "Red",  class: "red", next: 1, description:"Write the simplest test you can think of that will fail" , buttonText: "Done: There is ONE failing (red) test"},
-    { name: "Swap", class: "swap", next: 2, description:"Swap the roles of driver and navigator", buttonText: "Done: All the test are now passing (green)" },
-    { name: "Green",  class: "green", next: 3 , description:"Write just enough code to make the failing test pass",  },
+    { name: "Swap", class: "swap", next: 2, description:"Swap the roles of driver and navigator", buttonText: "" },
+    { name: "Green",  class: "green", next: 3 , description:"Write just enough code to make the failing test pass",  buttonText: "Done: All the test are now passing (green)" },
     { name: "Refactor",  class: "refactor", next: 0,  description:"Clean up the code you've just written" ,buttonText: "Done: The code is better and all tests are still passing!"},
 ];
 
 var players = ["John", "Jane"];
   
-var curState = states[0];
+let curState = undefined
 var curDriver = 0;
 var curNavigator = 1;
 var stepNumber = 1;
 var iterationCounter = 1;
-var iterationEl;
-var curStep;
-var steps=[];
+var curIteration;
+var step = undefined;
+let steps=[];
 var iterations=[];
-
 
 function startGame(){
     document.getElementById("startBtn").disabled = true;
     document.getElementById("startBtn").style.display = "none";
     nextStep();
-
 }
 
 function nextStep() {
-    if(curStep){
-        //iterationEl.removeChild(iterationEl.lastChild);
-        addStep(curState, stepNumber, players[curDriver], players[curNavigator]);
-        stepNumber++;
+    step= new Object();
+    if(!curState){
+      curState = states[0]
     }
+    else{
+      curState=states[curState.next];
+    }
+
     if(curState.name=="Red") {
-        iterations.push(iterationCounter)
-        iterations=iterations
+        if(curIteration) curIteration.phase=4;
+        curIteration =  {phase:1, index:iterationCounter}
+        iterations=[...iterations, curIteration]
         iterationCounter++;
+        console.log(iterations)
     }
+
+    if(curState.name=="Green") {
+        curIteration.phase = 2
+       
+        console.log(curIteration)
+    }
+    if(curState.name=="Refactor") {
+        curIteration.phase = 3
+    }
+
     if(curState.name=="Swap") {
+        curIteration.phase = 2
         swapPairRoles();
     }
     else{
         addStep(curState, stepNumber, players[curDriver], players[curNavigator]);
         stepNumber++;
     }
-    curState=states[curState.next];
-    
+    iterations=iterations
 }
 
 function swapPairRoles() {
@@ -58,37 +72,35 @@ function swapPairRoles() {
     curNavigator++;
     curDriver %= 2;
     curNavigator %= 2;
-    const newStep=buildStepElement(
+    step = buildStepObject(
         "Swap pair programming roles",
         players[curDriver] + " is now the driver and " + players[curNavigator] + " is the navigator",
         "Done:" + players[curDriver] + " has the keyboard",
         nextStep,
-        [curState.class, "step", "swap"]
+        ""+ curState.class+" step swap"
     );
-
-    curStep=newStep;
-    //iterationEl.appendChild(newStep);
 }
   
   function addStep(state, stepNumber, driverName, navigatorName) {
-    const newStep=buildStepElement(
+    step = buildStepObject(
         "Step:" + stepNumber + " " +state.name,
-        (state.description + "    ("+ driverName + " is driving" 
-        + ", " + navigatorName + " is navigating)"),
+        (state.description + "    ("+ driverName + " is driving" + ", " + navigatorName + " is navigating)"),
         state.buttonText,
         nextStep,
-        [state.class, "step"]
+        ""+state.class+ " step"
     );
 
-    curStep=newStep;
-    // iterationEl.appendChild(newStep);
   }
 
-  const buildStepElement = (title, bodyText, buttonText, buttonAction, classes) => {
-
-        steps.push({title, bodyText, buttonText, buttonAction, classes})
-        steps=steps
-
+  function buildStepObject(title, bodyText, buttonText, buttonAction, classes) {
+        step= new Object();
+        step = {title, bodyText, buttonText, buttonAction, classes};
+        step.x=42
+        //steps.push(step)
+        steps=[...steps, step]
+        //curStep = step;
+        //console.log(step)
+        return step
   }
 
   const addStepToIteration = (step)=>{
@@ -108,15 +120,23 @@ function swapPairRoles() {
     <input id="startBtn" name="Submit" type="submit" value="Start" on:click={startGame}/>
     </form>
 </section>
-<div>
+<div class = "iterations">
 {#each iterations as i}
-    <Iteration iterationCounter = {i}/>
+    <Iteration iterationCounter = {i.index} phase={i.phase}/>
 {/each}
+</div>
+<div>
+{#if step}
+    <Step step = {step}/>
+{/if}
 
-{#each steps as step}
-<Step {step}/>
-{/each}
 </div>
 
 <style>
+.iterations{
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+}
 </style>

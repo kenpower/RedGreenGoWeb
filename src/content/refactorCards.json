@@ -1,0 +1,63 @@
+[
+    {
+        "id": "1",
+        "title": "Helper Methods",
+        "description": "Use helper methods with descriptive names to wrap low-level code, so that your code reads as much like natural language as possible.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/R-1"
+    },
+    {
+        "id": "2",
+        "title": "Create Constants",
+        "description": "Literal values embedded in your production code are a form of technical debt. Define literals as constants with names that make their meaning explicit.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/R-2"
+    },
+    {
+        "id": "3",
+        "title": "Refactor When Beneficial",
+        "description": "Refactor when you see an obvious code quality problem and a clear solution.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/R-3"
+    },
+    {
+        "id": "4",
+        "title": "Refactor Test Code Too",
+        "description": "Remember that test code is code, too, and should also be refactored to keep the design clean and the tests readable.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/R-4"
+    },
+    {
+        "id": "5",
+        "title": "Remove Duplicate Code",
+        "description": "Duplicated code can indicate a missing design concept. Keep code readable and flexible by wrapping and removing duplicated code using helper methods.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/R-5"
+    },
+    {
+        "id": "6",
+        "title": "Refactoring Not Mandatory",
+        "description": "It's mandatory to look for refactoring opportunities in each red-green-green cycle. It is not mandatory to actually refactor. Do so only when the benefits are clear.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/R-6"
+    },
+    {
+        "id": "7",
+        "title": "Rewrite Constants",
+        "description": "Rewriting a constant in your production code with an expression in terms of other constants can help to reveal underlying patterns.",     
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/R-7"
+    },
+    {
+        "id": "8",
+        "title": "Wait Till Benefits Clear",
+        "description": "If you're not sure whether a particular refactoring will improve things, then leave it. Later test cases may make the benefits clearer.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/R-8"
+    },
+    {
+        "id": "9",
+        "title": "Generalise to Loop",
+        "description": "Replace if-statements describing how to process 0, 1, 2 and 3 items with a loop showing how to process N items.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/R-9"
+    },
+    {
+        "id": "10",
+        "title": "Generaise from a pattern",
+        "description": "Refactor when you see a pattern in the code that you can generalise so that more examples of the behaviour described by your test cases can be handled.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/R-10"
+    }
+
+]

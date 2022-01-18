@@ -1,32 +1,24 @@
 <script>
     export let step;
-
-    const {title, bodyText, buttonText, buttonAction, classes} = step
-    
-    let classesStr=""
-    console.log(classes)
-    classes.forEach(c => classesStr += (c + " "))
-    
 </script>
 
-<div class = {classesStr}>
-    <p class = "title">{title}</p>
+<div class = {step.classes}>
+    <p class = "title">{step.title}</p>
     
     <div class ="stepBody">
-        <p>{bodyText}</p>
-        <button on:click={buttonAction}>{buttonText}</button>
+        <p>{step.bodyText}</p>
+        <button on:click={step.buttonAction}>{step.buttonText}</button>
     </div>
 </div>
 
 <style>
 
 .step{
-  color: lightgray;
+  color: black;
   width: 100%;
   border-radius: 5px;
   border-width: 2px;
   border-style: solid;
-  max-width: 25%;
 }
 
 .step p{
