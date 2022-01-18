@@ -1,0 +1,35 @@
+[
+    {
+        "id": "1",
+        "title":  "Simplest Implementation",
+        "description": "Take the simplest route to making the current failing test pass. So, in the code step, we want to write production code that does exactly what the new test asks for, no more than that and no less.  We want to match the specification, as given by the test suite, as closely as we can.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/C-1"
+    },
+
+    {
+        "id": "2",
+        "title":  "Hardcode the Result",
+        "description": "If you have just one test case, the simplest way to make it pass is to hard-code its expected result as the return value of the method under test.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/C-2"
+    },
+    {
+        "id": "3",
+        "title":  "Use If-Statements",
+        "description": "Use if-statements to allow the production code to return two or three different hard-coded results, satisfying two or three tests quickly.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/C-3"
+    },
+    {
+        "id": "4",
+        "title":  "Generalise Existing Code",
+        "description": "To get back to green quickly, look for parts of the existing code that can also handle your new case, if generalised appropriately. In the code step of the TDD cycle, we are looking to make a small set of changes to the code that will cause the test we have just written to pass. We aren't concerned with making the code beautiful and elegant, as we are in the refactoring step. We just need to get back to a green test result as fast and as simply as we can. In TDD, we try to write tests that tackle very closely related functionalities, one after another. Therefore, it is often the case that the code we need to implement is more or less already written, because it was needed for the previous test case. And this previous test case is very similar to the current test case, except that it is slightly simpler.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/C-4"
+    },
+
+    {
+        "id": "5",
+        "title":  "Keep Distinct Code Separate",
+        "description": "When implementing a case that is quite different from anything the code currently does, try to keep the new code clearly separate from the old code.",
+        "url":"https://github.com/redgreengo/Red-Green-Go/wiki/C-5"
+    }
+
+]
