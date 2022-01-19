@@ -1,6 +1,7 @@
 <!-- src/Modal.svelte -->
 <script>
     import { createEventDispatcher } from 'svelte';
+    import {fly, fade,scale} from 'svelte/transition';
 
     export let isOpenModal;
     export let bodyText = "";
@@ -26,15 +27,15 @@
         >
 </div>
 
-<div id="frame" class={cardType}
-    style="display: {isOpenModal ? 'block' : 'none'};">
-        <div id="modal">
+{#if isOpenModal}
+<div transition:scale id="frame" class={cardType}>
+        <div class = "modal">
             <div class = "cardType" >{typeText}?</div>
-            
             <div class = "title" >{titleText}</div>
             <div class = "bodyText" >{@html bodyText}</div>
         </div>
 </div>
+{/if}
 
 <style>
   #background {
@@ -74,7 +75,7 @@
         background-color: var(--refactoring-blue);
         color:var(--refactoring-blue-hint);
     }
-   #modal {  
+   .modal {  
         margin: 10px;
         max-height:70vh;
         overflow-y: auto;
