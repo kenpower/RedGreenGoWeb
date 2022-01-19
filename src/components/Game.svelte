@@ -2,6 +2,7 @@
 import  Step  from './Step.svelte';
 import  Iteration  from './Iteration.svelte';
 import { fade } from 'svelte/transition';
+import {gameState} from '../store.js';
 
 //export const iterations = writable([]);
 
@@ -14,20 +15,21 @@ var states = [
 
 export let players = ["John", "Jane"];
   
-let curState = undefined
-var curDriver = 0;
-var curNavigator = 1;
-var stepNumber = 1;
-var iterationCounter = 0;
-var curIteration;
-var step = undefined;
-let steps=[];
-var iterations=[]
+// let curState = undefined
+// var curDriver = 0;
+// var curNavigator = 1;
+// var stepNumber = 1;
+// var iterationCounter = 0;
+// var curIteration;
+// var step = undefined;
+// let steps=[];
+// var iterations=[];
 
 
 nextStep();
+
 function add4Iterations(idx){
-    iterations = [...iterations,
+    $gameState.iterations = [...$gameState.iterations,
         {phase:1, index:idx++},
         {phase:0, index:idx++},
         {phase:0, index:idx++},
@@ -36,64 +38,64 @@ function add4Iterations(idx){
 }
 
 function nextStep() {
-    step= new Object();
+    var step= new Object();
 
-    curState = !curState ? states[0] : states[curState.next];
+    $gameState.curState = !$gameState.curState ? states[0] : states[$gameState.curState.next];
 
 
-    if(curState.id=="red") {
-        if(curIteration){
-           curIteration.phase=4;
-           iterationCounter++
+    if($gameState.curState.id=="red") {
+        if($gameState.curIteration){
+            $gameState.curIteration.phase=4;
+            $gameState.iterationCounter++
         }
 
-        if(iterationCounter >= iterations.length){
-            add4Iterations(iterations.length+1);
+        if( $gameState.iterationCounter >= $gameState.iterations.length){
+            add4Iterations($gameState.iterations.length+1);
         }
         
-        curIteration =  iterations[iterationCounter]
-        curIteration.phase=1;
-        console.log(iterations)
+        $gameState.curIteration =  $gameState.iterations[$gameState.iterationCounter]
+        $gameState.curIteration.phase=1;
+        console.log($gameState.iterations)
     }
 
-    if(curState.id=="green") {
-        curIteration.phase = 2
+    if($gameState.curState.id=="green") {
+        $gameState.curIteration.phase = 2
        
-        console.log(curIteration)
+        console.log($gameState.curIteration)
     }
-    if(curState.id=="refactor") {
-        curIteration.phase = 3
+    if($gameState.curState.id=="refactor") {
+        $gameState.curIteration.phase = 3
        
     }
 
-    if(curState.id=="swap") {
-        curIteration.phase = 2
+    if($gameState.curState.id=="swap") {
+        $gameState.curIteration.phase = 2
         swapPairRoles();
     }
     else{
-        addStep(curState, stepNumber, players[curDriver], players[curNavigator]);
-        stepNumber++;
+        addStep($gameState.curState, $gameState.stepNumber, $gameState.players[$gameState.curDriver], $gameState.players[$gameState.curNavigator]);
+        $gameState.stepNumber++;
     }
-    iterations=iterations
+    $gameState.iterations=$gameState.iterations
 }
 
 function swapPairRoles() {
-    curDriver++;
-    curNavigator++;
-    curDriver %= 2;
-    curNavigator %= 2;
-    step = buildStepObject(
+    $gameState.curDriver++;
+    $gameState.curNavigator++;
+    $gameState.curDriver %= 2;
+    $gameState.curNavigator %= 2;
+    buildStepObject(
         "Swap pair programming roles",
-        players[curDriver] + " is now the driver and " + players[curNavigator] + " is the navigator",
-        "Done:" + players[curDriver] + " has the keyboard",
+        $gameState.players[$gameState.curDriver] + " is now the driver and " + $gameState.players[$gameState.curNavigator] + " is the navigator",
+        "Done:" + $gameState.players[$gameState.curDriver] + " has the keyboard",
         nextStep,
-        ""+ curState.class+" step swap",
+        ""+ $gameState.curState.class+" step swap",
         "swap"
     );
 }
   
   function addStep(state, stepNumber, driverName, navigatorName) {
-    step = buildStepObject(
+    buildStepObject(
         "Step:" + stepNumber + " " +state.title,
         (state.description + "    ("+ driverName + " is driving" + ", " + navigatorName + " is navigating)"),
         state.buttonText,
@@ -105,14 +107,14 @@ function swapPairRoles() {
   }
 
   function buildStepObject(title, bodyText, buttonText, buttonAction, classes, helpName) {
-        step= new Object();
+        var step= new Object();
         step = {title, bodyText, buttonText, buttonAction, classes, helpName};
         step.x=42
         //steps.push(step)
-        steps=[...steps, step]
+        $gameState.steps=[...$gameState.steps, step]
         //curStep = step;
         //console.log(step)
-        return step
+        $gameState.step =  step
   }
 
   const addStepToIteration = (step)=>{
@@ -123,14 +125,14 @@ function swapPairRoles() {
 
 
 <div class = "iterations">
-{#each iterations as i}
+{#each $gameState.iterations as i}
     <Iteration iterationCounter = {i.index} phase={i.phase}/>
 {/each}
 </div>
 <div>
-{#if step}
+{#if $gameState.step}
 <div  transition:fade >
-    <Step step = {step}/>
+    <Step step = {$gameState.step}/>
 </div>
 {/if}
 

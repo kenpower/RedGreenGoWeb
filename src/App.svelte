@@ -64,7 +64,7 @@
 	}
 	:global(html) {
   	/* THE TRICK to stop scroll bar appearing and moving everything to the left */
-  	margin-left: calc(100vw - 100%);
+  	margin-right: calc(100vw - 100%);
 	}
 
 
