@@ -5,7 +5,7 @@
 </script>
 
 <div class="iteration">
-    <TDDCycle phase = {phase} text={iterationCounter}></TDDCycle>
+    <TDDCycle size={100} phase = {phase} text={iterationCounter}></TDDCycle>
     <p class="title">
         Iteration: {iterationCounter}
     </p>
@@ -19,6 +19,7 @@
   border-style: solid;
   background-color: white;
   padding: 8px;
+  max-width: calc(var(--global-game-width)/5);
 }
 
 

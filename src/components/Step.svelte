@@ -1,91 +1,115 @@
-
 <script>
-    import HintCard from "./HintCard.svelte";
-    import { tick } from 'svelte';
-    export let step;
-    let showHint = false;
+import HintCard from "./HintCard.svelte";
+import {
+    tick
+} from 'svelte';
 
-    async function showCard(){
-        showHint = true;
-        await tick()
-        showHint = false
-    }
+export let step;
+let showHint = false;
 
-    $: {
-      console.log("step")
-      console.log(step)
-    }
+async function showCard() {
+    showHint = true;
+    await tick()
+    showHint = false
+}
+
+function scrollIntoView() {
+    const el = document.getElementById("theStep");
+    if (!el) return;
+    el.scrollIntoView({
+        behavior: 'smooth'
+    });
+}
+
+$: {
+    scrollIntoView();
+}
 </script>
 
-<div class = {step.classes}>
+<div class = {step.classes} id = "theStep">
     <p class = "title">{step.title}</p>
-    
+
     <div class ="stepBody">
         <p>{step.bodyText}</p>
         <button on:click={step.buttonAction}>{step.buttonText}</button>
         <button on:click={showCard}>Hint</button>
     </div>
-    <HintCard {showHint} cardType = {step.helpName}/>
-</div>
+    <HintCard {showHint} cardType = {step.helpName} />
+        </div>
 
 <style>
-
-.step{
-  color: black;
-  width: 100%;
-  border-radius: 5px;
-  border-width: 2px;
-  border-style: solid;
-  margin-top:10px;
+.step {
+    color: black;
+    width: 100%;
+    border-radius: 5px;
+    border-width: 2px;
+    border-style: solid;
+    margin-top: 10px;
+    min-height: 150px;
 }
 
-.step p{
-  margin: 2;
+.step p {
+    margin: 2;
 }
 
-
-.container .step .stepBody{
-  padding: 5px;
-  display: none;
-
+button {
+    position: relative;
+    bottom: 0px;
 }
 
-
-.step .title{
-  font-weight: bold;
-  padding : 4px;
-  margin: 0;
+.container .step .stepBody {
+    padding: 5px;
+    display: none;
 }
+
+.step .title {
+    font-weight: bold;
+    padding: 4px;
+    margin: 0;
+}
+
 .red .title {
-    background-color: #FC9999;
-  }
+    background-color: var(--testing-red-muted);
+}
 
 .green .title {
-    background-color: #99FC99;
-  }
-
-.refactor .title{
-    background-color: #9999FC;
-  } 
-
-.red{
-  border-color: red;
+    background-color:var(--coding-green-muted);
 }
 
-.green{
-  border-color:green;
+.refactor .title {
+    background-color: var(--refactoring-blue-muted);
 }
 
-.refactor{
-  border-color:blue;
+.red.step {
+    background-color: var(--testing-red-hint);
 }
 
-.iteration{
-  border-color: black;
-  border-radius: 5px;
-  border-width: 2px;
-  border-style: solid;
-  background-color: white;
-  padding: 8px;
+.green.step {
+    background-color:var(--coding-green-hint);
+}
+
+.refactor.step {
+    background-color: var(--refactoring-blue-hint);
+}
+
+.red {
+    border-color: var(--testing-red);
+}
+
+.green {
+    border-color: var(--coding-green);
+}
+
+.refactor {
+    border-color:var(--refactoring-blue);
+}
+
+.iteration {
+    border-color: black;
+    border-radius: 5px;
+    border-width: 2px;
+    border-style: solid;
+    background-color: white;
+    padding: 8px;
 }
 </style>

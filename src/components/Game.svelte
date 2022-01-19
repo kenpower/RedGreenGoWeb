@@ -1,65 +1,72 @@
 <script>
 import  Step  from './Step.svelte';
 import  Iteration  from './Iteration.svelte';
-import { SvelteComponentTyped } from 'svelte/internal';
+import { fade } from 'svelte/transition';
 
 //export const iterations = writable([]);
 
 var states = [
-    { name: "Red", helpName: "test", class: "red", next: 1, description:"Write the simplest test you can think of that will fail" , buttonText: "Done: There is ONE failing (red) test"},
-    { name: "Swap", helpName: "swap", class: "swap", next: 2, description:"Swap the roles of driver and navigator", buttonText: "" },
-    { name: "Green",  helpName: "code", class: "green", next: 3 , description:"Write just enough code to make the failing test pass",  buttonText: "Done: All the test are now passing (green)" },
-    { name: "Refactor",  helpName: "refactor", class: "refactor", next: 0,  description:"Clean up the code you've just written" ,buttonText: "Done: The code is better and all tests are still passing!"},
+    { id: "red", title: "Make it Red", helpName: "test", class: "red", next: 1, description:"Write the simplest test you can think of that will fail" , buttonText: "Done: There is ONE failing (red) test"},
+    { id: "swap", title: "Swap", helpName: "swap", class: "swap", next: 2, description:"Swap the roles of driver and navigator", buttonText: "" },
+    { id: "green", title: "Make it Green",  helpName: "code", class: "green", next: 3 , description:"Write just enough code to make the failing test pass",  buttonText: "Done: All the test are now passing (green)" },
+    { id: "refactor", title: "Make it Clean",  helpName: "refactor", class: "refactor", next: 0,  description:"Clean up the code you've just written" ,buttonText: "Done: The code is better and all tests are still passing!"},
 ];
 
-var players = ["John", "Jane"];
+export let players = ["John", "Jane"];
   
 let curState = undefined
 var curDriver = 0;
 var curNavigator = 1;
 var stepNumber = 1;
-var iterationCounter = 1;
+var iterationCounter = 0;
 var curIteration;
 var step = undefined;
 let steps=[];
-var iterations=[];
+var iterations=[]
 
-function startGame(){
-    document.getElementById("startBtn").disabled = true;
-    document.getElementById("startBtn").style.display = "none";
-    nextStep();
+
+nextStep();
+function add4Iterations(idx){
+    iterations = [...iterations,
+        {phase:1, index:idx++},
+        {phase:0, index:idx++},
+        {phase:0, index:idx++},
+        {phase:0, index:idx++}
+    ];
 }
 
 function nextStep() {
     step= new Object();
-    if(!curState){
-      curState = states[0]
-    }
-    else{
-      curState=states[curState.next];
-    }
 
-    if(curState.name=="Red") {
+    curState = !curState ? states[0] : states[curState.next];
+
+
+    if(curState.id=="red") {
         if(curIteration){
            curIteration.phase=4;
+           iterationCounter++
         }
-        curIteration =  {phase:1, index:iterationCounter}
-        iterations=[...iterations, curIteration]
-        iterationCounter++;
+
+        if(iterationCounter >= iterations.length){
+            add4Iterations(iterations.length+1);
+        }
+        
+        curIteration =  iterations[iterationCounter]
+        curIteration.phase=1;
         console.log(iterations)
     }
 
-    if(curState.name=="Green") {
+    if(curState.id=="green") {
         curIteration.phase = 2
        
         console.log(curIteration)
     }
-    if(curState.name=="Refactor") {
+    if(curState.id=="refactor") {
         curIteration.phase = 3
        
     }
 
-    if(curState.name=="Swap") {
+    if(curState.id=="swap") {
         curIteration.phase = 2
         swapPairRoles();
     }
@@ -87,7 +94,7 @@ function swapPairRoles() {
   
   function addStep(state, stepNumber, driverName, navigatorName) {
     step = buildStepObject(
-        "Step:" + stepNumber + " " +state.name,
+        "Step:" + stepNumber + " " +state.title,
         (state.description + "    ("+ driverName + " is driving" + ", " + navigatorName + " is navigating)"),
         state.buttonText,
         nextStep,
@@ -114,17 +121,7 @@ function swapPairRoles() {
 
 </script>
 
-<h1>Red-Green-Go!</h1>
-<h2>A game of TDD & Pairing</h2>    
-<section>
-<form >
-    <label for="fname">Player 1 name:</label>
-    <input type="text" id="fname" name="fname" value="John"><br>
-    <label for="lname">Player 2 name:</label>
-    <input type="text" id="lname" name="lname" value="Jane"><br>
-    <input id="startBtn" name="Submit" type="submit" value="Start" on:click={startGame}/>
-    </form>
-</section>
+
 <div class = "iterations">
 {#each iterations as i}
     <Iteration iterationCounter = {i.index} phase={i.phase}/>
@@ -132,7 +129,9 @@ function swapPairRoles() {
 </div>
 <div>
 {#if step}
+<div  transition:fade >
     <Step step = {step}/>
+</div>
 {/if}
 
 </div>

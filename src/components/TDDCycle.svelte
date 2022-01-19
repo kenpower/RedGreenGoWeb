@@ -1,6 +1,10 @@
 <script>
 	export let phase;
 	export let text = 1
+	export let size = 100;
+	let hsize=size/2;
+	let radius = hsize*0.65;
+	let textScale = size/50.0;
 	const phase1Col="tomato"
 	const phase2Col ="olivedrab"
 	const phase3Col ="dodgerblue"
@@ -14,7 +18,7 @@
 	}
 </script>
 
-<svg height="150" width="150">
+<svg height="{size}" width="{size}">
 	  <defs>
     <marker id="arrowheadred" markerWidth="1.5" markerHeight="2" 
     refX="0.5" refY="1" orient="auto">
@@ -31,7 +35,7 @@
   </defs>
 
   <g> 
-		<text x="0" y="0" transform="translate(74 91) scale(2.6,2.6)" style="text-anchor: middle">{text}</text>
+		<text x="0" y="0" transform="translate({hsize} {hsize*1.25}) scale({textScale},{textScale})" style="text-anchor: middle">{text}</text>
 		<path id="arrow"
 			d="M 0 -0.75
 						l 0 -0.5
@@ -42,8 +46,8 @@
 			stroke-width="0.02"/>
 
 		<g  transform="
-			translate(75 75)
-            scale(50 -50)">
+			translate({hsize} {hsize})
+            scale({radius} {-radius})">
 			<g>
 			<use href="#arrow" 
 				fill="{phase1FillCol}"
@@ -83,3 +87,4 @@
 		</g>
   </g>
 </svg>
+
