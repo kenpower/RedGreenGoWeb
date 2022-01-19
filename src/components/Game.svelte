@@ -12,7 +12,15 @@ var states = [
     { id: "refactor", title: "Make it Clean",  helpName: "refactor", class: "refactor", next: 0,  description:"Clean up the code you've just written" ,buttonText: "Done: The code is better and all tests are still passing!"},
 ];
 
-nextStep();
+//nextStep();
+console.log($gameState);
+
+if(!$gameState.curState){ 
+    $gameState.curState =  states[0];
+    add4Iterations(1);
+    addStep($gameState.curState, $gameState.stepNumber, $gameState.players[$gameState.curDriver], $gameState.players[$gameState.curNavigator]);
+}
+console.log($gameState)
 
 function add4Iterations(idx){
     $gameState.iterations = [...$gameState.iterations,
@@ -29,32 +37,28 @@ function nextStep() {
 
 
     if($gameState.curState.id=="red") {
-        if($gameState.curIteration){
-            $gameState.curIteration.phase=4;
-            $gameState.iterationCounter++
-        }
+        $gameState.iterations[$gameState.curIterationIdx].phase=4;
+        $gameState.iterationCounter++
+    
 
         if( $gameState.iterationCounter >= $gameState.iterations.length){
             add4Iterations($gameState.iterations.length+1);
         }
         
-        $gameState.curIteration =  $gameState.iterations[$gameState.iterationCounter]
-        $gameState.curIteration.phase=1;
+        $gameState.curIterationIdx =  $gameState.iterationCounter
+        $gameState.iterations[$gameState.curIterationIdx].phase=1;
         console.log($gameState.iterations)
     }
 
     if($gameState.curState.id=="green") {
-        $gameState.curIteration.phase = 2
-       
-        console.log($gameState.curIteration)
+        $gameState.iterations[$gameState.curIterationIdx].phase = 2
     }
     if($gameState.curState.id=="refactor") {
-        $gameState.curIteration.phase = 3
-       
+        $gameState.iterations[$gameState.curIterationIdx].phase = 3
     }
 
     if($gameState.curState.id=="swap") {
-        $gameState.curIteration.phase = 2
+        $gameState.iterations[$gameState.curIterationIdx].phase = 2
         swapPairRoles();
     }
     else{
@@ -73,7 +77,6 @@ function swapPairRoles() {
         "Swap pair programming roles",
         $gameState.players[$gameState.curDriver] + " is now the driver and " + $gameState.players[$gameState.curNavigator] + " is the navigator",
         "Done:" + $gameState.players[$gameState.curDriver] + " has the keyboard",
-        nextStep,
         ""+ $gameState.curState.class+" step swap",
         "swap"
     );
@@ -84,16 +87,15 @@ function swapPairRoles() {
         "Step:" + stepNumber + " " +state.title,
         (state.description + "    ("+ driverName + " is driving" + ", " + navigatorName + " is navigating)"),
         state.buttonText,
-        nextStep,
         ""+state.class+ " step",
         state.helpName
     );
 
   }
 
-  function buildStepObject(title, bodyText, buttonText, buttonAction, classes, helpName) {
+  function buildStepObject(title, bodyText, buttonText, classes, helpName) {
         var step= new Object();
-        step = {title, bodyText, buttonText, buttonAction, classes, helpName};
+        step = {title, bodyText, buttonText, classes, helpName};
         step.x=42
         //steps.push(step)
         $gameState.steps=[...$gameState.steps, step]
@@ -102,6 +104,12 @@ function swapPairRoles() {
         $gameState.step =  step
   }
 
+  const handleStepButton= (message) =>{
+    console.log(message)
+    if(message.detail=="done"){
+        nextStep();
+    }
+  }
 </script>
 
 
@@ -113,7 +121,7 @@ function swapPairRoles() {
 <div>
 {#if $gameState.step}
 <div  transition:fade >
-    <Step step = {$gameState.step}/>
+    <Step step = {$gameState.step} on:interact="{handleStepButton}"/>
 </div>
 {/if}
 </div>

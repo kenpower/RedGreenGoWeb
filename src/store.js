@@ -7,7 +7,7 @@ const initialGameState = {
     curState : null,
     stepNumber : 1, 
     iterationCounter : 0,    
-    curIteration: null,
+    curIterationIdx: 0,
     step :  null,
     steps : [],
     iterations : [],

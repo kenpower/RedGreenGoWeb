@@ -1,9 +1,10 @@
 <script>
 import HintCard from "./HintCard.svelte";
 import {fade,fly, blur, scale} from "svelte/transition";
-import {
-    tick
-} from 'svelte';
+import { tick } from 'svelte';
+import { createEventDispatcher } from 'svelte';
+
+const dispatch = createEventDispatcher();
 
 export let step;
 let showHint = false;
@@ -14,6 +15,7 @@ async function showCard() {
     showHint = false
 }
 
+//TODO move into game
 function scrollIntoView() {
     const el = document.getElementById("theStep");
     if (!el) return;
@@ -26,20 +28,21 @@ $: {
     scrollIntoView();
 }
 </script>
+
 {#key step}
 <div  out:fade in:fly="{{ delay: 300, y: 400, duration: 1000 }}" class = {step.classes} id = "theStep">
     <p class = "title">{step.title}</p>
-
     <div class ="stepBody">
         <p>{step.bodyText}</p>
-        <button on:click={step.buttonAction}>{step.buttonText}</button>
+        <button on:click="{() => dispatch('interact', 'done')}">{step.buttonText}</button>
         <button on:click={showCard}>Hint</button>
     </div>
+    <!-- TODO move into game -->
     <HintCard {showHint} cardType = {step.helpName} />
 </div>
 {/key}
-<style>
 
+<style>
 .step {
     color: black;
     width: 100%;

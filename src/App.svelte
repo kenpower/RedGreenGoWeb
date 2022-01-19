@@ -19,7 +19,12 @@
         <IconButton onclick={resetGame} icon="restart"/>
 		</div>
         <div class="title">
-			<span id="red">Red</span>-<span id="green">Green</span>-<span id="blue">Go!</span>
+			<svg xmlns="http://www.w3.org/2000/svg">
+			  <filter id="motion-blur-filter" filterUnits="userSpaceOnUse">
+					  <feGaussianBlur stdDeviation="15 0"></feGaussianBlur>
+			  </filter>
+			</svg>
+			<span id="red">Red</span>-<span id="green">Green</span>-<span  filter-content="G" class = "swoosh" id="blue">G</span><span id="blue">o!</span>
         </div>
         <div class="menu">
 			x
@@ -83,7 +88,17 @@
 
 	#red  {color: var(--testing-red);}
 	#green{color: var(--coding-green);}
-	#blue {color: var(--refactoring-blue);}
+	#blue {
+		color: var(--refactoring-blue);
+		font-style: italic;
+	}
+	.swoosh::before{
+		content: attr(filter-content);
+		filter: url(#motion-blur-filter);
+	}
+	svg {
+  		display: none;
+	}
 	
 	:global(*){
 		--global-game-width: 500px;
