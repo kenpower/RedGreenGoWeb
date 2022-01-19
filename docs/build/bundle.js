@@ -3163,7 +3163,7 @@ var app = (function () {
     			add_location(h1, file, 18, 1, 609);
     			add_location(h2, file, 19, 1, 634);
     			add_location(section, file, 20, 1, 673);
-    			attr_dev(main, "class", "svelte-1y9q6tv");
+    			attr_dev(main, "class", "svelte-j28e1y");
     			add_location(main, file, 17, 0, 600);
     		},
     		l: function claim(nodes) {

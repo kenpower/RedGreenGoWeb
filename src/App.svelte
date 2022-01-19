@@ -60,9 +60,11 @@
 		--coding-green-hint: #cee79d;
 		--refactoring-blue: dodgerblue; /*dodgerblue #1E90FF	 */
 		--refactoring-blue-muted: #85c2ff;
-		--refactoring-blue-hint: #d6ebff;
-
-		
+		--refactoring-blue-hint: #d6ebff;	
+	}
+	:global(html) {
+  	/* THE TRICK to stop scroll bar appearing and moving everything to the left */
+  	margin-left: calc(100vw - 100%);
 	}
 
 
