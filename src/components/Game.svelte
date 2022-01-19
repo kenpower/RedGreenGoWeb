@@ -4,7 +4,6 @@ import  Iteration  from './Iteration.svelte';
 import { fade } from 'svelte/transition';
 import {gameState} from '../store.js';
 
-//export const iterations = writable([]);
 
 var states = [
     { id: "red", title: "Make it Red", helpName: "test", class: "red", next: 1, description:"Write the simplest test you can think of that will fail" , buttonText: "Done: There is ONE failing (red) test"},
@@ -12,19 +11,6 @@ var states = [
     { id: "green", title: "Make it Green",  helpName: "code", class: "green", next: 3 , description:"Write just enough code to make the failing test pass",  buttonText: "Done: All the test are now passing (green)" },
     { id: "refactor", title: "Make it Clean",  helpName: "refactor", class: "refactor", next: 0,  description:"Clean up the code you've just written" ,buttonText: "Done: The code is better and all tests are still passing!"},
 ];
-
-export let players = ["John", "Jane"];
-  
-// let curState = undefined
-// var curDriver = 0;
-// var curNavigator = 1;
-// var stepNumber = 1;
-// var iterationCounter = 0;
-// var curIteration;
-// var step = undefined;
-// let steps=[];
-// var iterations=[];
-
 
 nextStep();
 
@@ -38,7 +24,6 @@ function add4Iterations(idx){
 }
 
 function nextStep() {
-    var step= new Object();
 
     $gameState.curState = !$gameState.curState ? states[0] : states[$gameState.curState.next];
 
@@ -117,10 +102,6 @@ function swapPairRoles() {
         $gameState.step =  step
   }
 
-  const addStepToIteration = (step)=>{
-      //iterationEl.children.namedItem("container").appendChild(step);
-  }
-
 </script>
 
 
@@ -135,7 +116,6 @@ function swapPairRoles() {
     <Step step = {$gameState.step}/>
 </div>
 {/if}
-
 </div>
 
 <style>

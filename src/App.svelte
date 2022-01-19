@@ -1,11 +1,9 @@
 <script>
 	import Game from "./components/Game.svelte";
-	import { fly } from 'svelte/transition';
-	export let player1 = "John";
-	export let player2 = "Jane";
-	
-	let gameBegin = false
+	import IconButton from "./components/IconButton.svelte";
+	import {gameState, resetGame} from './store.js';
 
+	import { fly } from 'svelte/transition';
 </script>
 
 <svelte:head>
@@ -16,40 +14,77 @@
 
 <title>Red Green Go!</title>
 <main>
-	<h1>Red-Green-Go!</h1>
+	<header>
+        <div class="menu">
+        <IconButton onclick={resetGame} icon="restart"/>
+		</div>
+        <div class="title">
+			<span id="red">Red</span>-<span id="green">Green</span>-<span id="blue">Go!</span>
+        </div>
+        <div class="menu">
+			x
+        </div>
+    </header>
+	
 	<h2>A game of TDD & Pairing</h2>    
 	<section>
-		{#if gameBegin}
-		<div transition:fly="{{ y: 200, duration: 2000 }}">
-			<Game  players={[player1,player2]} />
-		</div>
-
+		{#if $gameState.started}
+			<div in:fly="{{ y: 200, duration: 2000 }}">
+				<Game />
+			</div>
 		{:else}
 		<div >
 			<span>
 			<label for="fname">Player 1</label>
-			<input type="text" id="fname" name="fname" bind:value={player1}><br>
+			<input type="text" id="fname" name="fname" bind:value={$gameState.players[0]}><br>
 		</span>
 		<span>
 			<label for="lname">Player 2</label>
-			<input type="text" id="lname" name="lname" bind:value={player2}><br>
+			<input type="text" id="lname" name="lname" bind:value={$gameState.players[1]}><br>
 			</span>	
-			<button id="startBtn"  on:click={() => gameBegin = true}>Start Game</button>
+			<button id="startBtn"  on:click={() => $gameState.started = true}>Start Game</button>
 			</div>
 		{/if}
 	</section>
 </main>
 
 <style>
+	header{
+		display: flex;
+    	justify-content: space-between;
+		align-items: center;
+		border-bottom: 1px solid var(--color-tone-2);
+	}
 
+	.title{
+		font-size: 2.5em;
+		font-weight: bold;
+	}
+	h2{
+		font-size: 1.5em;
+		margin: 0.25em;
+		font-weight: 200;
+	}
 	main {
 		text-align: center;
 		padding: 1em;
 		max-width: 500px;
 		margin: 0 auto;
 		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+		color: var(--color-tone-2);
+		font-weight: 200;
 	}
 
+	label {
+        display: inline-block;
+        width: 55px;
+        text-align: right;
+      }
+
+	#red  {color: var(--testing-red);}
+	#green{color: var(--coding-green);}
+	#blue {color: var(--refactoring-blue);}
+	
 	:global(*){
 		--global-game-width: 500px;
 		--testing-red: tomato; /* SVG tomato #FF6347 */
@@ -61,10 +96,19 @@
 		--refactoring-blue: dodgerblue; /*dodgerblue #1E90FF	 */
 		--refactoring-blue-muted: #85c2ff;
 		--refactoring-blue-hint: #d6ebff;	
+
+		--color-tone-1: #1a1a1b;
+		--color-tone-2: #787c7e;
+		--color-tone-3: #878a8c;
+		--color-tone-4: #d3d6da;
+		--color-tone-5: #edeff1;
+		--color-tone-6: #f6f7f8;
+		--color-tone-7: #ffffff;
+		--opacity-50: rgba(255, 255, 255, 0.5);
 	}
 	:global(html) {
   	/* THE TRICK to stop scroll bar appearing and moving everything to the left */
-  	margin-right: calc(100vw - 100%);
+  	margin-left: calc(100vw - 100%);
 	}
 
 
