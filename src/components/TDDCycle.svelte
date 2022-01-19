@@ -35,7 +35,9 @@
   </defs>
 
   <g> 
+	  {#if phase > 0}
 		<text x="0" y="0" transform="translate({hsize} {hsize*1.25}) scale({textScale},{textScale})" style="text-anchor: middle">{text}</text>
+	  {/if}	
 		<path id="arrow"
 			d="M 0 -0.75
 						l 0 -0.5

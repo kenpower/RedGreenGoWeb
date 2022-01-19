@@ -1,5 +1,6 @@
 <script>
 import HintCard from "./HintCard.svelte";
+import {fade,fly, blur, scale} from "svelte/transition";
 import {
     tick
 } from 'svelte';
@@ -25,8 +26,8 @@ $: {
     scrollIntoView();
 }
 </script>
-
-<div class = {step.classes} id = "theStep">
+{#key step}
+<div  out:fade in:fly="{{ delay: 300, y: 400, duration: 1000 }}" class = {step.classes} id = "theStep">
     <p class = "title">{step.title}</p>
 
     <div class ="stepBody">
@@ -35,9 +36,10 @@ $: {
         <button on:click={showCard}>Hint</button>
     </div>
     <HintCard {showHint} cardType = {step.helpName} />
-        </div>
-
+</div>
+{/key}
 <style>
+
 .step {
     color: black;
     width: 100%;

@@ -110,6 +110,9 @@ var app = (function () {
     function space() {
         return text(' ');
     }
+    function empty() {
+        return text('');
+    }
     function listen(node, event, handler, options) {
         node.addEventListener(event, handler, options);
         return () => node.removeEventListener(event, handler, options);
@@ -133,6 +136,9 @@ var app = (function () {
         else {
             node.style.setProperty(key, value, important ? 'important' : '');
         }
+    }
+    function toggle_class(element, name, toggle) {
+        element.classList[toggle ? 'add' : 'remove'](name);
     }
     function custom_event(type, detail, bubbles = false) {
         const e = document.createEvent('CustomEvent');
@@ -367,6 +373,125 @@ var app = (function () {
         }
     }
     const null_transition = { duration: 0 };
+    function create_in_transition(node, fn, params) {
+        let config = fn(node, params);
+        let running = false;
+        let animation_name;
+        let task;
+        let uid = 0;
+        function cleanup() {
+            if (animation_name)
+                delete_rule(node, animation_name);
+        }
+        function go() {
+            const { delay = 0, duration = 300, easing = identity, tick = noop, css } = config || null_transition;
+            if (css)
+                animation_name = create_rule(node, 0, 1, duration, delay, easing, css, uid++);
+            tick(0, 1);
+            const start_time = now() + delay;
+            const end_time = start_time + duration;
+            if (task)
+                task.abort();
+            running = true;
+            add_render_callback(() => dispatch(node, true, 'start'));
+            task = loop(now => {
+                if (running) {
+                    if (now >= end_time) {
+                        tick(1, 0);
+                        dispatch(node, true, 'end');
+                        cleanup();
+                        return running = false;
+                    }
+                    if (now >= start_time) {
+                        const t = easing((now - start_time) / duration);
+                        tick(t, 1 - t);
+                    }
+                }
+                return running;
+            });
+        }
+        let started = false;
+        return {
+            start() {
+                if (started)
+                    return;
+                started = true;
+                delete_rule(node);
+                if (is_function(config)) {
+                    config = config();
+                    wait().then(go);
+                }
+                else {
+                    go();
+                }
+            },
+            invalidate() {
+                started = false;
+            },
+            end() {
+                if (running) {
+                    cleanup();
+                    running = false;
+                }
+            }
+        };
+    }
+    function create_out_transition(node, fn, params) {
+        let config = fn(node, params);
+        let running = true;
+        let animation_name;
+        const group = outros;
+        group.r += 1;
+        function go() {
+            const { delay = 0, duration = 300, easing = identity, tick = noop, css } = config || null_transition;
+            if (css)
+                animation_name = create_rule(node, 1, 0, duration, delay, easing, css);
+            const start_time = now() + delay;
+            const end_time = start_time + duration;
+            add_render_callback(() => dispatch(node, false, 'start'));
+            loop(now => {
+                if (running) {
+                    if (now >= end_time) {
+                        tick(0, 1);
+                        dispatch(node, false, 'end');
+                        if (!--group.r) {
+                            // this will result in `end()` being called,
+                            // so we don't need to clean up here
+                            run_all(group.c);
+                        }
+                        return false;
+                    }
+                    if (now >= start_time) {
+                        const t = easing((now - start_time) / duration);
+                        tick(1 - t, t);
+                    }
+                }
+                return running;
+            });
+        }
+        if (is_function(config)) {
+            wait().then(() => {
+                // @ts-ignore
+                config = config();
+                go();
+            });
+        }
+        else {
+            go();
+        }
+        return {
+            end(reset) {
+                if (reset && config.tick) {
+                    config.tick(1, 0);
+                }
+                if (running) {
+                    if (animation_name)
+                        delete_rule(node, animation_name);
+                    running = false;
+                }
+            }
+        };
+    }
     function create_bidirectional_transition(node, fn, params, intro) {
         let config = fn(node, params);
         let t = intro ? 0 : 1;
@@ -1246,10 +1371,71 @@ var app = (function () {
     	}
     }
 
+    function cubicInOut(t) {
+        return t < 0.5 ? 4.0 * t * t * t : 0.5 * Math.pow(2.0 * t - 2.0, 3.0) + 1.0;
+    }
+    function cubicOut(t) {
+        const f = t - 1.0;
+        return f * f * f + 1.0;
+    }
+
+    function blur(node, { delay = 0, duration = 400, easing = cubicInOut, amount = 5, opacity = 0 } = {}) {
+        const style = getComputedStyle(node);
+        const target_opacity = +style.opacity;
+        const f = style.filter === 'none' ? '' : style.filter;
+        const od = target_opacity * (1 - opacity);
+        return {
+            delay,
+            duration,
+            easing,
+            css: (_t, u) => `opacity: ${target_opacity - (od * u)}; filter: ${f} blur(${u * amount}px);`
+        };
+    }
+    function fade(node, { delay = 0, duration = 400, easing = identity } = {}) {
+        const o = +getComputedStyle(node).opacity;
+        return {
+            delay,
+            duration,
+            easing,
+            css: t => `opacity: ${t * o}`
+        };
+    }
+    function fly(node, { delay = 0, duration = 400, easing = cubicOut, x = 0, y = 0, opacity = 0 } = {}) {
+        const style = getComputedStyle(node);
+        const target_opacity = +style.opacity;
+        const transform = style.transform === 'none' ? '' : style.transform;
+        const od = target_opacity * (1 - opacity);
+        return {
+            delay,
+            duration,
+            easing,
+            css: (t, u) => `
+			transform: ${transform} translate(${(1 - t) * x}px, ${(1 - t) * y}px);
+			opacity: ${target_opacity - (od * u)}`
+        };
+    }
+    function scale(node, { delay = 0, duration = 400, easing = cubicOut, start = 0, opacity = 0 } = {}) {
+        const style = getComputedStyle(node);
+        const target_opacity = +style.opacity;
+        const transform = style.transform === 'none' ? '' : style.transform;
+        const sd = 1 - start;
+        const od = target_opacity * (1 - opacity);
+        return {
+            delay,
+            duration,
+            easing,
+            css: (_t, u) => `
+			transform: ${transform} scale(${1 - (sd * u)});
+			opacity: ${target_opacity - (od * u)}
+		`
+        };
+    }
+
     /* src\components\Step.svelte generated by Svelte v3.46.2 */
     const file$4 = "src\\components\\Step.svelte";
 
-    function create_fragment$4(ctx) {
+    // (29:0) {#key step}
+    function create_key_block(ctx) {
     	let div1;
     	let p0;
     	let t0_value = /*step*/ ctx[0].title + "";
@@ -1268,6 +1454,8 @@ var app = (function () {
     	let t7;
     	let hintcard;
     	let div1_class_value;
+    	let div1_intro;
+    	let div1_outro;
     	let current;
     	let mounted;
     	let dispose;
@@ -1297,22 +1485,19 @@ var app = (function () {
     			button1.textContent = "Hint";
     			t7 = space();
     			create_component(hintcard.$$.fragment);
-    			attr_dev(p0, "class", "title svelte-wgjdji");
-    			add_location(p0, file$4, 29, 4, 496);
-    			attr_dev(p1, "class", "svelte-wgjdji");
-    			add_location(p1, file$4, 32, 8, 572);
-    			attr_dev(button0, "class", "svelte-wgjdji");
-    			add_location(button0, file$4, 33, 8, 604);
-    			attr_dev(button1, "class", "svelte-wgjdji");
-    			add_location(button1, file$4, 34, 8, 677);
-    			attr_dev(div0, "class", "stepBody svelte-wgjdji");
-    			add_location(div0, file$4, 31, 4, 539);
-    			attr_dev(div1, "class", div1_class_value = "" + (null_to_empty(/*step*/ ctx[0].classes) + " svelte-wgjdji"));
+    			attr_dev(p0, "class", "title svelte-bt3w54");
+    			add_location(p0, file$4, 30, 4, 625);
+    			attr_dev(p1, "class", "svelte-bt3w54");
+    			add_location(p1, file$4, 33, 8, 701);
+    			attr_dev(button0, "class", "svelte-bt3w54");
+    			add_location(button0, file$4, 34, 8, 733);
+    			attr_dev(button1, "class", "svelte-bt3w54");
+    			add_location(button1, file$4, 35, 8, 806);
+    			attr_dev(div0, "class", "stepBody svelte-bt3w54");
+    			add_location(div0, file$4, 32, 4, 668);
+    			attr_dev(div1, "class", div1_class_value = "" + (null_to_empty(/*step*/ ctx[0].classes) + " svelte-bt3w54"));
     			attr_dev(div1, "id", "theStep");
-    			add_location(div1, file$4, 28, 0, 447);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    			add_location(div1, file$4, 29, 0, 516);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -1349,7 +1534,7 @@ var app = (function () {
     				mounted = true;
     			}
     		},
-    		p: function update(new_ctx, [dirty]) {
+    		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
     			if ((!current || dirty & /*step*/ 1) && t0_value !== (t0_value = /*step*/ ctx[0].title + "")) set_data_dev(t0, t0_value);
     			if ((!current || dirty & /*step*/ 1) && t2_value !== (t2_value = /*step*/ ctx[0].bodyText + "")) set_data_dev(t2, t2_value);
@@ -1359,24 +1544,92 @@ var app = (function () {
     			if (dirty & /*step*/ 1) hintcard_changes.cardType = /*step*/ ctx[0].helpName;
     			hintcard.$set(hintcard_changes);
 
-    			if (!current || dirty & /*step*/ 1 && div1_class_value !== (div1_class_value = "" + (null_to_empty(/*step*/ ctx[0].classes) + " svelte-wgjdji"))) {
+    			if (!current || dirty & /*step*/ 1 && div1_class_value !== (div1_class_value = "" + (null_to_empty(/*step*/ ctx[0].classes) + " svelte-bt3w54"))) {
     				attr_dev(div1, "class", div1_class_value);
     			}
     		},
     		i: function intro(local) {
     			if (current) return;
     			transition_in(hintcard.$$.fragment, local);
+
+    			add_render_callback(() => {
+    				if (div1_outro) div1_outro.end(1);
+    				div1_intro = create_in_transition(div1, fly, { delay: 300, y: 400, duration: 1000 });
+    				div1_intro.start();
+    			});
+
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(hintcard.$$.fragment, local);
+    			if (div1_intro) div1_intro.invalidate();
+    			div1_outro = create_out_transition(div1, fade, {});
     			current = false;
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div1);
     			destroy_component(hintcard);
+    			if (detaching && div1_outro) div1_outro.end();
     			mounted = false;
     			run_all(dispose);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_key_block.name,
+    		type: "key",
+    		source: "(29:0) {#key step}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$4(ctx) {
+    	let previous_key = /*step*/ ctx[0];
+    	let key_block_anchor;
+    	let current;
+    	let key_block = create_key_block(ctx);
+
+    	const block = {
+    		c: function create() {
+    			key_block.c();
+    			key_block_anchor = empty();
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			key_block.m(target, anchor);
+    			insert_dev(target, key_block_anchor, anchor);
+    			current = true;
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*step*/ 1 && safe_not_equal(previous_key, previous_key = /*step*/ ctx[0])) {
+    				group_outros();
+    				transition_out(key_block, 1, 1, noop);
+    				check_outros();
+    				key_block = create_key_block(ctx);
+    				key_block.c();
+    				transition_in(key_block);
+    				key_block.m(key_block_anchor.parentNode, key_block_anchor);
+    			} else {
+    				key_block.p(ctx, dirty);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(key_block);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(key_block);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(key_block_anchor);
+    			key_block.d(detaching);
     		}
     	};
 
@@ -1421,6 +1674,10 @@ var app = (function () {
 
     	$$self.$capture_state = () => ({
     		HintCard,
+    		fade,
+    		fly,
+    		blur,
+    		scale,
     		tick,
     		step,
     		showHint,
@@ -1477,7 +1734,45 @@ var app = (function () {
 
     const file$3 = "src\\components\\TDDCycle.svelte";
 
-    // (55:4) {#if phase == 1}
+    // (38:3) {#if phase > 0}
+    function create_if_block_4(ctx) {
+    	let text_1;
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			text_1 = svg_element("text");
+    			t = text(/*text*/ ctx[1]);
+    			attr_dev(text_1, "x", "0");
+    			attr_dev(text_1, "y", "0");
+    			attr_dev(text_1, "transform", "translate(" + /*hsize*/ ctx[6] + " " + /*hsize*/ ctx[6] * 1.25 + ") scale(" + /*textScale*/ ctx[8] + "," + /*textScale*/ ctx[8] + ")");
+    			set_style(text_1, "text-anchor", "middle");
+    			add_location(text_1, file$3, 38, 2, 1165);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, text_1, anchor);
+    			append_dev(text_1, t);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*text*/ 2) set_data_dev(t, /*text*/ ctx[1]);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(text_1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_4.name,
+    		type: "if",
+    		source: "(38:3) {#if phase > 0}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (57:4) {#if phase == 1}
     function create_if_block_3(ctx) {
     	let animate;
 
@@ -1488,7 +1783,7 @@ var app = (function () {
     			attr_dev(animate, "values", "white;" + phase1Col + ";white");
     			attr_dev(animate, "dur", "3s");
     			attr_dev(animate, "repeatCount", "indefinite");
-    			add_location(animate, file$3, 55, 5, 1697);
+    			add_location(animate, file$3, 57, 5, 1728);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, animate, anchor);
@@ -1503,14 +1798,14 @@ var app = (function () {
     		block,
     		id: create_if_block_3.name,
     		type: "if",
-    		source: "(55:4) {#if phase == 1}",
+    		source: "(57:4) {#if phase == 1}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (64:3) {#if phase == 2}
+    // (66:3) {#if phase == 2}
     function create_if_block_2(ctx) {
     	let animate;
 
@@ -1521,7 +1816,7 @@ var app = (function () {
     			attr_dev(animate, "values", "white;" + phase2Col + ";white");
     			attr_dev(animate, "dur", "3s");
     			attr_dev(animate, "repeatCount", "indefinite");
-    			add_location(animate, file$3, 64, 3, 1958);
+    			add_location(animate, file$3, 66, 3, 1989);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, animate, anchor);
@@ -1536,14 +1831,14 @@ var app = (function () {
     		block,
     		id: create_if_block_2.name,
     		type: "if",
-    		source: "(64:3) {#if phase == 2}",
+    		source: "(66:3) {#if phase == 2}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (71:3) {#if phase == 3}
+    // (73:3) {#if phase == 3}
     function create_if_block_1(ctx) {
     	let animate;
 
@@ -1554,7 +1849,7 @@ var app = (function () {
     			attr_dev(animate, "values", "white;" + phase3Col + ";white");
     			attr_dev(animate, "dur", "3s");
     			attr_dev(animate, "repeatCount", "indefinite");
-    			add_location(animate, file$3, 71, 3, 2203);
+    			add_location(animate, file$3, 73, 3, 2234);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, animate, anchor);
@@ -1569,14 +1864,14 @@ var app = (function () {
     		block,
     		id: create_if_block_1.name,
     		type: "if",
-    		source: "(71:3) {#if phase == 3}",
+    		source: "(73:3) {#if phase == 3}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (76:3) {#if phase == 4}
+    // (78:3) {#if phase == 4}
     function create_if_block$2(ctx) {
     	let animateTransform;
 
@@ -1590,7 +1885,7 @@ var app = (function () {
     			attr_dev(animateTransform, "to", "0 0 0");
     			attr_dev(animateTransform, "dur", "0.6s");
     			attr_dev(animateTransform, "repeatCount", "3");
-    			add_location(animateTransform, file$3, 76, 4, 2352);
+    			add_location(animateTransform, file$3, 78, 4, 2383);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, animateTransform, anchor);
@@ -1604,7 +1899,7 @@ var app = (function () {
     		block,
     		id: create_if_block$2.name,
     		type: "if",
-    		source: "(76:3) {#if phase == 4}",
+    		source: "(78:3) {#if phase == 4}",
     		ctx
     	});
 
@@ -1621,18 +1916,17 @@ var app = (function () {
     	let marker2;
     	let polygon2;
     	let g2;
-    	let text_1;
-    	let t;
     	let path;
     	let g1;
     	let g0;
     	let use0;
     	let use1;
     	let use2;
-    	let if_block0 = /*phase*/ ctx[0] == 1 && create_if_block_3(ctx);
-    	let if_block1 = /*phase*/ ctx[0] == 2 && create_if_block_2(ctx);
-    	let if_block2 = /*phase*/ ctx[0] == 3 && create_if_block_1(ctx);
-    	let if_block3 = /*phase*/ ctx[0] == 4 && create_if_block$2(ctx);
+    	let if_block0 = /*phase*/ ctx[0] > 0 && create_if_block_4(ctx);
+    	let if_block1 = /*phase*/ ctx[0] == 1 && create_if_block_3(ctx);
+    	let if_block2 = /*phase*/ ctx[0] == 2 && create_if_block_2(ctx);
+    	let if_block3 = /*phase*/ ctx[0] == 3 && create_if_block_1(ctx);
+    	let if_block4 = /*phase*/ ctx[0] == 4 && create_if_block$2(ctx);
 
     	const block = {
     		c: function create() {
@@ -1645,18 +1939,17 @@ var app = (function () {
     			marker2 = svg_element("marker");
     			polygon2 = svg_element("polygon");
     			g2 = svg_element("g");
-    			text_1 = svg_element("text");
-    			t = text(/*text*/ ctx[1]);
+    			if (if_block0) if_block0.c();
     			path = svg_element("path");
     			g1 = svg_element("g");
     			g0 = svg_element("g");
     			use0 = svg_element("use");
-    			if (if_block0) if_block0.c();
-    			use1 = svg_element("use");
     			if (if_block1) if_block1.c();
-    			use2 = svg_element("use");
+    			use1 = svg_element("use");
     			if (if_block2) if_block2.c();
+    			use2 = svg_element("use");
     			if (if_block3) if_block3.c();
+    			if (if_block4) if_block4.c();
     			attr_dev(polygon0, "points", "0 0, 1.5 1, 0 2");
     			attr_dev(polygon0, "fill", "tomato");
     			add_location(polygon0, file$3, 24, 6, 677);
@@ -1688,32 +1981,27 @@ var app = (function () {
     			attr_dev(marker2, "orient", "auto");
     			add_location(marker2, file$3, 30, 7, 941);
     			add_location(defs, file$3, 21, 3, 556);
-    			attr_dev(text_1, "x", "0");
-    			attr_dev(text_1, "y", "0");
-    			attr_dev(text_1, "transform", "translate(" + /*hsize*/ ctx[6] + " " + /*hsize*/ ctx[6] * 1.25 + ") scale(" + /*textScale*/ ctx[8] + "," + /*textScale*/ ctx[8] + ")");
-    			set_style(text_1, "text-anchor", "middle");
-    			add_location(text_1, file$3, 37, 2, 1145);
     			attr_dev(path, "id", "arrow");
     			attr_dev(path, "d", "M 0 -0.75\r\n\t\t\t\t\t\tl 0 -0.5\r\n\t\t\t\tA 1.25 1.25, 0, 0, 0, -1.2 -0.21\r\n\t\t\t\t\t\tl -0.25 0, 0.45 0.7 0.45 -0.7 -0.2 0\r\n\t\t\t\t\t\tA 0.75 0.75, 0, 0, 1, 0 -0.75\r\n\t\t\t\t\t\t");
     			attr_dev(path, "stroke-width", "0.02");
-    			add_location(path, file$3, 38, 2, 1283);
+    			add_location(path, file$3, 40, 2, 1314);
     			attr_dev(use0, "href", "#arrow");
     			attr_dev(use0, "fill", /*phase1FillCol*/ ctx[3]);
     			attr_dev(use0, "stroke", phase1Col);
-    			add_location(use0, file$3, 51, 3, 1594);
+    			add_location(use0, file$3, 53, 3, 1625);
     			attr_dev(use1, "href", "#arrow");
     			attr_dev(use1, "fill", /*phase2FillCol*/ ctx[4]);
     			attr_dev(use1, "stroke", phase2Col);
     			attr_dev(use1, "transform", "rotate(-120)");
-    			add_location(use1, file$3, 59, 3, 1828);
+    			add_location(use1, file$3, 61, 3, 1859);
     			attr_dev(use2, "href", "#arrow");
     			attr_dev(use2, "stroke", phase3Col);
     			attr_dev(use2, "fill", /*phase3FillCol*/ ctx[5]);
     			attr_dev(use2, "transform", "rotate(120)");
-    			add_location(use2, file$3, 69, 3, 2091);
-    			add_location(g0, file$3, 50, 3, 1586);
+    			add_location(use2, file$3, 71, 3, 2122);
+    			add_location(g0, file$3, 52, 3, 1617);
     			attr_dev(g1, "transform", "\r\n\t\t\ttranslate(" + /*hsize*/ ctx[6] + " " + /*hsize*/ ctx[6] + ")\r\n            scale(" + /*radius*/ ctx[7] + " " + -/*radius*/ ctx[7] + ")");
-    			add_location(g1, file$3, 47, 2, 1494);
+    			add_location(g1, file$3, 49, 2, 1525);
     			add_location(g2, file$3, 36, 2, 1137);
     			attr_dev(svg, "height", /*size*/ ctx[2]);
     			attr_dev(svg, "width", /*size*/ ctx[2]);
@@ -1732,33 +2020,43 @@ var app = (function () {
     			append_dev(defs, marker2);
     			append_dev(marker2, polygon2);
     			append_dev(svg, g2);
-    			append_dev(g2, text_1);
-    			append_dev(text_1, t);
+    			if (if_block0) if_block0.m(g2, null);
     			append_dev(g2, path);
     			append_dev(g2, g1);
     			append_dev(g1, g0);
     			append_dev(g0, use0);
-    			if (if_block0) if_block0.m(use0, null);
+    			if (if_block1) if_block1.m(use0, null);
     			append_dev(g0, use1);
-    			if (if_block1) if_block1.m(use1, null);
+    			if (if_block2) if_block2.m(use1, null);
     			append_dev(g0, use2);
-    			if (if_block2) if_block2.m(use2, null);
-    			if (if_block3) if_block3.m(g0, null);
+    			if (if_block3) if_block3.m(use2, null);
+    			if (if_block4) if_block4.m(g0, null);
     		},
     		p: function update(ctx, [dirty]) {
-    			if (dirty & /*text*/ 2) set_data_dev(t, /*text*/ ctx[1]);
-
-    			if (/*phase*/ ctx[0] == 1) {
+    			if (/*phase*/ ctx[0] > 0) {
     				if (if_block0) {
     					if_block0.p(ctx, dirty);
     				} else {
-    					if_block0 = create_if_block_3(ctx);
+    					if_block0 = create_if_block_4(ctx);
     					if_block0.c();
-    					if_block0.m(use0, null);
+    					if_block0.m(g2, path);
     				}
     			} else if (if_block0) {
     				if_block0.d(1);
     				if_block0 = null;
+    			}
+
+    			if (/*phase*/ ctx[0] == 1) {
+    				if (if_block1) {
+    					if_block1.p(ctx, dirty);
+    				} else {
+    					if_block1 = create_if_block_3(ctx);
+    					if_block1.c();
+    					if_block1.m(use0, null);
+    				}
+    			} else if (if_block1) {
+    				if_block1.d(1);
+    				if_block1 = null;
     			}
 
     			if (dirty & /*phase1FillCol*/ 8) {
@@ -1766,16 +2064,16 @@ var app = (function () {
     			}
 
     			if (/*phase*/ ctx[0] == 2) {
-    				if (if_block1) {
-    					if_block1.p(ctx, dirty);
+    				if (if_block2) {
+    					if_block2.p(ctx, dirty);
     				} else {
-    					if_block1 = create_if_block_2(ctx);
-    					if_block1.c();
-    					if_block1.m(use1, null);
+    					if_block2 = create_if_block_2(ctx);
+    					if_block2.c();
+    					if_block2.m(use1, null);
     				}
-    			} else if (if_block1) {
-    				if_block1.d(1);
-    				if_block1 = null;
+    			} else if (if_block2) {
+    				if_block2.d(1);
+    				if_block2 = null;
     			}
 
     			if (dirty & /*phase2FillCol*/ 16) {
@@ -1783,16 +2081,16 @@ var app = (function () {
     			}
 
     			if (/*phase*/ ctx[0] == 3) {
-    				if (if_block2) {
-    					if_block2.p(ctx, dirty);
+    				if (if_block3) {
+    					if_block3.p(ctx, dirty);
     				} else {
-    					if_block2 = create_if_block_1(ctx);
-    					if_block2.c();
-    					if_block2.m(use2, null);
+    					if_block3 = create_if_block_1(ctx);
+    					if_block3.c();
+    					if_block3.m(use2, null);
     				}
-    			} else if (if_block2) {
-    				if_block2.d(1);
-    				if_block2 = null;
+    			} else if (if_block3) {
+    				if_block3.d(1);
+    				if_block3 = null;
     			}
 
     			if (dirty & /*phase3FillCol*/ 32) {
@@ -1800,14 +2098,14 @@ var app = (function () {
     			}
 
     			if (/*phase*/ ctx[0] == 4) {
-    				if (if_block3) ; else {
-    					if_block3 = create_if_block$2(ctx);
-    					if_block3.c();
-    					if_block3.m(g0, null);
+    				if (if_block4) ; else {
+    					if_block4 = create_if_block$2(ctx);
+    					if_block4.c();
+    					if_block4.m(g0, null);
     				}
-    			} else if (if_block3) {
-    				if_block3.d(1);
-    				if_block3 = null;
+    			} else if (if_block4) {
+    				if_block4.d(1);
+    				if_block4 = null;
     			}
 
     			if (dirty & /*size*/ 4) {
@@ -1826,6 +2124,7 @@ var app = (function () {
     			if (if_block1) if_block1.d();
     			if (if_block2) if_block2.d();
     			if (if_block3) if_block3.d();
+    			if (if_block4) if_block4.d();
     		}
     	};
 
@@ -1971,11 +2270,17 @@ var app = (function () {
     const file$2 = "src\\components\\Iteration.svelte";
 
     function create_fragment$2(ctx) {
-    	let div;
-    	let tddcycle;
+    	let div1;
+    	let div0;
     	let t0;
-    	let p;
+    	let tddcycle;
     	let t1;
+    	let p;
+
+    	let t2_value = (/*dimmed*/ ctx[2]
+    	? ""
+    	: "Iteration: " + /*iterationCounter*/ ctx[0]) + "";
+
     	let t2;
     	let current;
 
@@ -1990,26 +2295,31 @@ var app = (function () {
 
     	const block = {
     		c: function create() {
-    			div = element("div");
-    			create_component(tddcycle.$$.fragment);
+    			div1 = element("div");
+    			div0 = element("div");
     			t0 = space();
+    			create_component(tddcycle.$$.fragment);
+    			t1 = space();
     			p = element("p");
-    			t1 = text("Iteration: ");
-    			t2 = text(/*iterationCounter*/ ctx[0]);
+    			t2 = text(t2_value);
+    			attr_dev(div0, "class", "overlay svelte-1q3e0gx");
+    			add_location(div0, file$2, 9, 4, 238);
     			attr_dev(p, "class", "title");
-    			add_location(p, file$2, 8, 4, 240);
-    			attr_dev(div, "class", "iteration svelte-ule86a");
-    			add_location(div, file$2, 6, 0, 133);
+    			add_location(p, file$2, 11, 4, 344);
+    			attr_dev(div1, "class", "iteration svelte-1q3e0gx");
+    			toggle_class(div1, "dimmed", /*dimmed*/ ctx[2]);
+    			add_location(div1, file$2, 8, 0, 196);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div, anchor);
-    			mount_component(tddcycle, div, null);
-    			append_dev(div, t0);
-    			append_dev(div, p);
-    			append_dev(p, t1);
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, div0);
+    			append_dev(div1, t0);
+    			mount_component(tddcycle, div1, null);
+    			append_dev(div1, t1);
+    			append_dev(div1, p);
     			append_dev(p, t2);
     			current = true;
     		},
@@ -2018,7 +2328,14 @@ var app = (function () {
     			if (dirty & /*phase*/ 2) tddcycle_changes.phase = /*phase*/ ctx[1];
     			if (dirty & /*iterationCounter*/ 1) tddcycle_changes.text = /*iterationCounter*/ ctx[0];
     			tddcycle.$set(tddcycle_changes);
-    			if (!current || dirty & /*iterationCounter*/ 1) set_data_dev(t2, /*iterationCounter*/ ctx[0]);
+
+    			if ((!current || dirty & /*dimmed, iterationCounter*/ 5) && t2_value !== (t2_value = (/*dimmed*/ ctx[2]
+    			? ""
+    			: "Iteration: " + /*iterationCounter*/ ctx[0]) + "")) set_data_dev(t2, t2_value);
+
+    			if (dirty & /*dimmed*/ 4) {
+    				toggle_class(div1, "dimmed", /*dimmed*/ ctx[2]);
+    			}
     		},
     		i: function intro(local) {
     			if (current) return;
@@ -2030,7 +2347,7 @@ var app = (function () {
     			current = false;
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div);
+    			if (detaching) detach_dev(div1);
     			destroy_component(tddcycle);
     		}
     	};
@@ -2051,6 +2368,7 @@ var app = (function () {
     	validate_slots('Iteration', slots, []);
     	let { iterationCounter = 0 } = $$props;
     	let { phase = 0 } = $$props;
+    	let dimmed = false;
     	const writable_props = ['iterationCounter', 'phase'];
 
     	Object.keys($$props).forEach(key => {
@@ -2062,18 +2380,30 @@ var app = (function () {
     		if ('phase' in $$props) $$invalidate(1, phase = $$props.phase);
     	};
 
-    	$$self.$capture_state = () => ({ TDDCycle, iterationCounter, phase });
+    	$$self.$capture_state = () => ({
+    		TDDCycle,
+    		iterationCounter,
+    		phase,
+    		dimmed
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ('iterationCounter' in $$props) $$invalidate(0, iterationCounter = $$props.iterationCounter);
     		if ('phase' in $$props) $$invalidate(1, phase = $$props.phase);
+    		if ('dimmed' in $$props) $$invalidate(2, dimmed = $$props.dimmed);
     	};
 
     	if ($$props && "$$inject" in $$props) {
     		$$self.$inject_state($$props.$$inject);
     	}
 
-    	return [iterationCounter, phase];
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty & /*phase*/ 2) {
+    			$$invalidate(2, dimmed = phase == 0 || phase == 4);
+    		}
+    	};
+
+    	return [iterationCounter, phase, dimmed];
     }
 
     class Iteration extends SvelteComponentDev {
@@ -2104,35 +2434,6 @@ var app = (function () {
     	set phase(value) {
     		throw new Error("<Iteration>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
-    }
-
-    function cubicOut(t) {
-        const f = t - 1.0;
-        return f * f * f + 1.0;
-    }
-
-    function fade(node, { delay = 0, duration = 400, easing = identity } = {}) {
-        const o = +getComputedStyle(node).opacity;
-        return {
-            delay,
-            duration,
-            easing,
-            css: t => `opacity: ${t * o}`
-        };
-    }
-    function fly(node, { delay = 0, duration = 400, easing = cubicOut, x = 0, y = 0, opacity = 0 } = {}) {
-        const style = getComputedStyle(node);
-        const target_opacity = +style.opacity;
-        const transform = style.transform === 'none' ? '' : style.transform;
-        const od = target_opacity * (1 - opacity);
-        return {
-            delay,
-            duration,
-            easing,
-            css: (t, u) => `
-			transform: ${transform} translate(${(1 - t) * x}px, ${(1 - t) * y}px);
-			opacity: ${target_opacity - (od * u)}`
-        };
     }
 
     /* src\components\Game.svelte generated by Svelte v3.46.2 */
