@@ -1,5 +1,5 @@
 import { get } from 'svelte/store';
-import {gameState} from './store.js';
+import {gameState, resetGame} from './store.js';
 
 var states = [
     { id: "red", title: "Make it Red", helpName: "test", class: "red", next: 1, description:"Write the simplest test you can think of that will fail" , buttonText: "Done: There is ONE failing (red) test"},
@@ -9,17 +9,23 @@ var states = [
 ];
 
 
-let gs=get(gameState); 
-console.log(gs);
-
-if(!gs.curState){ 
-    gs.curState =  states[0];
-    var its = get4Iterations(1);
-    gs.iterations = [...gs.iterations, ...its];
-    addStep(gs.curState, gs.stepNumber, gs.players[gs.curDriver], gs.players[gs.curNavigator]);
-    gameState.set(gs)
+export const reStartGame= () => {
+    resetGame();
 }
 
+export const startGame= () => {
+    
+    let gs=get(gameState); 
+    gs.started=true;
+    if(!gs.curState){ 
+        gs.curState =  states[0];
+        var its = get4Iterations(1);
+        gs.iterations = [...gs.iterations, ...its];
+        addStep(gs, gs.curState, gs.stepNumber, gs.players[gs.curDriver], gs.players[gs.curNavigator]);
+    }
+    
+    gameState.set(gs)
+}
 
 function get4Iterations(idx){
     return[
@@ -62,7 +68,7 @@ export const nextStep = () => {
         swapPairRoles();
     }
     else{
-        addStep(gs.curState, gs.stepNumber, gs.players[gs.curDriver], gs.players[gs.curNavigator]);
+        addStep(gs, gs.curState, gs.stepNumber, gs.players[gs.curDriver], gs.players[gs.curNavigator]);
         gs.stepNumber++;
     }
     
@@ -70,42 +76,46 @@ export const nextStep = () => {
 }
 
 function swapPairRoles() {
-    let gs=get(gameState); 
+    let gs = get(gameState); 
     gs.curDriver++;
     gs.curNavigator++;
     gs.curDriver %= 2;
     gs.curNavigator %= 2;
-    buildStepObject(
+    const step = buildStepObject(
         "Swap pair programming roles",
         gs.players[gs.curDriver] + " is now the driver and " + gs.players[gs.curNavigator] + " is the navigator",
         "Done:" + gs.players[gs.curDriver] + " has the keyboard",
         ""+ gs.curState.class+" step swap",
         "swap"
     );
+    gs.steps=[...gs.steps, step]
+    gs.step =  step
     gameState.set(gs)
 }
   
-  function addStep(state, stepNumber, driverName, navigatorName) {
-    buildStepObject(
+function addStep(gs, state, stepNumber, driverName, navigatorName) {
+     const step = buildStepObject(
         "Step:" + stepNumber + " " +state.title,
         (state.description + "    ("+ driverName + " is driving" + ", " + navigatorName + " is navigating)"),
         state.buttonText,
         ""+state.class+ " step",
         state.helpName
     );
+    gs.steps=[...gs.steps, step]
+    gs.step =  step
 
-  }
+}
 
-  function buildStepObject(title, bodyText, buttonText, classes, helpName) {
-        let gs=get(gameState);
-        var step= new Object();
-        step = {title, bodyText, buttonText, classes, helpName};
-        step.x=42
-        //steps.push(step)
-        gs.steps=[...gs.steps, step]
-        //curStep = step;
-        //console.log(step)
-        gs.step =  step
+function buildStepObject(title, bodyText, buttonText, classes, helpName) {
+    const step = {title, bodyText, buttonText, classes, helpName};
 
-        gameState.set(gs)
-  }
+    return step;
+    step.x=42
+    //steps.push(step)
+    gs.steps=[...gs.steps, step]
+    //curStep = step;
+    //console.log(step)
+    gs.step =  step
+
+    gameState.set(gs)
+}

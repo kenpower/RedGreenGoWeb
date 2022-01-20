@@ -1,7 +1,9 @@
 <script>
 	import Game from "./components/Game.svelte";
 	import IconButton from "./components/IconButton.svelte";
-	import {gameState, resetGame} from './store.js';
+	import {gameState} from './store.js';
+	import {reStartGame, startGame} from './gameLogic.js';
+	
 
 	import { fly } from 'svelte/transition';
 </script>
@@ -16,7 +18,7 @@
 <main>
 	<header>
         <div class="menu">
-        <IconButton onclick={resetGame} icon="restart"/>
+        <IconButton onclick={reStartGame} icon="restart"/>
 		</div>
         <div class="title">
 			<svg xmlns="http://www.w3.org/2000/svg">
@@ -47,7 +49,7 @@
 			<label for="lname">Player 2</label>
 			<input type="text" id="lname" name="lname" bind:value={$gameState.players[1]}><br>
 			</span>	
-			<button id="startBtn"  on:click={() => $gameState.started = true}>Start Game</button>
+			<button id="startBtn"  on:click={startGame}>Start Game</button>
 			</div>
 		{/if}
 	</section>
