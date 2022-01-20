@@ -25,7 +25,7 @@ function scrollIntoView() {
 }
 
 $: {
-    scrollIntoView();
+    scrollIntoView(); //no state here, so does it ever get called?
 }
 </script>
 

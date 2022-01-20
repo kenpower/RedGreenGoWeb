@@ -18,9 +18,8 @@ export const startGame= () => {
     let gs=get(gameState); 
     gs.started=true;
     if(!gs.curState){ 
-        gs.curState =  states[0];
-        var its = get4Iterations(1);
-        gs.iterations = [...gs.iterations, ...its];
+        gs.curState = states[0];
+        gs.iterations = get4Iterations(1);
         addStep(gs, gs.curState, gs.stepNumber, gs.players[gs.curDriver], gs.players[gs.curNavigator]);
     }
     
@@ -103,7 +102,6 @@ function addStep(gs, state, stepNumber, driverName, navigatorName) {
     );
     gs.steps=[...gs.steps, step]
     gs.step =  step
-
 }
 
 function buildStepObject(title, bodyText, buttonText, classes, helpName) {
