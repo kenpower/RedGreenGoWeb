@@ -21,7 +21,7 @@
         <div class="title">
 			<svg xmlns="http://www.w3.org/2000/svg">
 			  <filter id="motion-blur-filter" filterUnits="userSpaceOnUse">
-					  <feGaussianBlur stdDeviation="15 0"></feGaussianBlur>
+					  <feGaussianBlur stdDeviation="10 0"></feGaussianBlur>
 			  </filter>
 			</svg>
 			<span id="red">Red</span>-<span id="green">Green</span>-<span  filter-content="G" class = "swoosh" id="blue">G</span><span id="blue">o!</span>
@@ -91,6 +91,7 @@
 	#blue {
 		color: var(--refactoring-blue);
 		font-style: italic;
+		transform: skew(45deg, 50deg);
 	}
 	.swoosh::before{
 		content: attr(filter-content);
