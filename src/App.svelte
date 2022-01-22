@@ -3,6 +3,8 @@
 	import IconButton from "./components/IconButton.svelte";
 	import {gameState} from './store.js';
 	import {reStartGame, startGame} from './gameLogic.js';
+	import TimedButton from './components/TimedButton.svelte';
+	
 	
 
 	import { fly } from 'svelte/transition';
@@ -15,6 +17,7 @@
 </svelte:head>
 
 <title>Red Green Go!</title>
+
 <main>
 	<header>
         <div class="menu">

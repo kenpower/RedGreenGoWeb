@@ -3,6 +3,8 @@ import HintCard from "./HintCard.svelte";
 import {fade,fly, blur, scale} from "svelte/transition";
 import { tick } from 'svelte';
 import { createEventDispatcher } from 'svelte';
+import Icon from './Icon.svelte';
+import TimedButton from "./TimedButton.svelte";
 
 const dispatch = createEventDispatcher();
 
@@ -34,8 +36,16 @@ $: {
     <p class = "title">{step.title}</p>
     <div class ="stepBody">
         <p>{step.bodyText}</p>
-        <button on:click="{() => dispatch('interact', 'done')}">{step.buttonText}</button>
-        <button on:click={showCard}>Hint</button>
+        <div>
+            <Icon icon="keyboard"/><span> {step.driver}</span>
+            <span style="display: inline-block;width:2em;"></span>
+            <Icon icon="navigation"/><span> {step.navigator}</span>
+        </div>
+        <div style="display: flex; justify-content:space-evenly" >
+            <button on:click="{() => dispatch('interact', 'done')}">{step.buttonText}</button>
+            <button on:click={showCard}>Hint</button>
+            <TimedButton text="Solution"/>
+        </div>
     </div>
     <!-- TODO move into game -->
     <HintCard {showHint} cardType = {step.helpName} />
@@ -43,6 +53,10 @@ $: {
 {/key}
 
 <style>
+span{
+    vertical-align: top;
+    padding-left: 0.3em;
+}
 .step {
     color: black;
     width: 100%;

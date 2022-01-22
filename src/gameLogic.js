@@ -83,9 +83,12 @@ function swapPairRoles() {
     const step = buildStepObject(
         "Swap pair programming roles",
         gs.players[gs.curDriver] + " is now the driver and " + gs.players[gs.curNavigator] + " is the navigator",
-        "Done:" + gs.players[gs.curDriver] + " has the keyboard",
+        "OK:" + gs.players[gs.curDriver] + " has the keyboard",
         ""+ gs.curState.class+" step swap",
-        "swap"
+        "swap",
+        gs.players[gs.curDriver],
+        gs.players[gs.curNavigator]
+
     );
     gs.steps=[...gs.steps, step]
     gs.step =  step
@@ -95,25 +98,18 @@ function swapPairRoles() {
 function addStep(gs, state, stepNumber, driverName, navigatorName) {
      const step = buildStepObject(
         "Step:" + stepNumber + " " +state.title,
-        (state.description + "    ("+ driverName + " is driving" + ", " + navigatorName + " is navigating)"),
+        state.description,
         state.buttonText,
         ""+state.class+ " step",
-        state.helpName
+        state.helpName,
+        driverName,
+        navigatorName
     );
     gs.steps=[...gs.steps, step]
     gs.step =  step
 }
 
-function buildStepObject(title, bodyText, buttonText, classes, helpName) {
-    const step = {title, bodyText, buttonText, classes, helpName};
-
-    return step;
-    step.x=42
-    //steps.push(step)
-    gs.steps=[...gs.steps, step]
-    //curStep = step;
-    //console.log(step)
-    gs.step =  step
-
-    gameState.set(gs)
+function buildStepObject(title, bodyText, buttonText, classes, helpName, driver, navigator) {
+    const step = {title, bodyText, buttonText, classes, helpName, driver, navigator};
+    return step
 }

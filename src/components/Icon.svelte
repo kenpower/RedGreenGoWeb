@@ -3,11 +3,19 @@
     export let size = "20px";
     
     let urls={
-        "restart": "icons/restart.png"
+        "restart": "icons/restart.png",
+        "driving": "icons/driving.png",
+        "navigation": "icons/navigation.png",
+        "keyboard": "icons/keyboard.png",
+        
     }
 
     let alts={
-        "restart": "Restart Game"
+        "restart": "Restart Game",
+        "driving": "Driver",
+        "navigation": "Navigator",
+        "keyboard": "Keyboard",
+        
     }
 
 </script>
