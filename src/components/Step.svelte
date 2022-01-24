@@ -37,9 +37,9 @@ $: {
     <div class ="stepBody">
         <p>{step.bodyText}</p>
         <div>
-            <Icon icon="keyboard"/><span> {step.driver}</span>
+            <Icon icon="keyboard"/><span> {step.driver} is the driver</span>
             <span style="display: inline-block;width:2em;"></span>
-            <Icon icon="navigation"/><span> {step.navigator}</span>
+            <Icon icon="navigation"/><span> {step.navigator} is the navigator</span>
         </div>
         <div style="display: flex; justify-content:space-evenly" >
             <button on:click="{() => dispatch('interact', 'done')}">{step.buttonText}</button>

@@ -5,20 +5,20 @@ const ALERT_THRESHOLD = 5;
 
 const COLOR_CODES = {
   info: {
-    color: "green"
+    color: "red"
   },
   warning: {
     color: "orange",
     threshold: WARNING_THRESHOLD
   },
   alert: {
-    color: "red",
+    color: "green",
     threshold: ALERT_THRESHOLD
   }
 };
 
 export let text = "OK"
-const TIME_LIMIT = 5;
+const TIME_LIMIT = 12;
 let timePassed = 0;
 let timeLeft = TIME_LIMIT;
 let timerInterval = null;
