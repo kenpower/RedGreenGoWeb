@@ -1,0 +1,44 @@
+
+## First failing test
+
+Our first test might simply try to create FizzBuzz object, if we do, we will have a compile error: `FizzBuzz is undefined`. 
+This is OK, this is probably the simlest test we can write that will fail. The failing test will tell us what to do next.
+
+If code in a test fails to compile because we have not yet defined the class or methids, then that counts as a failing test. The first red test is below
+```
+// in file test.cpp
+#include "pch.h"
+
+TEST(FizzBuzz, CanCreateAFizzBuzzObject) {
+	FizzBuzz fb;
+}
+```
+
+## Making first test green
+
+In order to make this test pass, we need to define a FizzBuzz class
+  
+  1. Right click on FizzBuzz project in Solution Explorer windows. Select add/"new item", select "Header File (.h)". Change the name to "FizzBuzz.h" and click "Add
+  2. Normally we should also create a FizzBuzz.cpp file for the method bodies, but we will put the methods in the .h file to simplify stting up the tests.
+  3. Define a FizzBuzz class by adding the following code to FizzBuzz.h
+
+```
+#pragma once
+
+class FizzBuzz {
+
+};
+```
+ We also needd to `include` the class into out test file. Add the following line to test.cpp:
+ ```
+ #include "pch.h"
+#include "../FizzBuzz/FizzBuzz.h"```
+
+Go to test menu, select "Run all tests". We should see one green test in the Test Explorer. COngratulation you have 
+
+ ## Second test
+ 
+ Check that given input 1, it returns the string `"1"`, 
+
+
+
