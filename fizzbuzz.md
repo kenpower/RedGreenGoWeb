@@ -29,16 +29,19 @@ class FizzBuzz {
 
 };
 ```
+ 
  We also needd to `include` the class into out test file. Add the following line to test.cpp:
- ```
- #include "pch.h"
-#include "../FizzBuzz/FizzBuzz.h"```
+ 
+```
+#include "pch.h"
+#include "../FizzBuzz/FizzBuzz.h"
+```
 
-Go to test menu, select "Run all tests". We should see one green test in the Test Explorer. COngratulation you have 
+Go to test menu, select "Run all tests". We should see one green test in the Test Explorer. Congratulation you have written your first passing test.
 
  ## Second test
  
- Check that given input 1, it returns the string `"1"`, 
+ Check that given input of 1, it returns the string `"1"`, 
 
 
 
