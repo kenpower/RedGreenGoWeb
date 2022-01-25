@@ -18,7 +18,7 @@ export class GameState{
         this.driver = 0,
         this.navigator = 1,
         this.state  = states[0],
-        this.stepCount  = 0, 
+        this.stepNumber  = 1, 
         this.iteration  = 0,    
         this.started = false
         this.iterations = [];
@@ -53,7 +53,7 @@ export class GameState{
             console.log("Error: next step called but no state")
         }
         this.state = states[this.state.next];
-        this.stepCount++;
+        this.stepNumber++;
 
         if(this.state.id=="red") {
             this.iterations[this.iteration].phase=TDDPhase.COMPLETED;
@@ -84,7 +84,7 @@ export class GameState{
 
     getStep = () =>{
         const step = {
-            title: "Step:" + this.stepCount + " " + this.state.title,
+            title: "Step:" + this.stepNumber + " " + this.state.title,
             bodyText: this.state.description,
             buttonText: this.state.buttonText,
             classes: ""+this.state.class+ " step",

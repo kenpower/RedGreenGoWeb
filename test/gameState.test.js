@@ -6,7 +6,7 @@ test('initialisation', () => {
   expect(g.driver).toBe(0);
   expect(g.navigator).toBe(1);
   expect(g.state).toBe(states[0]);
-  expect(g.stepCount).toBe(0);
+  expect(g.stepNumber).toBe(1);
   expect(g.iteration).toBe(0);
   expect(g.started).toBe(false);
 });
@@ -96,7 +96,7 @@ test('start', () => {
     expect(g.navigator).toBe(1);
     expect(g.iterations[4].phase).toBe(TDDPhase.RED); 
     expect(g.iterations[3].phase).toBe(TDDPhase.COMPLETED); 
-    expect(g.stepCount).toBe(16);
+    expect(g.stepNumber).toBe(17);
   });
 
 
@@ -130,5 +130,5 @@ test('start', () => {
     expect(step.stateName).toBe("refactor");
     expect(step.iteration).toBe(0);
     expect(step.driver).toBe("Jane");
-    expect(step.title).toBe("Step:3 Make it Clean")
+    expect(step.title).toBe("Step:4 Make it Clean")
   });
