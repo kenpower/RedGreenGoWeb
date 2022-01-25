@@ -1,14 +1,18 @@
 <script>
 	import Game from "./components/Game.svelte";
 	import IconButton from "./components/IconButton.svelte";
-	import {gameState} from './store.js';
-	import {reStartGame, startGame} from './gameLogic.js';
-	import TimedButton from './components/TimedButton.svelte';
-	import Solutions from './components/Solutions.svelte';
-	
-	
-
+	//import {gameState} from './store.js';
+	//import {reStartGame, startGame} from './gameLogic.js';
+	import {GameState} from "./gameState"
 	import { fly } from 'svelte/transition';
+
+	let gameState = new GameState();
+
+	const startGame = () => {
+		gameState.start();
+		gameState=gameState;
+		
+	}	
 </script>
 
 <svelte:head>
@@ -22,7 +26,7 @@
 <main>
 	<header>
         <div class="menu">
-        <IconButton onclick={reStartGame} icon="restart"/>
+        <IconButton onclick={startGame} icon="restart"/>
 		</div>
         <div class="title">
 			<svg xmlns="http://www.w3.org/2000/svg">
@@ -41,19 +45,19 @@
 	
 	<h2>A game of TDD & Pairing</h2>    
 	<section>
-		{#if $gameState.started}
+		{#if gameState.started}
 			<div in:fly="{{ y: 200, duration: 2000 }}">
-				<Game />
+				<Game {gameState}/>
 			</div>
 		{:else}
 		<div >
 			<span>
 			<label for="fname">Player 1</label>
-			<input type="text" id="fname" name="fname" bind:value={$gameState.players[0]}><br>
+			<input type="text" id="fname" name="fname" bind:value={gameState.players[0]}><br>
 		</span>
 		<span>
 			<label for="lname">Player 2</label>
-			<input type="text" id="lname" name="lname" bind:value={$gameState.players[1]}><br>
+			<input type="text" id="lname" name="lname" bind:value={gameState.players[1]}><br>
 			</span>	
 			<button id="startBtn"  on:click={startGame}>Start Game</button>
 			</div>

@@ -2,7 +2,7 @@
     import { createEventDispatcher } from 'svelte';
     import {fly, fade,scale} from 'svelte/transition';
 
-    export let isOpenModal;
+    export let isOpenModal = false;
 
       const dispatch = createEventDispatcher();
 

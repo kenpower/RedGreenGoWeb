@@ -39,9 +39,9 @@ function scrollIntoView() {
 }
 
 $:{
-	if(dataReady) solutionHTML = st.getStepText(2,"green");
+    console.log(step)
+	if(dataReady) solutionHTML = st.getStepText(step.iteration, step.name);
 }
-
 
 $: {
     scrollIntoView(); //no state here, so does it ever get called?
@@ -64,7 +64,8 @@ $: {
             <TimedButton on:solution="{showSolution}" text="Solution"/>
         </div>
     </div>
-    <!-- TODO move into game -->
+    <!-- TODO move into game, or should I??? -->
+    <!-- TODO make hint a sub component of modalContainer -->
     <HintCard {showHint} cardType = {step.helpName} />
     <ModalContainer bind:isOpenModal>
         <div style="background:white">

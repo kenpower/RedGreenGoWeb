@@ -12,11 +12,12 @@
 		if(!dataReady) {
 			return "";
 		}
-		
+		console.log(iteration, " ",step)
+
 		const selector = "article#loop"+iteration+" section."+step;
 		const section = htmlDoc.querySelector(selector);
 		console.log(section)
-		return section.innerHTML;		
+		return section ? section.innerHTML: "";		
 	};
 
 	onMount(async function () {
