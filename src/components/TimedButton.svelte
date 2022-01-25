@@ -1,4 +1,10 @@
 <script>
+
+import { createEventDispatcher } from 'svelte';
+
+const dispatch = createEventDispatcher();
+
+
 const FULL_DASH_ARRAY = 283;
 const WARNING_THRESHOLD = 10;
 const ALERT_THRESHOLD = 5;
@@ -85,7 +91,7 @@ function setCircleDasharray() {
 }
 
 </script>
-<button disabled={!timeUp}><span>{text}</span>
+<button disabled={!timeUp}  on:click="{() => dispatch('solution', '')}"><span>{text}</span>
 <div class="clock-container">
     <div class="base-timer">
         <svg class="base-timer__svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">

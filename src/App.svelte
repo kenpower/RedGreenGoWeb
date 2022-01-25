@@ -4,6 +4,7 @@
 	import {gameState} from './store.js';
 	import {reStartGame, startGame} from './gameLogic.js';
 	import TimedButton from './components/TimedButton.svelte';
+	import Solutions from './components/Solutions.svelte';
 	
 	
 

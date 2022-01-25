@@ -1,5 +1,7 @@
 <script>
 import HintCard from "./HintCard.svelte";
+import Solutions from "./Solutions.svelte";
+import ModalContainer from "./ModalContainer.svelte";
 import {fade,fly, blur, scale} from "svelte/transition";
 import { tick } from 'svelte';
 import { createEventDispatcher } from 'svelte';
@@ -9,12 +11,22 @@ import TimedButton from "./TimedButton.svelte";
 const dispatch = createEventDispatcher();
 
 export let step;
+let isOpenModal;
+let solutionHTML = ""
+let dataReady = false;
+        
+let st;
+
 let showHint = false;
 
 async function showCard() {
     showHint = true;
     await tick()
     showHint = false
+}
+
+async function showSolution() {
+    isOpenModal = true;
 }
 
 //TODO move into game
@@ -25,6 +37,11 @@ function scrollIntoView() {
         behavior: 'smooth'
     });
 }
+
+$:{
+	if(dataReady) solutionHTML = st.getStepText(2,"green");
+}
+
 
 $: {
     scrollIntoView(); //no state here, so does it ever get called?
@@ -44,14 +61,20 @@ $: {
         <div style="display: flex; justify-content:space-evenly" >
             <button on:click="{() => dispatch('interact', 'done')}">{step.buttonText}</button>
             <button on:click={showCard}>Hint</button>
-            <TimedButton text="Solution"/>
+            <TimedButton on:solution="{showSolution}" text="Solution"/>
         </div>
     </div>
     <!-- TODO move into game -->
     <HintCard {showHint} cardType = {step.helpName} />
+    <ModalContainer bind:isOpenModal>
+        <div style="background:white">
+            {@html solutionHTML}
+        </div>
+    </ModalContainer>
 </div>
 {/key}
 
+<Solutions bind:this={st} bind:dataReady />
 <style>
 span{
     vertical-align: top;
