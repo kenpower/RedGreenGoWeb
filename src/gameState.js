@@ -13,15 +13,28 @@ export const TDDPhase = {
 };
 
 export class GameState{
-    constructor(){
-        this.players  = ["John", "Jane"],
-        this.driver = 0,
-        this.navigator = 1,
-        this.state  = states[0],
-        this.stepNumber  = 1, 
-        this.iteration  = 0,    
-        this.started = false
-        this.iterations = [];
+    constructor(recoveredSavedGame){
+        if(recoveredSavedGame){
+            const r = recoveredSavedGame;
+            this.players  = r.players;
+            this.driver = r.driver;
+            this.navigator = r.navigator;
+            this.state  = r.state;
+            this.stepNumber  = r.stepNumber; 
+            this.iteration  = r.iteration;    
+            this.started = r.started
+            this.iterations = r.iterations;
+
+        }else{
+            this.players  = ["John", "Jane"],
+            this.driver = 0,
+            this.navigator = 1,
+            this.state  = states[0],
+            this.stepNumber  = 1, 
+            this.iteration  = 0,    
+            this.started = false
+            this.iterations = [];
+        }
     }
 
     #swapPairRoles = () => {
@@ -39,11 +52,26 @@ export class GameState{
             {phase:0, index:idx++}
         ];
     }
+
+    static GAME_STATE = "GAME_STATE";
+
+    #save = () => {
+        localStorage.setItem(GameState.GAME_STATE, JSON.stringify(this));
+    }
+
+    static recoverSavedGame = () => {
+        var ls = localStorage.getItem(GameState.GAME_STATE); 
+            
+        console.log("recovering game from local storage");
+        console.log(ls);
+        return ls ? new GameState(JSON.parse(ls)) : null;
+    }
     
     start(){ 
-        console.log(this);
+        
         this.started = true;
         this.iterations = this.#get4Iterations(1);
+        this.#save();
         //console.log("starting game");
     }
     
@@ -77,6 +105,7 @@ export class GameState{
             this.iterations[this.iteration].phase=TDDPhase.GREEN; 
             this.#swapPairRoles();   
         }
+        this.#save();
     }
 
     #driver = () => this.players[this.driver];
@@ -107,6 +136,20 @@ export class GameState{
         return step;
 
     }
+
+
 }
 
+// export const resetGame = () => {
+//     const gs = copyOfInitialGameState();
+//     _gameState.set(gs);
+//     localStorage.setItem(GAME_STATE, JSON.stringify(gs))
+// }
+// const GAME_STATE = "GAME_STATE";
+// const copyOfInitialGameState = () => JSON.parse(JSON.stringify(initialGameState));
+
+// export const _gameState = writable(
+//     localStorage[GAME_STATE] 
+//         ? JSON.parse(localStorage[GAME_STATE]) 
+//         : copyOfInitialGameState());
 

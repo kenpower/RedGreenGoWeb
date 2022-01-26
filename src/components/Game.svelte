@@ -2,9 +2,6 @@
 import  Step  from './Step.svelte';
 import  Iteration  from './Iteration.svelte';
 import { fade } from 'svelte/transition';
-//import {gameState} from '../store.js';
-//import {nextStep} from '../gameLogic.js';
-//import {GameState, states, TDDPhase} from "../gameState"
 
 export let gameState;
 let iterations;
@@ -14,13 +11,6 @@ const nextStep = () => {
     gameState.nextStep();
     gameState=gameState;
 }
-
-// gameState.subscribe(gs => {
-//     console.log("game state changed");
-//     console.log(gs);
-//     iterations=gs.iterations;
-//     step=gs.step;
-// });
 
 </script>
 

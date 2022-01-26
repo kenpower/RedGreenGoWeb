@@ -6,8 +6,10 @@
 	import {GameState} from "./gameState"
 	import { fly } from 'svelte/transition';
 
-	let gameState = new GameState();
-
+	let gameState = GameState.recoverSavedGame();
+	if(!gameState){
+		gameState = new GameState();
+	}
 	const startGame = () => {
 		gameState.start();
 		gameState=gameState;

@@ -40,7 +40,7 @@ function scrollIntoView() {
 
 $:{
     console.log(step)
-	if(dataReady) solutionHTML = st.getStepText(step.iteration, step.name);
+	if(dataReady) solutionHTML = st.getStepText(step.iteration+1, step.stateName);
 }
 
 $: {
