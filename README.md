@@ -4,6 +4,10 @@ Web implementation of the [RedGreenGo coaching game](https://github.com/redgreen
 
 # Play https://kenpower.github.io/RedGreenGoWeb/
 
+Todo:
+- [] fizbuzz solution
+- [] Card animation
+
 
 
 # Developers
