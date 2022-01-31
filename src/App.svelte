@@ -20,9 +20,8 @@
 <svelte:head>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-	<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Montserrat:ital,wght@0,300;0,500;1,100;1,300;1,500&family=Roboto+Mono:ital,wght@0,277;0,300;1,300&display=swap" rel="stylesheet">
+	<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Montserrat:ital,wght@0,300;0,500;1,100;1,300;1,500&family=Roboto+Mono:ital,wght@0,277;0,300;1,300&family=Zilla+Slab:wght@300;400;700&display=swap" rel="stylesheet">
 </svelte:head>
-
 <title>Red Green Go!</title>
 
 <main>
@@ -68,6 +67,9 @@
 </main>
 
 <style>
+	:global(*) {
+		--app-width: 500px;
+	}
 	header{
 		display: flex;
     	justify-content: space-between;
@@ -84,10 +86,11 @@
 		margin: 0.25em;
 		font-weight: 200;
 	}
+
 	main {
 		text-align: center;
 		padding: 1em;
-		max-width: 500px;
+		max-width: var(--app-width);
 		margin: 0 auto;
 		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
 		color: var(--color-tone-2);
@@ -120,12 +123,15 @@
 		--testing-red: tomato; /* SVG tomato #FF6347 */
 		--testing-red-muted: #FFA899; 
 		--testing-red-hint: #FFDCD6;
+		--testing-red-hint-trans: #FFDCD677;
 		--coding-green: olivedrab; /* SVG olivedrab #6B8E23	 */
 		--coding-green-muted: #A5D24B;
 		--coding-green-hint: #cee79d;
+		--coding-green-hint-trans: #cee79d77;
 		--refactoring-blue: dodgerblue; /*dodgerblue #1E90FF	 */
 		--refactoring-blue-muted: #85c2ff;
 		--refactoring-blue-hint: #d6ebff;	
+		--refactoring-blue-hint-trans: #d6ebff77;	
 
 		--color-tone-1: #1a1a1b;
 		--color-tone-2: #787c7e;

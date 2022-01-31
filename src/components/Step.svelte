@@ -58,13 +58,14 @@
         id="theStep"
     >
         <p class="title">{step.title}</p>
+        
         <div class="stepBody" >
             <div style="display:flex;">
-                <div class="cardDeck">
-                    <Card off={18} />
-                    <Card off={12} />
-                    <Card off={6} /> 
-                    <Card off={0} />
+                <div class="cardDeck"  on:click={showCard}>
+                    <Card off={12} cardType={step.helpName}  {showHint} />
+                    <Card off={8} cardType={step.helpName} />
+                    <Card off={4} cardType={step.helpName} /> 
+                    <Card off={0} cardType={step.helpName} />
                 </div>
                 <div>
                     <p>{step.bodyText}</p>
@@ -89,7 +90,7 @@
         </div>
         <!-- TODO move into game, or should I??? -->
         <!-- TODO make hint a sub component of modalContainer -->
-        <HintCard {showHint} cardType={step.helpName} />
+        <!-- <HintCard {showHint} cardType={step.helpName} /> -->
         <ModalContainer bind:isOpenModal>
             <div style="background:white">
                 {@html solutionHTML}
@@ -103,9 +104,9 @@
 <style>
     .cardDeck {
         position: relative; /*absolute children position relative to this, not body*/
-        min-width: 20vw;
-        min-height: 30vw;
-        margin: 1em;
+        min-width: calc(var(--app-width) * 0.3);
+        min-height: calc(var(--app-width) * 0.45);
+        margin: 0.5em;
     }
     span {
         vertical-align: top;
