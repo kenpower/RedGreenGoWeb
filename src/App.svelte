@@ -13,7 +13,10 @@
 	const startGame = () => {
 		gameState.start();
 		gameState=gameState;
-		
+	}
+	
+	const reStartGame = () => {
+		gameState = new GameState();
 	}	
 </script>
 
@@ -27,7 +30,7 @@
 <main>
 	<header>
         <div class="menu">
-        <IconButton onclick={startGame} icon="restart"/>
+        <IconButton onclick={reStartGame} icon="restart"/>
 		</div>
         <div class="title">
 			<svg xmlns="http://www.w3.org/2000/svg">

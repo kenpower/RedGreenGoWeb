@@ -35,6 +35,7 @@ export class GameState{
             this.started = false
             this.iterations = [];
         }
+        this.#save();
     }
 
     #swapPairRoles = () => {
@@ -61,9 +62,6 @@ export class GameState{
 
     static recoverSavedGame = () => {
         var ls = localStorage.getItem(GameState.GAME_STATE); 
-            
-        console.log("recovering game from local storage");
-        console.log(ls);
         return ls ? new GameState(JSON.parse(ls)) : null;
     }
     
@@ -72,7 +70,6 @@ export class GameState{
         this.started = true;
         this.iterations = this.#get4Iterations(1);
         this.#save();
-        //console.log("starting game");
     }
     
 
