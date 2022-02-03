@@ -24,6 +24,11 @@ class LocalStorageMock {
 
 global.localStorage = new LocalStorageMock;
 
+test("check localstorage mock", () => {
+  localStorage.setItem("aKey", "my string");
+  const s = localStorage.getItem("aKey");
+  expect(s).toEqual("my string");
+});
 
 const isInitialState = (g) => {
   expect(g.players[0]).toEqual("John");
