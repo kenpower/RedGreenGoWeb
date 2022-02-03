@@ -1,18 +1,17 @@
 <script>
-    import Icon from "./Icon.svelte";
-    export let icon=""
-    export let onclick=()=>{
-        console.log("clicked")
-    }
-    
+  import Icon from "./Icon.svelte";
+  export let icon = "";
+  export let onclick = () => {
+    console.log("clicked");
+  };
 </script>
 
 <button on:click={onclick}>
-    <Icon {icon} ></Icon> 
+  <Icon {icon} />
 </button>
-<style>
 
-button{
+<style>
+  button {
     background: none;
     border: none;
     cursor: pointer;
@@ -20,5 +19,5 @@ button{
     margin: 0;
     display: flex;
     align-items: center;
-} 
+  }
 </style>

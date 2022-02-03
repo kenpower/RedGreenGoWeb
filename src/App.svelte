@@ -59,17 +59,18 @@
   </p>
   <ol>
     <li>
-      <p>Describe one very simple thing what your code <strong>should</strong> do. We write this
-      description in a <em>"test"</em>. A test is a special function that can
-      check if a single peice of code does what you say it should do.
+      <p>
+        Describe one very simple thing what your code <strong>should</strong>
+        do. We write this description in a <em>"test"</em>. A test is a special
+        function that can check if a single peice of code does what you say it
+        should do.
       </p>
       <p>
-      After you write the test, the test will fail, but that us OK as you won't have written the code yet.
+        After you write the test, the test will fail, but that us OK as you
+        won't have written the code yet.
       </p>
     </li>
-    <li>
-      The next step is to to write the code that will makethe test pass.
-    </li>
+    <li>The next step is to to write the code that will makethe test pass.</li>
   </ol>
   <section>
     {#if gameState.started}

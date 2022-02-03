@@ -1,4 +1,4 @@
-import {GameState, states, TDDPhase} from "../src/gameState"
+import { GameState, states, TDDPhase } from "../src/gameState";
 
 class LocalStorageMock {
   constructor() {
@@ -22,7 +22,7 @@ class LocalStorageMock {
   }
 }
 
-global.localStorage = new LocalStorageMock;
+global.localStorage = new LocalStorageMock();
 
 test("check localstorage mock", () => {
   localStorage.setItem("aKey", "my string");

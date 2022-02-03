@@ -5,8 +5,8 @@
 //     curDriver: 0,
 //     curNavigator: 1,
 //     curState : null,
-//     stepNumber : 1, 
-//     iterationCounter : 0,    
+//     stepNumber : 1,
+//     iterationCounter : 0,
 //     curIterationIdx: 0,
 //     step :  null,
 //     steps : [],
@@ -18,10 +18,10 @@
 // const copyOfInitialGameState = () => JSON.parse(JSON.stringify(initialGameState));
 
 // export const _gameState = writable(
-//     localStorage[GAME_STATE] 
-//         ? JSON.parse(localStorage[GAME_STATE]) 
+//     localStorage[GAME_STATE]
+//         ? JSON.parse(localStorage[GAME_STATE])
 //         : copyOfInitialGameState());
-    
+
 // export const resetGame = () => {
 //     const gs = copyOfInitialGameState();
 //     _gameState.set(gs);
