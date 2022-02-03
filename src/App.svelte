@@ -66,11 +66,16 @@
         should do.
       </p>
       <p>
-        After you write the test, the test will fail, but that us OK as you
+        After you write the test, the test will fail, but that is OK as you
         won't have written the code yet.
       </p>
     </li>
-    <li>The next step is to to write the code that will makethe test pass.</li>
+    <li>The next step is to to write enough code that will make the test pass.
+        You don't have to write very much, nor do you haveot write clever code.
+        You can even hard code in results that will pass the test. The code written at this stage will usually
+        be low quality, and specifit to the test. But that is ok, we will geta change to impreove the code later on. 
+        During this step the importnt hting is to get the test passing.
+    </li>
   </ol>
   <section>
     {#if gameState.started}
