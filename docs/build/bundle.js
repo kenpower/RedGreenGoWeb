@@ -2438,12 +2438,12 @@ var app = (function () {
     			span1 = element("span");
     			t3 = text(t3_value);
     			attr_dev(span0, "class", "svelte-vihkma");
-    			add_location(span0, file$6, 92, 3, 2111);
+    			add_location(span0, file$6, 92, 3, 2112);
     			attr_dev(circle, "class", "base-timer__path-elapsed svelte-vihkma");
     			attr_dev(circle, "cx", "50");
     			attr_dev(circle, "cy", "50");
     			attr_dev(circle, "r", "45");
-    			add_location(circle, file$6, 101, 10, 2374);
+    			add_location(circle, file$6, 101, 10, 2375);
     			attr_dev(path, "id", "base-timer-path-remaining");
     			attr_dev(path, "stroke-dasharray", "283");
     			attr_dev(path, "class", "base-timer__path-remaining svelte-vihkma");
@@ -2451,23 +2451,23 @@ var app = (function () {
     			toggle_class(path, "red", /*red*/ ctx[3]);
     			toggle_class(path, "orange", /*orange*/ ctx[4]);
     			toggle_class(path, "green", /*green*/ ctx[5]);
-    			add_location(path, file$6, 102, 10, 2452);
+    			add_location(path, file$6, 102, 10, 2453);
     			attr_dev(g, "class", "base-timer__circle svelte-vihkma");
-    			add_location(g, file$6, 100, 8, 2332);
+    			add_location(g, file$6, 100, 8, 2333);
     			attr_dev(svg, "class", "base-timer__svg svelte-vihkma");
     			attr_dev(svg, "viewBox", "0 0 100 100");
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
-    			add_location(svg, file$6, 95, 6, 2201);
+    			add_location(svg, file$6, 95, 6, 2202);
     			attr_dev(span1, "id", "base-timer-label");
     			attr_dev(span1, "class", "base-timer__label svelte-vihkma");
-    			add_location(span1, file$6, 118, 6, 2866);
+    			add_location(span1, file$6, 118, 6, 2867);
     			attr_dev(div0, "class", "base-timer svelte-vihkma");
-    			add_location(div0, file$6, 94, 4, 2169);
+    			add_location(div0, file$6, 94, 4, 2170);
     			attr_dev(div1, "class", "clock-container svelte-vihkma");
-    			add_location(div1, file$6, 93, 2, 2134);
+    			add_location(div1, file$6, 93, 2, 2135);
     			button.disabled = button_disabled_value = !/*timeUp*/ ctx[2];
     			attr_dev(button, "class", "svelte-vihkma");
-    			add_location(button, file$6, 91, 0, 2038);
+    			add_location(button, file$6, 91, 0, 2039);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -2536,7 +2536,7 @@ var app = (function () {
     const FULL_DASH_ARRAY = 283;
     const WARNING_THRESHOLD = 10;
     const ALERT_THRESHOLD = 5;
-    const TIME_LIMIT = 2;
+    const TIME_LIMIT = 12;
 
     function formatTime(time) {
     	const minutes = Math.floor(time / 60);
@@ -2708,7 +2708,7 @@ var app = (function () {
     		c: function create() {
     			div = element("div");
     			set_style(div, "background", "white");
-    			add_location(div, file$5, 92, 6, 2659);
+    			add_location(div, file$5, 92, 6, 2618);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -2771,14 +2771,12 @@ var app = (function () {
     	let t13;
     	let t14;
     	let div4;
-    	let button0;
+    	let button;
     	let t15_value = /*step*/ ctx[0].buttonText + "";
     	let t15;
     	let t16;
-    	let button1;
-    	let t18;
     	let timedbutton;
-    	let t19;
+    	let t17;
     	let modalcontainer;
     	let updating_isOpenModal;
     	let div6_class_value;
@@ -2893,14 +2891,11 @@ var app = (function () {
     			t13 = text(" is the navigator");
     			t14 = space();
     			div4 = element("div");
-    			button0 = element("button");
+    			button = element("button");
     			t15 = text(t15_value);
     			t16 = space();
-    			button1 = element("button");
-    			button1.textContent = "Hint";
-    			t18 = space();
     			create_component(timedbutton.$$.fragment);
-    			t19 = space();
+    			t17 = space();
     			create_component(modalcontainer.$$.fragment);
     			attr_dev(p0, "class", "title svelte-wc9c2u");
     			add_location(p0, file$5, 59, 4, 1350);
@@ -2920,8 +2915,7 @@ var app = (function () {
     			add_location(div2, file$5, 69, 8, 1750);
     			set_style(div3, "display", "flex");
     			add_location(div3, file$5, 62, 6, 1421);
-    			add_location(button0, file$5, 81, 8, 2189);
-    			add_location(button1, file$5, 84, 8, 2301);
+    			add_location(button, file$5, 81, 8, 2189);
     			set_style(div4, "display", "flex");
     			set_style(div4, "justify-content", "space-evenly");
     			add_location(div4, file$5, 80, 6, 2120);
@@ -2965,21 +2959,18 @@ var app = (function () {
     			append_dev(span2, t13);
     			append_dev(div5, t14);
     			append_dev(div5, div4);
-    			append_dev(div4, button0);
-    			append_dev(button0, t15);
+    			append_dev(div4, button);
+    			append_dev(button, t15);
     			append_dev(div4, t16);
-    			append_dev(div4, button1);
-    			append_dev(div4, t18);
     			mount_component(timedbutton, div4, null);
-    			append_dev(div6, t19);
+    			append_dev(div6, t17);
     			mount_component(modalcontainer, div6, null);
     			current = true;
 
     			if (!mounted) {
     				dispose = [
     					listen_dev(div0, "click", /*showCard*/ ctx[7], false, false, false),
-    					listen_dev(button0, "click", /*click_handler*/ ctx[9], false, false, false),
-    					listen_dev(button1, "click", /*showCard*/ ctx[7], false, false, false)
+    					listen_dev(button, "click", /*click_handler*/ ctx[9], false, false, false)
     				];
 
     				mounted = true;
@@ -4703,82 +4694,151 @@ var app = (function () {
     /* src\App.svelte generated by Svelte v3.46.2 */
     const file = "src\\App.svelte";
 
-    // (85:4) {:else}
+    // (62:4) {:else}
     function create_else_block(ctx) {
+    	let p0;
+    	let t1;
+    	let ol;
+    	let li0;
+    	let p1;
+    	let t2;
+    	let strong;
+    	let t4;
+    	let em;
+    	let t6;
+    	let t7;
+    	let p2;
+    	let t9;
+    	let li1;
+    	let t11;
+    	let li2;
+    	let t13;
     	let div;
     	let span0;
     	let label0;
-    	let t1;
+    	let t15;
     	let input0;
     	let br0;
-    	let t2;
+    	let t16;
     	let span1;
     	let label1;
-    	let t4;
+    	let t18;
     	let input1;
     	let br1;
-    	let t5;
+    	let t19;
     	let button;
     	let mounted;
     	let dispose;
 
     	const block = {
     		c: function create() {
+    			p0 = element("p");
+    			p0.textContent = "Test Driven Development (TDD) is a process for writing code that involves\r\n      repeatedly appying three distinct steps:";
+    			t1 = space();
+    			ol = element("ol");
+    			li0 = element("li");
+    			p1 = element("p");
+    			t2 = text("Describe one very simple thing what your code ");
+    			strong = element("strong");
+    			strong.textContent = "should";
+    			t4 = text("\r\n          do. We write this description in a ");
+    			em = element("em");
+    			em.textContent = "\"test\"";
+    			t6 = text(". A test is a special\r\n          function that can check if a single peice of code does what you say it\r\n          should do.");
+    			t7 = space();
+    			p2 = element("p");
+    			p2.textContent = "After you write the test, the test will fail, but that is OK as you\r\n          won't have written the code yet.";
+    			t9 = space();
+    			li1 = element("li");
+    			li1.textContent = "The next step is to to write enough code that will make the test pass.\r\n          You don't have to write very much, nor do you have to write clever code.\r\n          You can even hard code in results that will pass the test. The code written at this stage will usually\r\n          be low quality, and specifit to the test. But that is ok, we will get a chance to improve the code later on. \r\n          During this step the important thing is to get the test passing.";
+    			t11 = space();
+    			li2 = element("li");
+    			li2.textContent = "Once the test is passing (green), the final step in the cycle is refactoring. This is where we look at the code\r\n          we just wrote and try to find patterns that we can use to make the code more general. \r\n          We will repeat these three steps with tests covering more and more of the required behaviour.";
+    			t13 = space();
     			div = element("div");
     			span0 = element("span");
     			label0 = element("label");
     			label0.textContent = "Player 1";
-    			t1 = space();
+    			t15 = space();
     			input0 = element("input");
     			br0 = element("br");
-    			t2 = space();
+    			t16 = space();
     			span1 = element("span");
     			label1 = element("label");
     			label1.textContent = "Player 2";
-    			t4 = space();
+    			t18 = space();
     			input1 = element("input");
     			br1 = element("br");
-    			t5 = space();
+    			t19 = space();
     			button = element("button");
     			button.textContent = "Start Game";
+    			add_location(p0, file, 62, 6, 1909);
+    			add_location(strong, file, 69, 56, 2144);
+    			add_location(em, file, 70, 45, 2214);
+    			add_location(p1, file, 68, 8, 2083);
+    			add_location(p2, file, 74, 8, 2378);
+    			attr_dev(li0, "class", "svelte-x21k7e");
+    			add_location(li0, file, 67, 6, 2069);
+    			attr_dev(li1, "class", "svelte-x21k7e");
+    			add_location(li1, file, 79, 6, 2539);
+    			attr_dev(li2, "class", "svelte-x21k7e");
+    			add_location(li2, file, 85, 6, 3029);
+    			add_location(ol, file, 66, 4, 2057);
     			attr_dev(label0, "for", "fname");
-    			attr_dev(label0, "class", "svelte-dtmn9t");
-    			add_location(label0, file, 87, 10, 3018);
+    			attr_dev(label0, "class", "svelte-x21k7e");
+    			add_location(label0, file, 92, 10, 3412);
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "id", "fname");
     			attr_dev(input0, "name", "fname");
-    			add_location(input0, file, 88, 10, 3065);
-    			add_location(br0, file, 93, 12, 3207);
-    			add_location(span0, file, 86, 8, 3000);
+    			add_location(input0, file, 93, 10, 3459);
+    			add_location(br0, file, 98, 12, 3601);
+    			add_location(span0, file, 91, 8, 3394);
     			attr_dev(label1, "for", "lname");
-    			attr_dev(label1, "class", "svelte-dtmn9t");
-    			add_location(label1, file, 96, 10, 3258);
+    			attr_dev(label1, "class", "svelte-x21k7e");
+    			add_location(label1, file, 101, 10, 3652);
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "id", "lname");
     			attr_dev(input1, "name", "lname");
-    			add_location(input1, file, 97, 10, 3305);
-    			add_location(br1, file, 102, 12, 3447);
-    			add_location(span1, file, 95, 8, 3240);
+    			add_location(input1, file, 102, 10, 3699);
+    			add_location(br1, file, 107, 12, 3841);
+    			add_location(span1, file, 100, 8, 3634);
     			attr_dev(button, "id", "startBtn");
-    			add_location(button, file, 104, 8, 3480);
-    			add_location(div, file, 85, 6, 2985);
+    			add_location(button, file, 109, 8, 3874);
+    			add_location(div, file, 90, 6, 3379);
     		},
     		m: function mount(target, anchor) {
+    			insert_dev(target, p0, anchor);
+    			insert_dev(target, t1, anchor);
+    			insert_dev(target, ol, anchor);
+    			append_dev(ol, li0);
+    			append_dev(li0, p1);
+    			append_dev(p1, t2);
+    			append_dev(p1, strong);
+    			append_dev(p1, t4);
+    			append_dev(p1, em);
+    			append_dev(p1, t6);
+    			append_dev(li0, t7);
+    			append_dev(li0, p2);
+    			append_dev(ol, t9);
+    			append_dev(ol, li1);
+    			append_dev(ol, t11);
+    			append_dev(ol, li2);
+    			insert_dev(target, t13, anchor);
     			insert_dev(target, div, anchor);
     			append_dev(div, span0);
     			append_dev(span0, label0);
-    			append_dev(span0, t1);
+    			append_dev(span0, t15);
     			append_dev(span0, input0);
     			set_input_value(input0, /*gameState*/ ctx[0].players[0]);
     			append_dev(span0, br0);
-    			append_dev(div, t2);
+    			append_dev(div, t16);
     			append_dev(div, span1);
     			append_dev(span1, label1);
-    			append_dev(span1, t4);
+    			append_dev(span1, t18);
     			append_dev(span1, input1);
     			set_input_value(input1, /*gameState*/ ctx[0].players[1]);
     			append_dev(span1, br1);
-    			append_dev(div, t5);
+    			append_dev(div, t19);
     			append_dev(div, button);
 
     			if (!mounted) {
@@ -4803,6 +4863,10 @@ var app = (function () {
     		i: noop,
     		o: noop,
     		d: function destroy(detaching) {
+    			if (detaching) detach_dev(p0);
+    			if (detaching) detach_dev(t1);
+    			if (detaching) detach_dev(ol);
+    			if (detaching) detach_dev(t13);
     			if (detaching) detach_dev(div);
     			mounted = false;
     			run_all(dispose);
@@ -4813,14 +4877,14 @@ var app = (function () {
     		block,
     		id: create_else_block.name,
     		type: "else",
-    		source: "(85:4) {:else}",
+    		source: "(62:4) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (81:4) {#if gameState.started}
+    // (58:4) {#if gameState.started}
     function create_if_block(ctx) {
     	let div;
     	let game;
@@ -4836,7 +4900,7 @@ var app = (function () {
     		c: function create() {
     			div = element("div");
     			create_component(game.$$.fragment);
-    			add_location(div, file, 81, 6, 2879);
+    			add_location(div, file, 58, 6, 1803);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -4875,7 +4939,7 @@ var app = (function () {
     		block,
     		id: create_if_block.name,
     		type: "if",
-    		source: "(81:4) {#if gameState.started}",
+    		source: "(58:4) {#if gameState.started}",
     		ctx
     	});
 
@@ -4912,21 +4976,6 @@ var app = (function () {
     	let t13;
     	let h2;
     	let t15;
-    	let p0;
-    	let t17;
-    	let ol;
-    	let li0;
-    	let p1;
-    	let t18;
-    	let strong;
-    	let t20;
-    	let em;
-    	let t22;
-    	let t23;
-    	let p2;
-    	let t25;
-    	let li1;
-    	let t27;
     	let section;
     	let current_block_type_index;
     	let if_block;
@@ -4989,26 +5038,6 @@ var app = (function () {
     			h2 = element("h2");
     			h2.textContent = "A game of TDD & Pairing";
     			t15 = space();
-    			p0 = element("p");
-    			p0.textContent = "Test Driven Development (TDD) is a process for writing code that involves\r\n    repeatedly appying three distinct steps:";
-    			t17 = space();
-    			ol = element("ol");
-    			li0 = element("li");
-    			p1 = element("p");
-    			t18 = text("Describe one very simple thing what your code ");
-    			strong = element("strong");
-    			strong.textContent = "should";
-    			t20 = text("\r\n        do. We write this description in a ");
-    			em = element("em");
-    			em.textContent = "\"test\"";
-    			t22 = text(". A test is a special\r\n        function that can check if a single peice of code does what you say it\r\n        should do.");
-    			t23 = space();
-    			p2 = element("p");
-    			p2.textContent = "After you write the test, the test will fail, but that is OK as you\r\n        won't have written the code yet.";
-    			t25 = space();
-    			li1 = element("li");
-    			li1.textContent = "The next step is to to write enough code that will make the test pass.\r\n        You don't have to write very much, nor do you haveot write clever code.\r\n        You can even hard code in results that will pass the test. The code written at this stage will usually\r\n        be low quality, and specifit to the test. But that is ok, we will geta change to impreove the code later on. \r\n        During this step the important thing is to get the test passing.";
-    			t27 = space();
     			section = element("section");
     			if_block.c();
     			attr_dev(link0, "rel", "preconnect");
@@ -5035,39 +5064,31 @@ var app = (function () {
     			attr_dev(filter, "filterUnits", "userSpaceOnUse");
     			add_location(filter, file, 39, 8, 1242);
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
-    			attr_dev(svg, "class", "svelte-dtmn9t");
+    			attr_dev(svg, "class", "svelte-x21k7e");
     			add_location(svg, file, 38, 6, 1192);
     			attr_dev(span0, "id", "red");
-    			attr_dev(span0, "class", "svelte-dtmn9t");
+    			attr_dev(span0, "class", "svelte-x21k7e");
     			add_location(span0, file, 45, 6, 1481);
     			attr_dev(span1, "id", "green");
-    			attr_dev(span1, "class", "svelte-dtmn9t");
+    			attr_dev(span1, "class", "svelte-x21k7e");
     			add_location(span1, file, 45, 32, 1507);
     			attr_dev(span2, "filter-content", "G");
-    			attr_dev(span2, "class", "swoosh svelte-dtmn9t");
+    			attr_dev(span2, "class", "swoosh svelte-x21k7e");
     			attr_dev(span2, "id", "blue");
     			add_location(span2, file, 45, 62, 1537);
     			attr_dev(span3, "id", "blue");
-    			attr_dev(span3, "class", "svelte-dtmn9t");
+    			attr_dev(span3, "class", "svelte-x21k7e");
     			add_location(span3, file, 49, 7, 1630);
-    			attr_dev(div1, "class", "title svelte-dtmn9t");
+    			attr_dev(div1, "class", "title svelte-x21k7e");
     			add_location(div1, file, 37, 4, 1165);
     			attr_dev(div2, "class", "menu");
     			add_location(div2, file, 51, 4, 1673);
-    			attr_dev(header, "class", "svelte-dtmn9t");
+    			attr_dev(header, "class", "svelte-x21k7e");
     			add_location(header, file, 33, 2, 1056);
-    			attr_dev(h2, "class", "svelte-dtmn9t");
+    			attr_dev(h2, "class", "svelte-x21k7e");
     			add_location(h2, file, 54, 2, 1717);
-    			add_location(p0, file, 55, 2, 1753);
-    			add_location(strong, file, 62, 54, 1974);
-    			add_location(em, file, 63, 43, 2042);
-    			add_location(p1, file, 61, 6, 1915);
-    			add_location(p2, file, 67, 6, 2198);
-    			add_location(li0, file, 60, 4, 1903);
-    			add_location(li1, file, 72, 4, 2349);
-    			add_location(ol, file, 59, 2, 1893);
-    			add_location(section, file, 79, 2, 2833);
-    			attr_dev(main, "class", "svelte-dtmn9t");
+    			add_location(section, file, 56, 2, 1757);
+    			attr_dev(main, "class", "svelte-x21k7e");
     			add_location(main, file, 32, 0, 1046);
     		},
     		l: function claim(nodes) {
@@ -5103,21 +5124,6 @@ var app = (function () {
     			append_dev(main, t13);
     			append_dev(main, h2);
     			append_dev(main, t15);
-    			append_dev(main, p0);
-    			append_dev(main, t17);
-    			append_dev(main, ol);
-    			append_dev(ol, li0);
-    			append_dev(li0, p1);
-    			append_dev(p1, t18);
-    			append_dev(p1, strong);
-    			append_dev(p1, t20);
-    			append_dev(p1, em);
-    			append_dev(p1, t22);
-    			append_dev(li0, t23);
-    			append_dev(li0, p2);
-    			append_dev(ol, t25);
-    			append_dev(ol, li1);
-    			append_dev(main, t27);
     			append_dev(main, section);
     			if_blocks[current_block_type_index].m(section, null);
     			current = true;
