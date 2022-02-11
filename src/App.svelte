@@ -74,7 +74,7 @@
         You don't have to write very much, nor do you haveot write clever code.
         You can even hard code in results that will pass the test. The code written at this stage will usually
         be low quality, and specifit to the test. But that is ok, we will geta change to impreove the code later on. 
-        During this step the importnt hting is to get the test passing.
+        During this step the important thing is to get the test passing.
     </li>
   </ol>
   <section>

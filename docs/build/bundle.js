@@ -1622,9 +1622,9 @@ var app = (function () {
     	validate_slots('Solutions', slots, []);
     	let htmlDoc;
     	let { dataReady = false } = $$props;
-    	origin = window.location.origin;
-    	if (!origin || origin == "null") origin = "http://localhost:8080";
-    	let endpoint = origin + "/content/fizzbuzz.html";
+    	origin = window.location.href;
+    	if (!origin || origin == "null") origin = "http://localhost:8080/";
+    	let endpoint = origin + "content/fizzbuzz.html";
 
     	function getStepText(iteration, step) {
     		if (!dataReady) {
@@ -4743,25 +4743,25 @@ var app = (function () {
     			button.textContent = "Start Game";
     			attr_dev(label0, "for", "fname");
     			attr_dev(label0, "class", "svelte-dtmn9t");
-    			add_location(label0, file, 87, 10, 3017);
+    			add_location(label0, file, 87, 10, 3018);
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "id", "fname");
     			attr_dev(input0, "name", "fname");
-    			add_location(input0, file, 88, 10, 3064);
-    			add_location(br0, file, 93, 12, 3206);
-    			add_location(span0, file, 86, 8, 2999);
+    			add_location(input0, file, 88, 10, 3065);
+    			add_location(br0, file, 93, 12, 3207);
+    			add_location(span0, file, 86, 8, 3000);
     			attr_dev(label1, "for", "lname");
     			attr_dev(label1, "class", "svelte-dtmn9t");
-    			add_location(label1, file, 96, 10, 3257);
+    			add_location(label1, file, 96, 10, 3258);
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "id", "lname");
     			attr_dev(input1, "name", "lname");
-    			add_location(input1, file, 97, 10, 3304);
-    			add_location(br1, file, 102, 12, 3446);
-    			add_location(span1, file, 95, 8, 3239);
+    			add_location(input1, file, 97, 10, 3305);
+    			add_location(br1, file, 102, 12, 3447);
+    			add_location(span1, file, 95, 8, 3240);
     			attr_dev(button, "id", "startBtn");
-    			add_location(button, file, 104, 8, 3479);
-    			add_location(div, file, 85, 6, 2984);
+    			add_location(button, file, 104, 8, 3480);
+    			add_location(div, file, 85, 6, 2985);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -4836,7 +4836,7 @@ var app = (function () {
     		c: function create() {
     			div = element("div");
     			create_component(game.$$.fragment);
-    			add_location(div, file, 81, 6, 2878);
+    			add_location(div, file, 81, 6, 2879);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -5007,7 +5007,7 @@ var app = (function () {
     			p2.textContent = "After you write the test, the test will fail, but that is OK as you\r\n        won't have written the code yet.";
     			t25 = space();
     			li1 = element("li");
-    			li1.textContent = "The next step is to to write enough code that will make the test pass.\r\n        You don't have to write very much, nor do you haveot write clever code.\r\n        You can even hard code in results that will pass the test. The code written at this stage will usually\r\n        be low quality, and specifit to the test. But that is ok, we will geta change to impreove the code later on. \r\n        During this step the importnt hting is to get the test passing.";
+    			li1.textContent = "The next step is to to write enough code that will make the test pass.\r\n        You don't have to write very much, nor do you haveot write clever code.\r\n        You can even hard code in results that will pass the test. The code written at this stage will usually\r\n        be low quality, and specifit to the test. But that is ok, we will geta change to impreove the code later on. \r\n        During this step the important thing is to get the test passing.";
     			t27 = space();
     			section = element("section");
     			if_block.c();
@@ -5066,7 +5066,7 @@ var app = (function () {
     			add_location(li0, file, 60, 4, 1903);
     			add_location(li1, file, 72, 4, 2349);
     			add_location(ol, file, 59, 2, 1893);
-    			add_location(section, file, 79, 2, 2832);
+    			add_location(section, file, 79, 2, 2833);
     			attr_dev(main, "class", "svelte-dtmn9t");
     			add_location(main, file, 32, 0, 1046);
     		},
