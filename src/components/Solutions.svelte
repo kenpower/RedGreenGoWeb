@@ -3,9 +3,9 @@
   let htmlDoc;
   export let dataReady = false;
 
-  origin = window.location.origin;
-  if (!origin || origin == "null") origin = "http://localhost:8080";
-  let endpoint = origin + "/content/fizzbuzz.html";
+  origin = window.location.href;
+  if (!origin || origin == "null") origin = "http://localhost:8080/";
+  let endpoint = origin + "content/fizzbuzz.html";
 
   export function getStepText(iteration, step) {
     if (!dataReady) {
