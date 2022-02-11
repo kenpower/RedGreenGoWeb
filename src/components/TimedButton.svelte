@@ -22,7 +22,7 @@
   };
 
   export let text = "OK";
-  const TIME_LIMIT = 2;
+  const TIME_LIMIT = 12;
   let timePassed = 0;
   let timeLeft = TIME_LIMIT;
   let timerInterval = null;

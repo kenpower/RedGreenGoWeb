@@ -53,36 +53,41 @@
   </header>
 
   <h2>A game of TDD & Pairing</h2>
-  <p>
-    Test Driven Development (TDD) is a process for writing code that involves
-    repeatedly appying three distinct steps:
-  </p>
-  <ol>
-    <li>
-      <p>
-        Describe one very simple thing what your code <strong>should</strong>
-        do. We write this description in a <em>"test"</em>. A test is a special
-        function that can check if a single peice of code does what you say it
-        should do.
-      </p>
-      <p>
-        After you write the test, the test will fail, but that is OK as you
-        won't have written the code yet.
-      </p>
-    </li>
-    <li>The next step is to to write enough code that will make the test pass.
-        You don't have to write very much, nor do you haveot write clever code.
-        You can even hard code in results that will pass the test. The code written at this stage will usually
-        be low quality, and specifit to the test. But that is ok, we will geta change to impreove the code later on. 
-        During this step the important thing is to get the test passing.
-    </li>
-  </ol>
+  
   <section>
     {#if gameState.started}
       <div in:fly={{ y: 200, duration: 2000 }}>
         <Game {gameState} />
       </div>
     {:else}
+      <p>
+      Test Driven Development (TDD) is a process for writing code that involves
+      repeatedly appying three distinct steps:
+    </p>
+    <ol>
+      <li>
+        <p>
+          Describe one very simple thing what your code <strong>should</strong>
+          do. We write this description in a <em>"test"</em>. A test is a special
+          function that can check if a single peice of code does what you say it
+          should do.
+        </p>
+        <p>
+          After you write the test, the test will fail, but that is OK as you
+          won't have written the code yet.
+        </p>
+      </li>
+      <li>The next step is to to write enough code that will make the test pass.
+          You don't have to write very much, nor do you have to write clever code.
+          You can even hard code in results that will pass the test. The code written at this stage will usually
+          be low quality, and specifit to the test. But that is ok, we will get a chance to improve the code later on. 
+          During this step the important thing is to get the test passing.
+      </li>
+      <li>Once the test is passing (green), the final step in the cycle is refactoring. This is where we look at the code
+          we just wrote and try to find patterns that we can use to make the code more general. 
+          We will repeat these three steps with tests covering more and more of the required behaviour.
+      </li>
+    </ol>
       <div>
         <span>
           <label for="fname">Player 1</label>
@@ -140,6 +145,10 @@
       Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
     color: var(--color-tone-2);
     font-weight: 200;
+  }
+
+  li{
+     text-align: justify;
   }
 
   label {

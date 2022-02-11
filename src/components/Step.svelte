@@ -82,7 +82,7 @@
         <button on:click={() => dispatch("interact", "done")}
           >{step.buttonText}</button
         >
-        <button on:click={showCard}>Hint</button>
+        
         <TimedButton on:solution={showSolution} text="Solution" />
       </div>
     </div>
