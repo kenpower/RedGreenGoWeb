@@ -162,10 +162,12 @@ test("get_step_after_3_nexts", () => {
   expect(step.iteration).toBe(0);
   expect(step.driver).toBe("Jane");
   expect(step.title).toBe("Step:4 Make it Clean");
+  expect(step.navigators).toEqual(["John"]);
 });
 
 test("recover_step_from_local_storage", () => {
   let g = new GameState();
+  g.players[2] = "player3";
   g.start();
   g.nextStep();
   g.nextStep();
@@ -177,6 +179,8 @@ test("recover_step_from_local_storage", () => {
   expect(step.iteration).toBe(0);
   expect(step.driver).toBe("Jane");
   expect(step.title).toBe("Step:4 Make it Clean");
+
+  expect(recoveredFromLocalStorage.players[2]).toBe("player3");
 });
 
 test("restart Game (bug repro)", () => {
@@ -191,4 +195,121 @@ test("restart Game (bug repro)", () => {
 
   let recoveredFromLocalStorage = GameState.recoverSavedGame();
   isInitialState(recoveredFromLocalStorage);
+});
+
+test("3_players_next_step_0_times", () => {
+  let g = new GameState();
+  g.players[2] = "player3";
+  g.start();
+  //g.nextStep();
+  expect(g.state.id).toBe("red");
+  expect(g.driver).toBe(0);
+  expect(g.navigator).toBe(1);
+  expect(g.iterations[0].phase).toBe(TDDPhase.RED);
+});
+
+test("3_players_next_step_1_times", () => {
+  let g = new GameState();
+  g.players[2] = "player3";
+  g.start();
+  g.nextStep();
+  expect(g.state.id).toBe("swap");
+  expect(g.driver).toBe(1);
+  expect(g.navigator).toBe(2);
+  expect(g.iterations[0].phase).toBe(TDDPhase.GREEN);
+});
+
+test("3_players_next_step_2_times", () => {
+  let g = new GameState();
+  g.players[2] = "player3";
+  console.log(g.players);
+  console.log(g.players.length);
+  g.start();
+  [...Array(2)].forEach((_) => g.nextStep());
+  expect(g.state.id).toBe("green");
+  expect(g.driver).toBe(1);
+  expect(g.navigator).toBe(2);
+  expect(g.iterations[0].phase).toBe(TDDPhase.GREEN);
+});
+
+test("3_players_next_step_3_times", () => {
+  let g = new GameState();
+  g.players[2] = "player3";
+  console.log(g.players);
+  console.log(g.players.length);
+  g.start();
+  [...Array(3)].forEach((_) => g.nextStep());
+  expect(g.state.id).toBe("refactor");
+  expect(g.driver).toBe(1);
+  expect(g.navigator).toBe(2);
+  expect(g.iterations[0].phase).toBe(TDDPhase.REFACTOR);
+});
+
+test("3_players_next_step_4_times", () => {
+  let g = new GameState();
+  g.players[2] = "player3";
+  console.log(g.players);
+  console.log(g.players.length);
+  g.start();
+  [...Array(4)].forEach((_) => g.nextStep());
+  expect(g.state.id).toBe("red");
+  expect(g.driver).toBe(1);
+  expect(g.navigator).toBe(2);
+  expect(g.iterations[1].phase).toBe(TDDPhase.RED);
+});
+
+test("3_players_next_step_5_times", () => {
+  let g = new GameState();
+  g.players[2] = "player3";
+  console.log(g.players);
+  console.log(g.players.length);
+  g.start();
+  [...Array(5)].forEach((_) => g.nextStep());
+  expect(g.state.id).toBe("swap");
+  expect(g.driver).toBe(2);
+  expect(g.navigator).toBe(0);
+  expect(g.iterations[1].phase).toBe(TDDPhase.GREEN);
+});
+
+test("3_players_next_step_9_times", () => {
+  let g = new GameState();
+  g.players[0] = "player0";
+  g.players[1] = "player1";
+  g.players[2] = "player2";
+  console.log(g.players);
+  console.log(g.players.length);
+  g.start();
+  [...Array(9)].forEach((_) => g.nextStep());
+  expect(g.state.id).toBe("swap");
+  expect(g.driver).toBe(0);
+  expect(g.navigator).toBe(1);
+  expect(g.iterations[2].phase).toBe(TDDPhase.GREEN);
+  const step = g.getStep();
+  expect(step.navigators.length).toEqual(2);
+  expect(step.navigators).toContainEqual("player1");
+  expect(step.navigators).toContainEqual("player2");
+});
+
+test("3_players_next_step_13_times", () => {
+  let g = new GameState();
+  g.players[0] = "player0";
+  g.players[1] = "player1";
+  g.players[2] = "player2";
+  console.log(g.players);
+  console.log(g.players.length);
+  g.start();
+  [...Array(13)].forEach((_) => g.nextStep());
+  expect(g.state.id).toBe("swap");
+  expect(g.driver).toBe(1);
+  expect(g.navigator).toBe(2);
+  expect(g.iterations[3].phase).toBe(TDDPhase.GREEN);
+  const step = g.getStep();
+  expect(step.navigators.length).toEqual(2);
+  expect(step.navigators).toContainEqual("player0");
+  expect(step.navigators).toContainEqual("player2");
+});
+
+test("initialisation", () => {
+  let g = new GameState();
+  isInitialState(g);
 });

@@ -72,8 +72,9 @@ export class GameState {
   #swapPairRoles = () => {
     this.driver++;
     this.navigator++;
-    this.driver %= 2;
-    this.navigator %= 2;
+    const numInMob = this.players.length;
+    this.driver %= numInMob;
+    this.navigator %= numInMob;
   };
 
   #get4Iterations = (idx) => {
@@ -136,6 +137,8 @@ export class GameState {
 
   #driver = () => this.players[this.driver];
   #navigator = () => this.players[this.navigator];
+  #navigators = () => 
+    this.players.filter((player, index) => index != this.driver);
 
   getStep = () => {
     const step = {
@@ -146,6 +149,7 @@ export class GameState {
       helpName: this.state.helpName,
       driver: this.#driver(),
       navigator: this.#navigator(),
+      navigators: this.#navigators(),
       iteration: this.iteration,
       stateName: this.state.id,
     };

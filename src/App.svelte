@@ -6,11 +6,14 @@
   import { GameState } from "./gameState";
   import { fly } from "svelte/transition";
 
+  let thirdPlayer;
   let gameState = GameState.recoverSavedGame();
   if (!gameState) {
     gameState = new GameState();
   }
   const startGame = () => {
+    
+    gameState.players[2] = thirdPlayer;
     gameState.start();
     gameState = gameState;
   };
@@ -90,23 +93,35 @@
     </ol>
       <div>
         <span>
-          <label for="fname">Player 1</label>
+          <label for="fname">Player 1 (required)</label>
           <input
             type="text"
             id="fname"
             name="fname"
+            required
             bind:value={gameState.players[0]}
           /><br />
         </span>
         <span>
-          <label for="lname">Player 2</label>
+          <label for="lname">Player 2 (required)</label>
           <input
             type="text"
             id="lname"
             name="lname"
+            required
             bind:value={gameState.players[1]}
           /><br />
         </span>
+        <span>
+          <label for="lname">Player 3 (Optional)</label>
+          <input
+            type="text"
+            id="lname"
+            name="lname" 
+            bind:value={thirdPlayer}
+          /><br />
+        </span>
+
         <button id="startBtn" on:click={startGame}>Start Game</button>
       </div>
     {/if}
@@ -153,7 +168,7 @@
 
   label {
     display: inline-block;
-    width: 55px;
+    min-width: 10rem;
     text-align: right;
   }
 
