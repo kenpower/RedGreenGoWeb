@@ -90,8 +90,9 @@
         <button on:click={() => dispatch("interact", "done")}
           >{step.buttonText}</button
         >
-        
-        <TimedButton on:solution={showSolution} text="Solution" />
+         {#if solutionHTML?.length != 0}
+          <TimedButton on:solution={showSolution} text="Solution" />
+        {/if}
       </div>
     </div>
     <!-- TODO move into game, or should I??? -->
