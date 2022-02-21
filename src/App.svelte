@@ -13,7 +13,7 @@
   }
   const startGame = () => {
     
-    gameState.players[2] = thirdPlayer;
+    if(thirdPlayer) gameState.players[2] = thirdPlayer;
     gameState.start();
     gameState = gameState;
   };

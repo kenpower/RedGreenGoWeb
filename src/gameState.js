@@ -11,7 +11,7 @@ export const states = [
   {
     id: "swap",
     title: "Swap",
-    helpName: "swap",
+    helpName: "",
     class: "swap",
     next: 2,
     description: "Swap the roles of driver and navigator",
@@ -137,8 +137,15 @@ export class GameState {
 
   #driver = () => this.players[this.driver];
   #navigator = () => this.players[this.navigator];
-  #navigators = () => 
+  #navigators = () =>
     this.players.filter((player, index) => index != this.driver);
+
+  #navigatorText = () => {
+    if (this.#navigators().length == 1)
+      return this.#navigators()[0] + " is the navigator";
+
+    return this.#navigators().join(" and ") + " are the navigators";
+  };
 
   getStep = () => {
     const step = {
@@ -157,14 +164,10 @@ export class GameState {
     if (this.state.id == "swap") {
       step.title = "Swap pair programming roles";
       step.bodyText =
-        this.#driver() +
-        " is now the driver and " +
-        this.#navigator() +
-        " is the navigator";
+        this.#driver() + " is now the driver and " + this.#navigatorText();
 
       step.buttonText = "OK:" + this.#driver() + " has the keyboard";
       step.classes = "" + this.state.class + " swap step"; //TODO is this redundant?
-      step.helpName = "swap"; //TODO is this redundant?
     }
     return step;
   };

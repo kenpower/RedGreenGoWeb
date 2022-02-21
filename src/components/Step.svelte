@@ -60,23 +60,31 @@
     <p class="title">{step.title}</p>
 
     <div class="stepBody">
-      <div style="display:flex;">
+      <div style="display: flex;justify-content: center;">
+        {#if step.helpName !== ""}
         <div class="cardDeck" on:click={showCard}>
-          <Card off={12} cardType={step.helpName} {showHint} />
-          <Card off={8} cardType={step.helpName} />
-          <Card off={4} cardType={step.helpName} />
-          <Card off={0} cardType={step.helpName} />
+            <Card off={12} cardType={step.helpName} {showHint} />
+            <Card off={8} cardType={step.helpName} />
+            <Card off={4} cardType={step.helpName} />
+            <Card off={0} cardType={step.helpName} />
         </div>
-        <div>
+        {/if}
+        <div style="display: flex;justify-content: center;flex-direction: column;">
           <p>{step.bodyText}</p>
           <div>
-            <Icon icon="keyboard" /><span> {step.driver} is the driver</span>
-            <span style="display: inline-block;width:2em;" />
-            <Icon icon="navigation" /><span>
-              {step.navigator} is the navigator</span
-            >
+            <div>
+              <Icon icon="keyboard" />
+              <span> {step.driver} is the driver</span>
+            </div>
+            {#each step.navigators as navigator}
+            <div>
+              <Icon icon="navigation" />
+                <span>{navigator} is the navigator</span>
+            </div>
+            {/each}
           </div>
         </div>
+        
       </div>
       <div style="display: flex; justify-content:space-evenly; ">
         <button on:click={() => dispatch("interact", "done")}
