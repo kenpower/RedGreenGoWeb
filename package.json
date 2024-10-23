@@ -6,11 +6,10 @@
     "build": "rollup -c",
     "dev": "rollup -c -w",
     "start": "sirv public --no-clear --cors",
-    "deploy": "cp -a public/. docs",
+    "publish": "npm run build && cp -a public/. docs && git add docs && git commit -m \"Deploying to Github Pages\" && git push",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watchAll"
   },
   "type": "module",
-
   "devDependencies": {
     "@rollup/plugin-commonjs": "^17.0.0",
     "@rollup/plugin-json": "^4.1.0",
