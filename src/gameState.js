@@ -5,7 +5,8 @@ export const states = [
     helpName: "test",
     class: "red",
     next: 1,
-    description: "Write the simplest test you can think of that will fail",
+    description:
+      "For a FizzBuzz app write the simplest test you can think of that will fail, then run the test. [Hint: the test you are thinking about is probably too complex]",
     buttonText: "Done: There is ONE failing (red) test",
   },
   {
