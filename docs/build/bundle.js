@@ -952,7 +952,7 @@ var app = (function () {
     const file$a = "src\\components\\Modal.svelte";
 
     // (27:0) {#if isOpenModal}
-    function create_if_block$4(ctx) {
+    function create_if_block$5(ctx) {
     	let div4;
     	let div3;
     	let div0;
@@ -1036,7 +1036,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$4.name,
+    		id: create_if_block$5.name,
     		type: "if",
     		source: "(27:0) {#if isOpenModal}",
     		ctx
@@ -1052,7 +1052,7 @@ var app = (function () {
     	let current;
     	let mounted;
     	let dispose;
-    	let if_block = /*isOpenModal*/ ctx[0] && create_if_block$4(ctx);
+    	let if_block = /*isOpenModal*/ ctx[0] && create_if_block$5(ctx);
 
     	const block = {
     		c: function create() {
@@ -1093,7 +1093,7 @@ var app = (function () {
     						transition_in(if_block, 1);
     					}
     				} else {
-    					if_block = create_if_block$4(ctx);
+    					if_block = create_if_block$5(ctx);
     					if_block.c();
     					transition_in(if_block, 1);
     					if_block.m(if_block_anchor.parentNode, if_block_anchor);
@@ -1711,7 +1711,7 @@ var app = (function () {
     const file$9 = "src\\components\\ModalContainer.svelte";
 
     // (22:0) {#if isOpenModal}
-    function create_if_block$3(ctx) {
+    function create_if_block$4(ctx) {
     	let div1;
     	let div0;
     	let div1_transition;
@@ -1782,7 +1782,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$3.name,
+    		id: create_if_block$4.name,
     		type: "if",
     		source: "(22:0) {#if isOpenModal}",
     		ctx
@@ -1798,7 +1798,7 @@ var app = (function () {
     	let current;
     	let mounted;
     	let dispose;
-    	let if_block = /*isOpenModal*/ ctx[0] && create_if_block$3(ctx);
+    	let if_block = /*isOpenModal*/ ctx[0] && create_if_block$4(ctx);
 
     	const block = {
     		c: function create() {
@@ -1839,7 +1839,7 @@ var app = (function () {
     						transition_in(if_block, 1);
     					}
     				} else {
-    					if_block = create_if_block$3(ctx);
+    					if_block = create_if_block$4(ctx);
     					if_block.c();
     					transition_in(if_block, 1);
     					if_block.m(if_block_anchor.parentNode, if_block_anchor);
@@ -2700,88 +2700,22 @@ var app = (function () {
     const { console: console_1$1 } = globals;
     const file$5 = "src\\components\\Step.svelte";
 
-    // (92:4) <ModalContainer bind:isOpenModal>
-    function create_default_slot(ctx) {
-    	let div;
-
-    	const block = {
-    		c: function create() {
-    			div = element("div");
-    			set_style(div, "background", "white");
-    			add_location(div, file$5, 92, 6, 2618);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div, anchor);
-    			div.innerHTML = /*solutionHTML*/ ctx[4];
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*solutionHTML*/ 16) div.innerHTML = /*solutionHTML*/ ctx[4];		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_default_slot.name,
-    		type: "slot",
-    		source: "(92:4) <ModalContainer bind:isOpenModal>",
-    		ctx
-    	});
-
-    	return block;
+    function get_each_context$1(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[13] = list[i];
+    	return child_ctx;
     }
 
-    // (53:0) {#key step}
-    function create_key_block(ctx) {
-    	let div6;
-    	let p0;
-    	let t0_value = /*step*/ ctx[0].title + "";
-    	let t0;
-    	let t1;
-    	let div5;
-    	let div3;
-    	let div0;
+    // (64:8) {#if step.helpName !== ""}
+    function create_if_block_1$1(ctx) {
+    	let div;
     	let card0;
-    	let t2;
+    	let t0;
     	let card1;
-    	let t3;
+    	let t1;
     	let card2;
-    	let t4;
+    	let t2;
     	let card3;
-    	let t5;
-    	let div2;
-    	let p1;
-    	let t6_value = /*step*/ ctx[0].bodyText + "";
-    	let t6;
-    	let t7;
-    	let div1;
-    	let icon0;
-    	let span0;
-    	let t8_value = /*step*/ ctx[0].driver + "";
-    	let t8;
-    	let t9;
-    	let t10;
-    	let span1;
-    	let t11;
-    	let icon1;
-    	let span2;
-    	let t12_value = /*step*/ ctx[0].navigator + "";
-    	let t12;
-    	let t13;
-    	let t14;
-    	let div4;
-    	let button;
-    	let t15_value = /*step*/ ctx[0].buttonText + "";
-    	let t15;
-    	let t16;
-    	let timedbutton;
-    	let t17;
-    	let modalcontainer;
-    	let updating_isOpenModal;
-    	let div6_class_value;
-    	let div6_intro;
-    	let div6_outro;
     	let current;
     	let mounted;
     	let dispose;
@@ -2819,15 +2753,160 @@ var app = (function () {
     			$$inline: true
     		});
 
-    	icon0 = new Icon({
-    			props: { icon: "keyboard" },
-    			$$inline: true
-    		});
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+    			create_component(card0.$$.fragment);
+    			t0 = space();
+    			create_component(card1.$$.fragment);
+    			t1 = space();
+    			create_component(card2.$$.fragment);
+    			t2 = space();
+    			create_component(card3.$$.fragment);
+    			attr_dev(div, "class", "cardDeck svelte-wc9c2u");
+    			add_location(div, file$5, 64, 8, 1519);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			mount_component(card0, div, null);
+    			append_dev(div, t0);
+    			mount_component(card1, div, null);
+    			append_dev(div, t1);
+    			mount_component(card2, div, null);
+    			append_dev(div, t2);
+    			mount_component(card3, div, null);
+    			current = true;
 
-    	icon1 = new Icon({
+    			if (!mounted) {
+    				dispose = listen_dev(div, "click", /*showCard*/ ctx[7], false, false, false);
+    				mounted = true;
+    			}
+    		},
+    		p: function update(ctx, dirty) {
+    			const card0_changes = {};
+    			if (dirty & /*step*/ 1) card0_changes.cardType = /*step*/ ctx[0].helpName;
+    			if (dirty & /*showHint*/ 32) card0_changes.showHint = /*showHint*/ ctx[5];
+    			card0.$set(card0_changes);
+    			const card1_changes = {};
+    			if (dirty & /*step*/ 1) card1_changes.cardType = /*step*/ ctx[0].helpName;
+    			card1.$set(card1_changes);
+    			const card2_changes = {};
+    			if (dirty & /*step*/ 1) card2_changes.cardType = /*step*/ ctx[0].helpName;
+    			card2.$set(card2_changes);
+    			const card3_changes = {};
+    			if (dirty & /*step*/ 1) card3_changes.cardType = /*step*/ ctx[0].helpName;
+    			card3.$set(card3_changes);
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(card0.$$.fragment, local);
+    			transition_in(card1.$$.fragment, local);
+    			transition_in(card2.$$.fragment, local);
+    			transition_in(card3.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(card0.$$.fragment, local);
+    			transition_out(card1.$$.fragment, local);
+    			transition_out(card2.$$.fragment, local);
+    			transition_out(card3.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    			destroy_component(card0);
+    			destroy_component(card1);
+    			destroy_component(card2);
+    			destroy_component(card3);
+    			mounted = false;
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_1$1.name,
+    		type: "if",
+    		source: "(64:8) {#if step.helpName !== \\\"\\\"}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (79:12) {#each step.navigators as navigator}
+    function create_each_block$1(ctx) {
+    	let div;
+    	let icon;
+    	let t0;
+    	let span;
+    	let t1_value = /*navigator*/ ctx[13] + "";
+    	let t1;
+    	let t2;
+    	let t3;
+    	let current;
+
+    	icon = new Icon({
     			props: { icon: "navigation" },
     			$$inline: true
     		});
+
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+    			create_component(icon.$$.fragment);
+    			t0 = space();
+    			span = element("span");
+    			t1 = text(t1_value);
+    			t2 = text(" is the navigator");
+    			t3 = space();
+    			attr_dev(span, "class", "svelte-wc9c2u");
+    			add_location(span, file$5, 81, 16, 2225);
+    			add_location(div, file$5, 79, 12, 2160);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			mount_component(icon, div, null);
+    			append_dev(div, t0);
+    			append_dev(div, span);
+    			append_dev(span, t1);
+    			append_dev(span, t2);
+    			append_dev(div, t3);
+    			current = true;
+    		},
+    		p: function update(ctx, dirty) {
+    			if ((!current || dirty & /*step*/ 1) && t1_value !== (t1_value = /*navigator*/ ctx[13] + "")) set_data_dev(t1, t1_value);
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(icon.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(icon.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    			destroy_component(icon);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$1.name,
+    		type: "each",
+    		source: "(79:12) {#each step.navigators as navigator}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (93:9) {#if solutionHTML?.length != 0}
+    function create_if_block$3(ctx) {
+    	let timedbutton;
+    	let current;
 
     	timedbutton = new TimedButton({
     			props: { text: "Solution" },
@@ -2835,6 +2914,132 @@ var app = (function () {
     		});
 
     	timedbutton.$on("solution", /*showSolution*/ ctx[8]);
+
+    	const block = {
+    		c: function create() {
+    			create_component(timedbutton.$$.fragment);
+    		},
+    		m: function mount(target, anchor) {
+    			mount_component(timedbutton, target, anchor);
+    			current = true;
+    		},
+    		p: noop,
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(timedbutton.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(timedbutton.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			destroy_component(timedbutton, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block$3.name,
+    		type: "if",
+    		source: "(93:9) {#if solutionHTML?.length != 0}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (101:4) <ModalContainer bind:isOpenModal>
+    function create_default_slot(ctx) {
+    	let div;
+
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+    			set_style(div, "background", "white");
+    			add_location(div, file$5, 101, 6, 2920);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			div.innerHTML = /*solutionHTML*/ ctx[4];
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*solutionHTML*/ 16) div.innerHTML = /*solutionHTML*/ ctx[4];		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_default_slot.name,
+    		type: "slot",
+    		source: "(101:4) <ModalContainer bind:isOpenModal>",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (53:0) {#key step}
+    function create_key_block(ctx) {
+    	let div6;
+    	let p0;
+    	let t0_value = /*step*/ ctx[0].title + "";
+    	let t0;
+    	let t1;
+    	let div5;
+    	let div3;
+    	let t2;
+    	let div2;
+    	let p1;
+    	let t3_value = /*step*/ ctx[0].bodyText + "";
+    	let t3;
+    	let t4;
+    	let div1;
+    	let div0;
+    	let icon;
+    	let t5;
+    	let span;
+    	let t6_value = /*step*/ ctx[0].driver + "";
+    	let t6;
+    	let t7;
+    	let t8;
+    	let t9;
+    	let div4;
+    	let button;
+    	let t10_value = /*step*/ ctx[0].buttonText + "";
+    	let t10;
+    	let t11;
+    	let t12;
+    	let modalcontainer;
+    	let updating_isOpenModal;
+    	let div6_class_value;
+    	let div6_intro;
+    	let div6_outro;
+    	let current;
+    	let mounted;
+    	let dispose;
+    	let if_block0 = /*step*/ ctx[0].helpName !== "" && create_if_block_1$1(ctx);
+
+    	icon = new Icon({
+    			props: { icon: "keyboard" },
+    			$$inline: true
+    		});
+
+    	let each_value = /*step*/ ctx[0].navigators;
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$1(get_each_context$1(ctx, each_value, i));
+    	}
+
+    	const out = i => transition_out(each_blocks[i], 1, 1, () => {
+    		each_blocks[i] = null;
+    	});
+
+    	let if_block1 = /*solutionHTML*/ ctx[4]?.length != 0 && create_if_block$3(ctx);
 
     	function modalcontainer_isOpenModal_binding(value) {
     		/*modalcontainer_isOpenModal_binding*/ ctx[10](value);
@@ -2864,61 +3069,52 @@ var app = (function () {
     			t1 = space();
     			div5 = element("div");
     			div3 = element("div");
-    			div0 = element("div");
-    			create_component(card0.$$.fragment);
+    			if (if_block0) if_block0.c();
     			t2 = space();
-    			create_component(card1.$$.fragment);
-    			t3 = space();
-    			create_component(card2.$$.fragment);
-    			t4 = space();
-    			create_component(card3.$$.fragment);
-    			t5 = space();
     			div2 = element("div");
     			p1 = element("p");
-    			t6 = text(t6_value);
-    			t7 = space();
+    			t3 = text(t3_value);
+    			t4 = space();
     			div1 = element("div");
-    			create_component(icon0.$$.fragment);
-    			span0 = element("span");
-    			t8 = text(t8_value);
-    			t9 = text(" is the driver");
-    			t10 = space();
-    			span1 = element("span");
-    			t11 = space();
-    			create_component(icon1.$$.fragment);
-    			span2 = element("span");
-    			t12 = text(t12_value);
-    			t13 = text(" is the navigator");
-    			t14 = space();
+    			div0 = element("div");
+    			create_component(icon.$$.fragment);
+    			t5 = space();
+    			span = element("span");
+    			t6 = text(t6_value);
+    			t7 = text(" is the driver");
+    			t8 = space();
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			t9 = space();
     			div4 = element("div");
     			button = element("button");
-    			t15 = text(t15_value);
-    			t16 = space();
-    			create_component(timedbutton.$$.fragment);
-    			t17 = space();
+    			t10 = text(t10_value);
+    			t11 = space();
+    			if (if_block1) if_block1.c();
+    			t12 = space();
     			create_component(modalcontainer.$$.fragment);
     			attr_dev(p0, "class", "title svelte-wc9c2u");
     			add_location(p0, file$5, 59, 4, 1350);
-    			attr_dev(div0, "class", "cardDeck svelte-wc9c2u");
-    			add_location(div0, file$5, 63, 8, 1458);
     			attr_dev(p1, "class", "svelte-wc9c2u");
-    			add_location(p1, file$5, 70, 10, 1767);
-    			attr_dev(span0, "class", "svelte-wc9c2u");
-    			add_location(span0, file$5, 72, 36, 1844);
-    			set_style(span1, "display", "inline-block");
-    			set_style(span1, "width", "2em");
-    			attr_dev(span1, "class", "svelte-wc9c2u");
-    			add_location(span1, file$5, 73, 12, 1899);
-    			attr_dev(span2, "class", "svelte-wc9c2u");
-    			add_location(span2, file$5, 74, 38, 1988);
-    			add_location(div1, file$5, 71, 10, 1801);
-    			add_location(div2, file$5, 69, 8, 1750);
+    			add_location(p1, file$5, 72, 10, 1921);
+    			attr_dev(span, "class", "svelte-wc9c2u");
+    			add_location(span, file$5, 76, 14, 2035);
+    			add_location(div0, file$5, 74, 12, 1974);
+    			add_location(div1, file$5, 73, 10, 1955);
+    			set_style(div2, "display", "flex");
+    			set_style(div2, "justify-content", "center");
+    			set_style(div2, "flex-direction", "column");
+    			add_location(div2, file$5, 71, 8, 1834);
     			set_style(div3, "display", "flex");
+    			set_style(div3, "justify-content", "center");
     			add_location(div3, file$5, 62, 6, 1421);
-    			add_location(button, file$5, 81, 8, 2189);
+    			add_location(button, file$5, 89, 8, 2442);
     			set_style(div4, "display", "flex");
     			set_style(div4, "justify-content", "space-evenly");
-    			add_location(div4, file$5, 80, 6, 2120);
+    			add_location(div4, file$5, 88, 6, 2373);
     			attr_dev(div5, "class", "stepBody svelte-wc9c2u");
     			add_location(div5, file$5, 61, 4, 1391);
     			attr_dev(div6, "class", div6_class_value = "" + (null_to_empty(/*step*/ ctx[0].classes) + " svelte-wc9c2u"));
@@ -2932,72 +3128,125 @@ var app = (function () {
     			append_dev(div6, t1);
     			append_dev(div6, div5);
     			append_dev(div5, div3);
-    			append_dev(div3, div0);
-    			mount_component(card0, div0, null);
-    			append_dev(div0, t2);
-    			mount_component(card1, div0, null);
-    			append_dev(div0, t3);
-    			mount_component(card2, div0, null);
-    			append_dev(div0, t4);
-    			mount_component(card3, div0, null);
-    			append_dev(div3, t5);
+    			if (if_block0) if_block0.m(div3, null);
+    			append_dev(div3, t2);
     			append_dev(div3, div2);
     			append_dev(div2, p1);
-    			append_dev(p1, t6);
-    			append_dev(div2, t7);
+    			append_dev(p1, t3);
+    			append_dev(div2, t4);
     			append_dev(div2, div1);
-    			mount_component(icon0, div1, null);
-    			append_dev(div1, span0);
-    			append_dev(span0, t8);
-    			append_dev(span0, t9);
-    			append_dev(div1, t10);
-    			append_dev(div1, span1);
-    			append_dev(div1, t11);
-    			mount_component(icon1, div1, null);
-    			append_dev(div1, span2);
-    			append_dev(span2, t12);
-    			append_dev(span2, t13);
-    			append_dev(div5, t14);
+    			append_dev(div1, div0);
+    			mount_component(icon, div0, null);
+    			append_dev(div0, t5);
+    			append_dev(div0, span);
+    			append_dev(span, t6);
+    			append_dev(span, t7);
+    			append_dev(div1, t8);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(div1, null);
+    			}
+
+    			append_dev(div5, t9);
     			append_dev(div5, div4);
     			append_dev(div4, button);
-    			append_dev(button, t15);
-    			append_dev(div4, t16);
-    			mount_component(timedbutton, div4, null);
-    			append_dev(div6, t17);
+    			append_dev(button, t10);
+    			append_dev(div4, t11);
+    			if (if_block1) if_block1.m(div4, null);
+    			append_dev(div6, t12);
     			mount_component(modalcontainer, div6, null);
     			current = true;
 
     			if (!mounted) {
-    				dispose = [
-    					listen_dev(div0, "click", /*showCard*/ ctx[7], false, false, false),
-    					listen_dev(button, "click", /*click_handler*/ ctx[9], false, false, false)
-    				];
-
+    				dispose = listen_dev(button, "click", /*click_handler*/ ctx[9], false, false, false);
     				mounted = true;
     			}
     		},
     		p: function update(ctx, dirty) {
     			if ((!current || dirty & /*step*/ 1) && t0_value !== (t0_value = /*step*/ ctx[0].title + "")) set_data_dev(t0, t0_value);
-    			const card0_changes = {};
-    			if (dirty & /*step*/ 1) card0_changes.cardType = /*step*/ ctx[0].helpName;
-    			if (dirty & /*showHint*/ 32) card0_changes.showHint = /*showHint*/ ctx[5];
-    			card0.$set(card0_changes);
-    			const card1_changes = {};
-    			if (dirty & /*step*/ 1) card1_changes.cardType = /*step*/ ctx[0].helpName;
-    			card1.$set(card1_changes);
-    			const card2_changes = {};
-    			if (dirty & /*step*/ 1) card2_changes.cardType = /*step*/ ctx[0].helpName;
-    			card2.$set(card2_changes);
-    			const card3_changes = {};
-    			if (dirty & /*step*/ 1) card3_changes.cardType = /*step*/ ctx[0].helpName;
-    			card3.$set(card3_changes);
-    			if ((!current || dirty & /*step*/ 1) && t6_value !== (t6_value = /*step*/ ctx[0].bodyText + "")) set_data_dev(t6, t6_value);
-    			if ((!current || dirty & /*step*/ 1) && t8_value !== (t8_value = /*step*/ ctx[0].driver + "")) set_data_dev(t8, t8_value);
-    			if ((!current || dirty & /*step*/ 1) && t12_value !== (t12_value = /*step*/ ctx[0].navigator + "")) set_data_dev(t12, t12_value);
-    			if ((!current || dirty & /*step*/ 1) && t15_value !== (t15_value = /*step*/ ctx[0].buttonText + "")) set_data_dev(t15, t15_value);
+
+    			if (/*step*/ ctx[0].helpName !== "") {
+    				if (if_block0) {
+    					if_block0.p(ctx, dirty);
+
+    					if (dirty & /*step*/ 1) {
+    						transition_in(if_block0, 1);
+    					}
+    				} else {
+    					if_block0 = create_if_block_1$1(ctx);
+    					if_block0.c();
+    					transition_in(if_block0, 1);
+    					if_block0.m(div3, t2);
+    				}
+    			} else if (if_block0) {
+    				group_outros();
+
+    				transition_out(if_block0, 1, 1, () => {
+    					if_block0 = null;
+    				});
+
+    				check_outros();
+    			}
+
+    			if ((!current || dirty & /*step*/ 1) && t3_value !== (t3_value = /*step*/ ctx[0].bodyText + "")) set_data_dev(t3, t3_value);
+    			if ((!current || dirty & /*step*/ 1) && t6_value !== (t6_value = /*step*/ ctx[0].driver + "")) set_data_dev(t6, t6_value);
+
+    			if (dirty & /*step*/ 1) {
+    				each_value = /*step*/ ctx[0].navigators;
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$1(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    						transition_in(each_blocks[i], 1);
+    					} else {
+    						each_blocks[i] = create_each_block$1(child_ctx);
+    						each_blocks[i].c();
+    						transition_in(each_blocks[i], 1);
+    						each_blocks[i].m(div1, null);
+    					}
+    				}
+
+    				group_outros();
+
+    				for (i = each_value.length; i < each_blocks.length; i += 1) {
+    					out(i);
+    				}
+
+    				check_outros();
+    			}
+
+    			if ((!current || dirty & /*step*/ 1) && t10_value !== (t10_value = /*step*/ ctx[0].buttonText + "")) set_data_dev(t10, t10_value);
+
+    			if (/*solutionHTML*/ ctx[4]?.length != 0) {
+    				if (if_block1) {
+    					if_block1.p(ctx, dirty);
+
+    					if (dirty & /*solutionHTML*/ 16) {
+    						transition_in(if_block1, 1);
+    					}
+    				} else {
+    					if_block1 = create_if_block$3(ctx);
+    					if_block1.c();
+    					transition_in(if_block1, 1);
+    					if_block1.m(div4, null);
+    				}
+    			} else if (if_block1) {
+    				group_outros();
+
+    				transition_out(if_block1, 1, 1, () => {
+    					if_block1 = null;
+    				});
+
+    				check_outros();
+    			}
+
     			const modalcontainer_changes = {};
 
-    			if (dirty & /*$$scope, solutionHTML*/ 8208) {
+    			if (dirty & /*$$scope, solutionHTML*/ 65552) {
     				modalcontainer_changes.$$scope = { dirty, ctx };
     			}
 
@@ -3015,13 +3264,14 @@ var app = (function () {
     		},
     		i: function intro(local) {
     			if (current) return;
-    			transition_in(card0.$$.fragment, local);
-    			transition_in(card1.$$.fragment, local);
-    			transition_in(card2.$$.fragment, local);
-    			transition_in(card3.$$.fragment, local);
-    			transition_in(icon0.$$.fragment, local);
-    			transition_in(icon1.$$.fragment, local);
-    			transition_in(timedbutton.$$.fragment, local);
+    			transition_in(if_block0);
+    			transition_in(icon.$$.fragment, local);
+
+    			for (let i = 0; i < each_value.length; i += 1) {
+    				transition_in(each_blocks[i]);
+    			}
+
+    			transition_in(if_block1);
     			transition_in(modalcontainer.$$.fragment, local);
 
     			add_render_callback(() => {
@@ -3033,13 +3283,15 @@ var app = (function () {
     			current = true;
     		},
     		o: function outro(local) {
-    			transition_out(card0.$$.fragment, local);
-    			transition_out(card1.$$.fragment, local);
-    			transition_out(card2.$$.fragment, local);
-    			transition_out(card3.$$.fragment, local);
-    			transition_out(icon0.$$.fragment, local);
-    			transition_out(icon1.$$.fragment, local);
-    			transition_out(timedbutton.$$.fragment, local);
+    			transition_out(if_block0);
+    			transition_out(icon.$$.fragment, local);
+    			each_blocks = each_blocks.filter(Boolean);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				transition_out(each_blocks[i]);
+    			}
+
+    			transition_out(if_block1);
     			transition_out(modalcontainer.$$.fragment, local);
     			if (div6_intro) div6_intro.invalidate();
     			div6_outro = create_out_transition(div6, fade, {});
@@ -3047,17 +3299,14 @@ var app = (function () {
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div6);
-    			destroy_component(card0);
-    			destroy_component(card1);
-    			destroy_component(card2);
-    			destroy_component(card3);
-    			destroy_component(icon0);
-    			destroy_component(icon1);
-    			destroy_component(timedbutton);
+    			if (if_block0) if_block0.d();
+    			destroy_component(icon);
+    			destroy_each(each_blocks, detaching);
+    			if (if_block1) if_block1.d();
     			destroy_component(modalcontainer);
     			if (detaching && div6_outro) div6_outro.end();
     			mounted = false;
-    			run_all(dispose);
+    			dispose();
     		}
     	};
 
@@ -4517,13 +4766,14 @@ var app = (function () {
         helpName: "test",
         class: "red",
         next: 1,
-        description: "Write the simplest test you can think of that will fail",
+        description:
+          "For a FizzBuzz app write the simplest test you can think of that will fail, then run the test. [Hint: the test you are thinking about is probably too complex]",
         buttonText: "Done: There is ONE failing (red) test",
       },
       {
         id: "swap",
         title: "Swap",
-        helpName: "swap",
+        helpName: "",
         class: "swap",
         next: 2,
         description: "Swap the roles of driver and navigator",
@@ -4584,8 +4834,9 @@ var app = (function () {
       #swapPairRoles = () => {
         this.driver++;
         this.navigator++;
-        this.driver %= 2;
-        this.navigator %= 2;
+        const numInMob = this.players.length;
+        this.driver %= numInMob;
+        this.navigator %= numInMob;
       };
 
       #get4Iterations = (idx) => {
@@ -4648,6 +4899,15 @@ var app = (function () {
 
       #driver = () => this.players[this.driver];
       #navigator = () => this.players[this.navigator];
+      #navigators = () =>
+        this.players.filter((player, index) => index != this.driver);
+
+      #navigatorText = () => {
+        if (this.#navigators().length == 1)
+          return this.#navigators()[0] + " is the navigator";
+
+        return this.#navigators().join(" and ") + " are the navigators";
+      };
 
       getStep = () => {
         const step = {
@@ -4658,6 +4918,7 @@ var app = (function () {
           helpName: this.state.helpName,
           driver: this.#driver(),
           navigator: this.#navigator(),
+          navigators: this.#navigators(),
           iteration: this.iteration,
           stateName: this.state.id,
         };
@@ -4665,14 +4926,10 @@ var app = (function () {
         if (this.state.id == "swap") {
           step.title = "Swap pair programming roles";
           step.bodyText =
-            this.#driver() +
-            " is now the driver and " +
-            this.#navigator() +
-            " is the navigator";
+            this.#driver() + " is now the driver and " + this.#navigatorText();
 
           step.buttonText = "OK:" + this.#driver() + " has the keyboard";
           step.classes = "" + this.state.class + " swap step"; //TODO is this redundant?
-          step.helpName = "swap"; //TODO is this redundant?
         }
         return step;
       };
@@ -4694,7 +4951,7 @@ var app = (function () {
     /* src\App.svelte generated by Svelte v3.46.2 */
     const file = "src\\App.svelte";
 
-    // (62:4) {:else}
+    // (64:4) {:else}
     function create_else_block(ctx) {
     	let p0;
     	let t1;
@@ -4726,6 +4983,12 @@ var app = (function () {
     	let input1;
     	let br1;
     	let t19;
+    	let span2;
+    	let label2;
+    	let t21;
+    	let input2;
+    	let br2;
+    	let t22;
     	let button;
     	let mounted;
     	let dispose;
@@ -4733,7 +4996,7 @@ var app = (function () {
     	const block = {
     		c: function create() {
     			p0 = element("p");
-    			p0.textContent = "Test Driven Development (TDD) is a process for writing code that involves\r\n      repeatedly appying three distinct steps:";
+    			p0.textContent = "Test Driven Development (TDD) is a process for writing code that\r\n        involves repeatedly appying three distinct steps:";
     			t1 = space();
     			ol = element("ol");
     			li0 = element("li");
@@ -4741,70 +5004,88 @@ var app = (function () {
     			t2 = text("Describe one very simple thing what your code ");
     			strong = element("strong");
     			strong.textContent = "should";
-    			t4 = text("\r\n          do. We write this description in a ");
+    			t4 = text("\r\n            do. We write this description in a ");
     			em = element("em");
     			em.textContent = "\"test\"";
-    			t6 = text(". A test is a special\r\n          function that can check if a single peice of code does what you say it\r\n          should do.");
+    			t6 = text(". A test is a\r\n            special function that can check if a single peice of code does what\r\n            you say it should do.");
     			t7 = space();
     			p2 = element("p");
-    			p2.textContent = "After you write the test, the test will fail, but that is OK as you\r\n          won't have written the code yet.";
+    			p2.textContent = "After you write the test, the test will fail, but that is OK as you\r\n            won't have written the code yet.";
     			t9 = space();
     			li1 = element("li");
-    			li1.textContent = "The next step is to to write enough code that will make the test pass.\r\n          You don't have to write very much, nor do you have to write clever code.\r\n          You can even hard code in results that will pass the test. The code written at this stage will usually\r\n          be low quality, and specifit to the test. But that is ok, we will get a chance to improve the code later on. \r\n          During this step the important thing is to get the test passing.";
+    			li1.textContent = "The next step is to to write enough code that will make the test pass.\r\n          You don't have to write very much, nor do you have to write clever\r\n          code. You can even hard code in results that will pass the test. The\r\n          code written at this stage will usually be low quality, and specifit\r\n          to the test. But that is ok, we will get a chance to improve the code\r\n          later on. During this step the important thing is to get the test\r\n          passing.";
     			t11 = space();
     			li2 = element("li");
-    			li2.textContent = "Once the test is passing (green), the final step in the cycle is refactoring. This is where we look at the code\r\n          we just wrote and try to find patterns that we can use to make the code more general. \r\n          We will repeat these three steps with tests covering more and more of the required behaviour.";
+    			li2.textContent = "Once the test is passing (green), the final step in the cycle is\r\n          refactoring. This is where we look at the code we just wrote and try\r\n          to find patterns that we can use to make the code more general. We\r\n          will repeat these three steps with tests covering more and more of the\r\n          required behaviour.";
     			t13 = space();
     			div = element("div");
     			span0 = element("span");
     			label0 = element("label");
-    			label0.textContent = "Player 1";
+    			label0.textContent = "Player 1 (required)";
     			t15 = space();
     			input0 = element("input");
     			br0 = element("br");
     			t16 = space();
     			span1 = element("span");
     			label1 = element("label");
-    			label1.textContent = "Player 2";
+    			label1.textContent = "Player 2 (required)";
     			t18 = space();
     			input1 = element("input");
     			br1 = element("br");
     			t19 = space();
+    			span2 = element("span");
+    			label2 = element("label");
+    			label2.textContent = "Player 3 (Optional)";
+    			t21 = space();
+    			input2 = element("input");
+    			br2 = element("br");
+    			t22 = space();
     			button = element("button");
     			button.textContent = "Start Game";
-    			add_location(p0, file, 62, 6, 1909);
-    			add_location(strong, file, 69, 56, 2144);
-    			add_location(em, file, 70, 45, 2214);
-    			add_location(p1, file, 68, 8, 2083);
-    			add_location(p2, file, 74, 8, 2378);
-    			attr_dev(li0, "class", "svelte-x21k7e");
-    			add_location(li0, file, 67, 6, 2069);
-    			attr_dev(li1, "class", "svelte-x21k7e");
-    			add_location(li1, file, 79, 6, 2539);
-    			attr_dev(li2, "class", "svelte-x21k7e");
-    			add_location(li2, file, 85, 6, 3029);
-    			add_location(ol, file, 66, 4, 2057);
-    			attr_dev(label0, "for", "fname");
-    			attr_dev(label0, "class", "svelte-x21k7e");
-    			add_location(label0, file, 92, 10, 3412);
+    			add_location(p0, file, 64, 6, 1985);
+    			add_location(strong, file, 71, 58, 2234);
+    			add_location(em, file, 73, 47, 2320);
+    			add_location(p1, file, 70, 10, 2171);
+    			add_location(p2, file, 77, 10, 2492);
+    			attr_dev(li0, "class", "svelte-16dwaug");
+    			add_location(li0, file, 69, 8, 2155);
+    			attr_dev(li1, "class", "svelte-16dwaug");
+    			add_location(li1, file, 82, 8, 2663);
+    			attr_dev(li2, "class", "svelte-16dwaug");
+    			add_location(li2, file, 91, 8, 3190);
+    			add_location(ol, file, 68, 6, 2141);
+    			attr_dev(label0, "for", "name1");
+    			attr_dev(label0, "class", "svelte-16dwaug");
+    			add_location(label0, file, 101, 10, 3610);
     			attr_dev(input0, "type", "text");
-    			attr_dev(input0, "id", "fname");
-    			attr_dev(input0, "name", "fname");
-    			add_location(input0, file, 93, 10, 3459);
-    			add_location(br0, file, 98, 12, 3601);
-    			add_location(span0, file, 91, 8, 3394);
-    			attr_dev(label1, "for", "lname");
-    			attr_dev(label1, "class", "svelte-x21k7e");
-    			add_location(label1, file, 101, 10, 3652);
+    			attr_dev(input0, "id", "name1");
+    			attr_dev(input0, "name", "name1");
+    			input0.required = true;
+    			add_location(input0, file, 102, 10, 3668);
+    			add_location(br0, file, 108, 12, 3832);
+    			add_location(span0, file, 100, 8, 3592);
+    			attr_dev(label1, "for", "name2");
+    			attr_dev(label1, "class", "svelte-16dwaug");
+    			add_location(label1, file, 111, 10, 3883);
     			attr_dev(input1, "type", "text");
-    			attr_dev(input1, "id", "lname");
-    			attr_dev(input1, "name", "lname");
-    			add_location(input1, file, 102, 10, 3699);
-    			add_location(br1, file, 107, 12, 3841);
-    			add_location(span1, file, 100, 8, 3634);
+    			attr_dev(input1, "id", "name2");
+    			attr_dev(input1, "name", "name2");
+    			input1.required = true;
+    			add_location(input1, file, 112, 10, 3941);
+    			add_location(br1, file, 118, 12, 4105);
+    			add_location(span1, file, 110, 8, 3865);
+    			attr_dev(label2, "for", "name3");
+    			attr_dev(label2, "class", "svelte-16dwaug");
+    			add_location(label2, file, 121, 10, 4156);
+    			attr_dev(input2, "type", "text");
+    			attr_dev(input2, "id", "name3");
+    			attr_dev(input2, "name", "name3");
+    			add_location(input2, file, 122, 10, 4214);
+    			add_location(br2, file, 127, 12, 4347);
+    			add_location(span2, file, 120, 8, 4138);
     			attr_dev(button, "id", "startBtn");
-    			add_location(button, file, 109, 8, 3874);
-    			add_location(div, file, 90, 6, 3379);
+    			add_location(button, file, 130, 8, 4382);
+    			add_location(div, file, 99, 6, 3577);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, p0, anchor);
@@ -4829,35 +5110,47 @@ var app = (function () {
     			append_dev(span0, label0);
     			append_dev(span0, t15);
     			append_dev(span0, input0);
-    			set_input_value(input0, /*gameState*/ ctx[0].players[0]);
+    			set_input_value(input0, /*gameState*/ ctx[1].players[0]);
     			append_dev(span0, br0);
     			append_dev(div, t16);
     			append_dev(div, span1);
     			append_dev(span1, label1);
     			append_dev(span1, t18);
     			append_dev(span1, input1);
-    			set_input_value(input1, /*gameState*/ ctx[0].players[1]);
+    			set_input_value(input1, /*gameState*/ ctx[1].players[1]);
     			append_dev(span1, br1);
     			append_dev(div, t19);
+    			append_dev(div, span2);
+    			append_dev(span2, label2);
+    			append_dev(span2, t21);
+    			append_dev(span2, input2);
+    			set_input_value(input2, /*thirdPlayer*/ ctx[0]);
+    			append_dev(span2, br2);
+    			append_dev(div, t22);
     			append_dev(div, button);
 
     			if (!mounted) {
     				dispose = [
-    					listen_dev(input0, "input", /*input0_input_handler*/ ctx[3]),
-    					listen_dev(input1, "input", /*input1_input_handler*/ ctx[4]),
-    					listen_dev(button, "click", /*startGame*/ ctx[1], false, false, false)
+    					listen_dev(input0, "input", /*input0_input_handler*/ ctx[4]),
+    					listen_dev(input1, "input", /*input1_input_handler*/ ctx[5]),
+    					listen_dev(input2, "input", /*input2_input_handler*/ ctx[6]),
+    					listen_dev(button, "click", /*startGame*/ ctx[2], false, false, false)
     				];
 
     				mounted = true;
     			}
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*gameState*/ 1 && input0.value !== /*gameState*/ ctx[0].players[0]) {
-    				set_input_value(input0, /*gameState*/ ctx[0].players[0]);
+    			if (dirty & /*gameState*/ 2 && input0.value !== /*gameState*/ ctx[1].players[0]) {
+    				set_input_value(input0, /*gameState*/ ctx[1].players[0]);
     			}
 
-    			if (dirty & /*gameState*/ 1 && input1.value !== /*gameState*/ ctx[0].players[1]) {
-    				set_input_value(input1, /*gameState*/ ctx[0].players[1]);
+    			if (dirty & /*gameState*/ 2 && input1.value !== /*gameState*/ ctx[1].players[1]) {
+    				set_input_value(input1, /*gameState*/ ctx[1].players[1]);
+    			}
+
+    			if (dirty & /*thirdPlayer*/ 1 && input2.value !== /*thirdPlayer*/ ctx[0]) {
+    				set_input_value(input2, /*thirdPlayer*/ ctx[0]);
     			}
     		},
     		i: noop,
@@ -4877,14 +5170,14 @@ var app = (function () {
     		block,
     		id: create_else_block.name,
     		type: "else",
-    		source: "(62:4) {:else}",
+    		source: "(64:4) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (58:4) {#if gameState.started}
+    // (60:4) {#if gameState.started}
     function create_if_block(ctx) {
     	let div;
     	let game;
@@ -4892,7 +5185,7 @@ var app = (function () {
     	let current;
 
     	game = new Game({
-    			props: { gameState: /*gameState*/ ctx[0] },
+    			props: { gameState: /*gameState*/ ctx[1] },
     			$$inline: true
     		});
 
@@ -4900,7 +5193,7 @@ var app = (function () {
     		c: function create() {
     			div = element("div");
     			create_component(game.$$.fragment);
-    			add_location(div, file, 58, 6, 1803);
+    			add_location(div, file, 60, 6, 1879);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -4909,7 +5202,7 @@ var app = (function () {
     		},
     		p: function update(ctx, dirty) {
     			const game_changes = {};
-    			if (dirty & /*gameState*/ 1) game_changes.gameState = /*gameState*/ ctx[0];
+    			if (dirty & /*gameState*/ 2) game_changes.gameState = /*gameState*/ ctx[1];
     			game.$set(game_changes);
     		},
     		i: function intro(local) {
@@ -4939,7 +5232,7 @@ var app = (function () {
     		block,
     		id: create_if_block.name,
     		type: "if",
-    		source: "(58:4) {#if gameState.started}",
+    		source: "(60:4) {#if gameState.started}",
     		ctx
     	});
 
@@ -4983,7 +5276,7 @@ var app = (function () {
 
     	iconbutton = new IconButton({
     			props: {
-    				onclick: /*reStartGame*/ ctx[2],
+    				onclick: /*reStartGame*/ ctx[3],
     				icon: "restart"
     			},
     			$$inline: true
@@ -4993,7 +5286,7 @@ var app = (function () {
     	const if_blocks = [];
 
     	function select_block_type(ctx, dirty) {
-    		if (/*gameState*/ ctx[0].started) return 0;
+    		if (/*gameState*/ ctx[1].started) return 0;
     		return 1;
     	}
 
@@ -5042,54 +5335,54 @@ var app = (function () {
     			if_block.c();
     			attr_dev(link0, "rel", "preconnect");
     			attr_dev(link0, "href", "https://fonts.googleapis.com");
-    			add_location(link0, file, 23, 2, 610);
+    			add_location(link0, file, 25, 2, 688);
     			attr_dev(link1, "rel", "preconnect");
     			attr_dev(link1, "href", "https://fonts.gstatic.com");
     			attr_dev(link1, "crossorigin", "");
-    			add_location(link1, file, 24, 2, 675);
+    			add_location(link1, file, 26, 2, 753);
     			attr_dev(link2, "href", "https://fonts.googleapis.com/css2?family=Bangers&family=Montserrat:ital,wght@0,300;0,500;1,100;1,300;1,500&family=Roboto+Mono:ital,wght@0,277;0,300;1,300&family=Zilla+Slab:wght@300;400;700&display=swap");
     			attr_dev(link2, "rel", "stylesheet");
-    			add_location(link2, file, 25, 2, 749);
-    			add_location(title, file, 30, 0, 1014);
+    			add_location(link2, file, 27, 2, 827);
+    			add_location(title, file, 32, 0, 1092);
     			attr_dev(div0, "class", "menu");
-    			add_location(div0, file, 34, 4, 1070);
+    			add_location(div0, file, 36, 4, 1148);
     			attr_dev(feGaussianBlur, "stdDeviation", "10 0");
-    			add_location(feGaussianBlur, file, 40, 10, 1315);
+    			add_location(feGaussianBlur, file, 42, 10, 1393);
     			attr_dev(feOffset, "dx", "5");
-    			add_location(feOffset, file, 41, 10, 1365);
+    			add_location(feOffset, file, 43, 10, 1443);
     			attr_dev(feMorphology, "operator", "erode");
     			attr_dev(feMorphology, "radius", "1");
-    			add_location(feMorphology, file, 42, 10, 1396);
+    			add_location(feMorphology, file, 44, 10, 1474);
     			attr_dev(filter, "id", "motion-blur-filter");
     			attr_dev(filter, "filterUnits", "userSpaceOnUse");
-    			add_location(filter, file, 39, 8, 1242);
+    			add_location(filter, file, 41, 8, 1320);
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
-    			attr_dev(svg, "class", "svelte-x21k7e");
-    			add_location(svg, file, 38, 6, 1192);
+    			attr_dev(svg, "class", "svelte-16dwaug");
+    			add_location(svg, file, 40, 6, 1270);
     			attr_dev(span0, "id", "red");
-    			attr_dev(span0, "class", "svelte-x21k7e");
-    			add_location(span0, file, 45, 6, 1481);
+    			attr_dev(span0, "class", "svelte-16dwaug");
+    			add_location(span0, file, 47, 6, 1559);
     			attr_dev(span1, "id", "green");
-    			attr_dev(span1, "class", "svelte-x21k7e");
-    			add_location(span1, file, 45, 32, 1507);
+    			attr_dev(span1, "class", "svelte-16dwaug");
+    			add_location(span1, file, 47, 32, 1585);
     			attr_dev(span2, "filter-content", "G");
-    			attr_dev(span2, "class", "swoosh svelte-x21k7e");
+    			attr_dev(span2, "class", "swoosh svelte-16dwaug");
     			attr_dev(span2, "id", "blue");
-    			add_location(span2, file, 45, 62, 1537);
+    			add_location(span2, file, 47, 62, 1615);
     			attr_dev(span3, "id", "blue");
-    			attr_dev(span3, "class", "svelte-x21k7e");
-    			add_location(span3, file, 49, 7, 1630);
-    			attr_dev(div1, "class", "title svelte-x21k7e");
-    			add_location(div1, file, 37, 4, 1165);
+    			attr_dev(span3, "class", "svelte-16dwaug");
+    			add_location(span3, file, 51, 7, 1708);
+    			attr_dev(div1, "class", "title svelte-16dwaug");
+    			add_location(div1, file, 39, 4, 1243);
     			attr_dev(div2, "class", "menu");
-    			add_location(div2, file, 51, 4, 1673);
-    			attr_dev(header, "class", "svelte-x21k7e");
-    			add_location(header, file, 33, 2, 1056);
-    			attr_dev(h2, "class", "svelte-x21k7e");
-    			add_location(h2, file, 54, 2, 1717);
-    			add_location(section, file, 56, 2, 1757);
-    			attr_dev(main, "class", "svelte-x21k7e");
-    			add_location(main, file, 32, 0, 1046);
+    			add_location(div2, file, 53, 4, 1751);
+    			attr_dev(header, "class", "svelte-16dwaug");
+    			add_location(header, file, 35, 2, 1134);
+    			attr_dev(h2, "class", "svelte-16dwaug");
+    			add_location(h2, file, 56, 2, 1795);
+    			add_location(section, file, 58, 2, 1833);
+    			attr_dev(main, "class", "svelte-16dwaug");
+    			add_location(main, file, 34, 0, 1124);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -5193,6 +5486,7 @@ var app = (function () {
     function instance($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('App', slots, []);
+    	let thirdPlayer;
     	let gameState = GameState.recoverSavedGame();
 
     	if (!gameState) {
@@ -5200,12 +5494,13 @@ var app = (function () {
     	}
 
     	const startGame = () => {
+    		if (thirdPlayer) $$invalidate(1, gameState.players[2] = thirdPlayer, gameState);
     		gameState.start();
-    		$$invalidate(0, gameState);
+    		$$invalidate(1, gameState);
     	};
 
     	const reStartGame = () => {
-    		$$invalidate(0, gameState = new GameState());
+    		$$invalidate(1, gameState = new GameState());
     	};
 
     	const writable_props = [];
@@ -5216,12 +5511,17 @@ var app = (function () {
 
     	function input0_input_handler() {
     		gameState.players[0] = this.value;
-    		$$invalidate(0, gameState);
+    		$$invalidate(1, gameState);
     	}
 
     	function input1_input_handler() {
     		gameState.players[1] = this.value;
-    		$$invalidate(0, gameState);
+    		$$invalidate(1, gameState);
+    	}
+
+    	function input2_input_handler() {
+    		thirdPlayer = this.value;
+    		$$invalidate(0, thirdPlayer);
     	}
 
     	$$self.$capture_state = () => ({
@@ -5229,20 +5529,30 @@ var app = (function () {
     		IconButton,
     		GameState,
     		fly,
+    		thirdPlayer,
     		gameState,
     		startGame,
     		reStartGame
     	});
 
     	$$self.$inject_state = $$props => {
-    		if ('gameState' in $$props) $$invalidate(0, gameState = $$props.gameState);
+    		if ('thirdPlayer' in $$props) $$invalidate(0, thirdPlayer = $$props.thirdPlayer);
+    		if ('gameState' in $$props) $$invalidate(1, gameState = $$props.gameState);
     	};
 
     	if ($$props && "$$inject" in $$props) {
     		$$self.$inject_state($$props.$$inject);
     	}
 
-    	return [gameState, startGame, reStartGame, input0_input_handler, input1_input_handler];
+    	return [
+    		thirdPlayer,
+    		gameState,
+    		startGame,
+    		reStartGame,
+    		input0_input_handler,
+    		input1_input_handler,
+    		input2_input_handler
+    	];
     }
 
     class App extends SvelteComponentDev {
