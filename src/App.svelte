@@ -20,6 +20,47 @@
   const reStartGame = () => {
     gameState = new GameState();
   };
+
+  let file = "waiting";
+  
+  const read_stream = async (stream) => {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let result = '';
+
+    // Read the stream
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break; // Stream is finished
+
+      // Decode the Uint8Array to string
+      result += decoder.decode(value, { stream: true });
+    }
+
+    // Finalize the decoding
+    result += decoder.decode(); // Flush any remaining data
+
+    return result;
+  }
+  const g = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/data');
+      
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const data = await read_stream(response.body);
+      //const data = await response.json(); // Parse JSON data
+      file = data; // Update file with the fetched data
+      console.log(data); // Handle the data
+    } catch (error) {
+      console.error('There has been a problem with your fetch operation:', error);
+    }
+}
+
+g();
+
 </script>
 
 <svelte:head>
@@ -133,6 +174,8 @@
     {/if}
   </section>
 </main>
+<p>My File:</p>
+{file}
 
 <style>
   :global(*) {
