@@ -5,6 +5,10 @@
   //import {reStartGame, startGame} from './gameLogic.js';
   import { GameState } from "./gameState";
   import { fly } from "svelte/transition";
+  import HelperStatus from "./components/HelperStatus.svelte";
+  import { startHelper, resetHelper } from "./helper.js";
+
+  startHelper();
 
   let thirdPlayer;
   let gameState = GameState.recoverSavedGame();
@@ -19,6 +23,7 @@
 
   const reStartGame = () => {
     gameState = new GameState();
+    resetHelper();
   };
 </script>
 
@@ -41,7 +46,7 @@
         id="blue">G</span
       ><span id="blue">o!</span>
     </div>
-    <div class="menu">x</div>
+    <div class="menu"><HelperStatus /></div>
   </header>
 
   <h2>A game of TDD & Pairing</h2>
