@@ -1,4 +1,9 @@
-import { GameState, states, TDDPhase } from "../src/gameState";
+import {
+  GameState,
+  states,
+  TDDPhase,
+  TOTAL_ITERATIONS,
+} from "../src/gameState";
 
 class LocalStorageMock {
   constructor() {
@@ -312,4 +317,70 @@ test("3_players_next_step_13_times", () => {
 test("initialisation", () => {
   let g = new GameState();
   isInitialState(g);
+});
+
+const STEPS_PER_ITERATION = 4;
+
+test("never_creates_more_than_total_iterations", () => {
+  let g = new GameState();
+  g.start();
+  [...Array(STEPS_PER_ITERATION * (TOTAL_ITERATIONS - 1))].forEach((_) =>
+    g.nextStep()
+  );
+  expect(g.iterations.length).toBe(TOTAL_ITERATIONS);
+  expect(g.iteration).toBe(TOTAL_ITERATIONS - 1);
+  expect(g.finished).toBe(false);
+});
+
+test("last_refactor_step_is_not_finished", () => {
+  let g = new GameState();
+  g.start();
+  [...Array(STEPS_PER_ITERATION * TOTAL_ITERATIONS - 1)].forEach((_) =>
+    g.nextStep()
+  );
+  expect(g.state.id).toBe("refactor");
+  expect(g.finished).toBe(false);
+  expect(g.getStep().stateName).toBe("refactor");
+});
+
+test("finishes_after_last_iteration", () => {
+  let g = new GameState();
+  g.start();
+  [...Array(STEPS_PER_ITERATION * TOTAL_ITERATIONS)].forEach((_) =>
+    g.nextStep()
+  );
+  expect(g.finished).toBe(true);
+  expect(g.getStep()).toBeNull();
+  expect(g.iterations.length).toBe(TOTAL_ITERATIONS);
+  expect(g.iterations.every((i) => i.phase == TDDPhase.COMPLETED)).toBe(true);
+});
+
+test("next_step_after_finish_does_nothing", () => {
+  let g = new GameState();
+  g.start();
+  [...Array(STEPS_PER_ITERATION * TOTAL_ITERATIONS + 3)].forEach((_) =>
+    g.nextStep()
+  );
+  expect(g.finished).toBe(true);
+  expect(g.stepNumber).toBe(STEPS_PER_ITERATION * TOTAL_ITERATIONS);
+});
+
+test("recover_finished_game_from_local_storage", () => {
+  let g = new GameState();
+  g.start();
+  [...Array(STEPS_PER_ITERATION * TOTAL_ITERATIONS)].forEach((_) =>
+    g.nextStep()
+  );
+  const recovered = GameState.recoverSavedGame();
+  expect(recovered.finished).toBe(true);
+});
+
+test("recover_game_saved_before_finish_existed", () => {
+  localStorage.setItem(
+    GameState.GAME_STATE,
+    JSON.stringify({ players: ["a", "b"], state: states[0], iterations: [] })
+  );
+  const recovered = GameState.recoverSavedGame();
+  expect(recovered.finished).toBe(false);
+  expect(recovered.totalIterations).toBe(TOTAL_ITERATIONS);
 });

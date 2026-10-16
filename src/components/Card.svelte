@@ -1,5 +1,4 @@
 <script>
-  import Modal from "./Modal.svelte";
   import refactorCards from "../content/refactorCards.json";
   import testCards from "../content/testCards.json";
   import codeCards from "../content/codeGuidanceCards.json";
@@ -20,6 +19,12 @@
     refactor: "REFACTOR?",
     test: "TEST!",
     code: "IMPLEMENTATION!",
+  };
+
+  const frontTitles = {
+    refactor: "Refactoring Inspiration Card",
+    test: "Testing Inspiration Card",
+    code: "Coding Inspiration Card",
   };
 
   let show = false;
@@ -53,18 +58,17 @@
       on:click={() => (flipCardTwist = true)}
     >
       <div class="content">
-        <h1>Testing Inspiration Card</h1>
+        <h1>{frontTitles[cardType]}</h1>
         <p>Stuck?<br /></p>
         <p>One of these cards might give you an idea to move forward</p>
       </div>
     </div>
     <div
-      class={"flip-card-back " + cardType}
+      class={"flip-card-back card-face " + cardType}
       on:click={() => (flipCardTwist = false)}
-      id="frame"
     >
       <div class="modal">
-        <div class="cardType">{typeText}?</div>
+        <div class="cardType">{typeText}</div>
         <div class="title">{titleText}</div>
         <div class="bodyText">{@html bodyText}</div>
       </div>
@@ -77,21 +81,7 @@
     --card-w: calc(var(--app-width) * 0.25);
     --card-h: calc(var(--card-w) * 1.5);
   }
-  #frame.test {
-    background-color: var(--testing-red);
-    color: var(--testing-red-hint);
-  }
-
-  #frame.code {
-    background-color: var(--coding-green);
-    color: var(--coding-green-hint);
-  }
-
-  #frame.refactor {
-    background-color: var(--refactoring-blue);
-    color: var(--refactoring-blue-hint);
-  }
-  /* .modal {  
+  /* .modal {
         margin: 10px;
         max-height:70vh;
         overflow-y: auto;
@@ -180,14 +170,17 @@
   .code {
     --hero-col: var(--coding-green-hint);
     --accent-col: var(--coding-green-hint-trans);
+    --border-col: var(--coding-green);
   }
   .test {
     --hero-col: var(--testing-red-hint);
     --accent-col: var(--testing-red-hint-trans);
+    --border-col: var(--testing-red);
   }
   .refactor {
     --hero-col: var(--refactoring-blue-hint);
     --accent-col: var(--refactoring-blue-hint-trans);
+    --border-col: var(--refactoring-blue);
   }
   .flip-card-front {
     border-radius: 5px;
@@ -247,7 +240,7 @@
     background-position: 0 0, 0 0, 15px 26px, 15px 26px, 0 0, 15px 26px;
     border: solid;
     border-width: 1px;
-    border-color: var(--coding-green);
+    border-color: var(--border-col);
     font-weight: bold;
     font-family: "Zilla Slab", Consolas, "Courier New", Courier, monospace;
     color: black;
@@ -261,8 +254,6 @@
   }
   .flip-card-back {
     border-radius: 10px;
-    background-color: #2980b9;
-    color: white;
     transform: rotateY(180deg);
     padding: 0.1em;
   }

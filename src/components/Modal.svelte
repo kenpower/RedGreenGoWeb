@@ -1,7 +1,7 @@
 <!-- src/Modal.svelte -->
 <script>
   import { createEventDispatcher } from "svelte";
-  import { fly, fade, scale } from "svelte/transition";
+  import { scale } from "svelte/transition";
 
   export let isOpenModal;
   export let bodyText = "";
@@ -18,16 +18,16 @@
 </script>
 
 <div
-  id="background"
-  style="display: 
+  class="modal-backdrop"
+  style="display:
         {isOpenModal ? 'block' : 'none'};"
   on:click={closeModal}
 />
 
 {#if isOpenModal}
-  <div transition:scale id="frame" class={cardType}>
-    <div class="modal">
-      <div class="cardType">{typeText}?</div>
+  <div transition:scale class="modal-frame card-face {cardType}">
+    <div class="modal-content">
+      <div class="cardType">{typeText}</div>
       <div class="title">{titleText}</div>
       <div class="bodyText">{@html bodyText}</div>
     </div>
@@ -35,47 +35,6 @@
 {/if}
 
 <style>
-  #background {
-    position: fixed;
-    z-index: 1;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: #0008;
-  }
-  #frame {
-    border-radius: 20px;
-    position: fixed;
-    z-index: 2;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    max-width: 450px;
-    min-height: 75vh;
-    height: 75vh;
-  }
-
-  #frame.test {
-    background-color: var(--testing-red);
-    color: var(--testing-red-hint);
-  }
-
-  #frame.code {
-    background-color: var(--coding-green);
-    color: var(--coding-green-hint);
-  }
-
-  #frame.refactor {
-    background-color: var(--refactoring-blue);
-    color: var(--refactoring-blue-hint);
-  }
-  .modal {
-    margin: 10px;
-    max-height: 70vh;
-    overflow-y: auto;
-  }
-
   .cardType {
     font-family: "Bangers", cursive;
     font-size: 2.5em;

@@ -1,3 +1,41 @@
+:root {
+	--app-width: 500px;
+	--global-game-width: 500px;
+
+	--testing-red: tomato;
+	/* SVG tomato #FF6347 */
+	--testing-red-muted: #ffa899;
+	--testing-red-hint: #ffdcd6;
+	--testing-red-hint-trans: #ffdcd677;
+	--coding-green: olivedrab;
+	/* SVG olivedrab #6B8E23	 */
+	--coding-green-muted: #a5d24b;
+	--coding-green-hint: #cee79d;
+	--coding-green-hint-trans: #cee79d77;
+	--refactoring-blue: dodgerblue;
+	/*dodgerblue #1E90FF	 */
+	--refactoring-blue-muted: #85c2ff;
+	--refactoring-blue-hint: #d6ebff;
+	--refactoring-blue-hint-trans: #d6ebff77;
+
+	--color-tone-1: #1a1a1b;
+	--color-tone-2: #787c7e;
+	--color-tone-3: #878a8c;
+	--color-tone-4: #d3d6da;
+	--color-tone-5: #edeff1;
+	--color-tone-6: #f6f7f8;
+	--color-tone-7: #ffffff;
+	--opacity-50: rgba(255, 255, 255, 0.5);
+
+	--text-color: #2b2d2e;
+	--text-muted: #55595b;
+}
+
+html {
+	/* THE TRICK to stop scroll bar appearing and moving everything to the left */
+	margin-left: calc(100vw - 100%);
+}
+
 html, body {
 	position: relative;
 	width: 100%;
@@ -5,7 +43,7 @@ html, body {
 }
 
 body {
-	color: #333;
+	color: var(--text-color);
 	margin: 0;
 	padding: 8px;
 	box-sizing: border-box;
@@ -48,10 +86,12 @@ button {
 	color: #333;
 	background-color: #f4f4f4;
 	outline: none;
+	cursor: pointer;
 }
 
 button:disabled {
 	color: #999;
+	cursor: default;
 }
 
 button:not(:disabled):active {
@@ -60,4 +100,49 @@ button:not(:disabled):active {
 
 button:focus {
 	border-color: #666;
+}
+
+/* Hint card colours, shared by the card deck and the card modal */
+.card-face.test {
+	background-color: var(--testing-red);
+	color: var(--testing-red-hint);
+}
+
+.card-face.code {
+	background-color: var(--coding-green);
+	color: var(--coding-green-hint);
+}
+
+.card-face.refactor {
+	background-color: var(--refactoring-blue);
+	color: var(--refactoring-blue-hint);
+}
+
+/* Modal overlay, shared by Modal and ModalContainer */
+.modal-backdrop {
+	position: fixed;
+	z-index: 1;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	background: #0008;
+}
+
+.modal-frame {
+	border-radius: 20px;
+	position: fixed;
+	z-index: 2;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	max-width: 450px;
+	min-height: 75vh;
+	height: 75vh;
+}
+
+.modal-content {
+	margin: 10px;
+	max-height: 70vh;
+	overflow-y: auto;
 }

@@ -45,6 +45,9 @@ export const TDDPhase = {
   RED: 1,
 };
 
+// must match the number of <article id="loopN"> in public/content/fizzbuzz.html
+export const TOTAL_ITERATIONS = 9;
+
 export class GameState {
   constructor(recoveredSavedGame) {
     if (recoveredSavedGame) {
@@ -57,6 +60,8 @@ export class GameState {
       this.iteration = r.iteration;
       this.started = r.started;
       this.iterations = r.iterations;
+      this.totalIterations = r.totalIterations || TOTAL_ITERATIONS;
+      this.finished = r.finished || false;
     } else {
       (this.players = ["John", "Jane"]),
         (this.driver = 0),
@@ -66,6 +71,8 @@ export class GameState {
         (this.iteration = 0),
         (this.started = false);
       this.iterations = [];
+      this.totalIterations = TOTAL_ITERATIONS;
+      this.finished = false;
     }
     this.#save();
   }
@@ -79,12 +86,13 @@ export class GameState {
   };
 
   #get4Iterations = (idx) => {
-    return [
+    const its = [
       { phase: 1, index: idx++ },
       { phase: 0, index: idx++ },
       { phase: 0, index: idx++ },
       { phase: 0, index: idx++ },
     ];
+    return its.slice(0, this.totalIterations - this.iterations.length);
   };
 
   static GAME_STATE = "GAME_STATE";
@@ -108,6 +116,16 @@ export class GameState {
     if (!this.state) {
       console.log("Error: next step called but no state");
     }
+    if (this.finished) return;
+
+    const lastIteration = this.iteration + 1 >= this.totalIterations;
+    if (states[this.state.next].id == "red" && lastIteration) {
+      this.iterations[this.iteration].phase = TDDPhase.COMPLETED;
+      this.finished = true;
+      this.#save();
+      return;
+    }
+
     this.state = states[this.state.next];
     this.stepNumber++;
 
@@ -149,6 +167,8 @@ export class GameState {
   };
 
   getStep = () => {
+    if (this.finished) return null;
+
     const step = {
       title: "Step:" + this.stepNumber + " " + this.state.title,
       bodyText: this.state.description,

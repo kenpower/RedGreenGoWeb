@@ -7,7 +7,6 @@
   import { tick } from "svelte";
   import { createEventDispatcher } from "svelte";
   import Icon from "./Icon.svelte";
-  import TimedButton from "./TimedButton.svelte";
 
   const dispatch = createEventDispatcher();
 
@@ -26,8 +25,9 @@
     showHint = false;
   }
 
-  async function showSolution() {
-    isOpenModal = true;
+  function peekAtSolution() {
+    if (confirm("Try it yourself first!\n\nShow our solution anyway?"))
+      isOpenModal = true;
   }
 
   //TODO move into game
@@ -62,11 +62,14 @@
     <div class="stepBody">
       <div style="display: flex;justify-content: center;">
         {#if step.helpName !== ""}
-        <div class="cardDeck" on:click={showCard}>
-            <Card off={12} cardType={step.helpName} {showHint} />
-            <Card off={8} cardType={step.helpName} />
-            <Card off={4} cardType={step.helpName} />
-            <Card off={0} cardType={step.helpName} />
+        <div>
+          <p class="deckPrompt">Stuck? Click a card for a tip</p>
+          <div class="cardDeck" on:click={showCard}>
+              <Card off={12} cardType={step.helpName} {showHint} />
+              <Card off={8} cardType={step.helpName} />
+              <Card off={4} cardType={step.helpName} />
+              <Card off={0} cardType={step.helpName} />
+          </div>
         </div>
         {/if}
         <div style="display: flex;justify-content: center;flex-direction: column;">
@@ -90,16 +93,20 @@
         <button on:click={() => dispatch("interact", "done")}
           >{step.buttonText}</button
         >
-         {#if solutionHTML?.length != 0}
-          <TimedButton on:solution={showSolution} text="Solution" />
-        {/if}
       </div>
+      {#if solutionHTML?.length != 0}
+        <div class="peekRow">
+          <button class="peek" on:click={peekAtSolution}
+            >Peek at our solution</button
+          >
+        </div>
+      {/if}
     </div>
     <!-- TODO move into game, or should I??? -->
     <!-- TODO make hint a sub component of modalContainer -->
     <!-- <HintCard {showHint} cardType={step.helpName} /> -->
     <ModalContainer bind:isOpenModal>
-      <div style="background:white">
+      <div style="background:white; text-align:left">
         {@html solutionHTML}
       </div>
     </ModalContainer>
@@ -109,7 +116,29 @@
 <Solutions bind:this={st} bind:dataReady />
 
 <style>
+  .deckPrompt {
+    font-size: 0.85em;
+    font-weight: bold;
+    margin: 0.5em 0 0 0;
+  }
+
+  .peekRow {
+    text-align: right;
+    padding: 0 0.5em 0.25em 0;
+  }
+
+  .peek {
+    background: none;
+    border: none;
+    padding: 0.2em;
+    margin: 0;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    text-decoration: underline;
+  }
+
   .cardDeck {
+    cursor: pointer;
     position: relative; /*absolute children position relative to this, not body*/
     min-width: calc(var(--app-width) * 0.3);
     min-height: calc(var(--app-width) * 0.45);
