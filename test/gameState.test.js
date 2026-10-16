@@ -4,6 +4,7 @@ import {
   TDDPhase,
   TOTAL_ITERATIONS,
 } from "../src/gameState";
+import { fizzbuzzGoals } from "../src/content/fizzbuzzGoals.js";
 
 class LocalStorageMock {
   constructor() {
@@ -373,6 +374,61 @@ test("recover_finished_game_from_local_storage", () => {
   );
   const recovered = GameState.recoverSavedGame();
   expect(recovered.finished).toBe(true);
+});
+
+test("one_goal_per_iteration", () => {
+  expect(fizzbuzzGoals.length).toBe(TOTAL_ITERATIONS);
+});
+
+test("red_step_shows_goal_for_its_iteration", () => {
+  let g = new GameState();
+  g.start();
+  expect(g.getStep().goal).toBe(fizzbuzzGoals[0]);
+  [...Array(STEPS_PER_ITERATION)].forEach((_) => g.nextStep());
+  expect(g.getStep().goal).toBe(fizzbuzzGoals[1]);
+});
+
+test("only_red_step_has_goal", () => {
+  let g = new GameState();
+  g.start();
+  g.nextStep();
+  expect(g.getStep().goal).toBe("");
+  g.nextStep();
+  expect(g.getStep().goal).toBe("");
+});
+
+test("steps_have_navigator_prompt_except_swap", () => {
+  let g = new GameState();
+  g.start();
+  expect(g.getStep().navigatorPrompt).not.toBe("");
+  g.nextStep();
+  expect(g.getStep().navigatorPrompt).toBe("");
+  g.nextStep();
+  expect(g.getStep().navigatorPrompt).not.toBe("");
+  g.nextStep();
+  expect(g.getStep().navigatorPrompt).not.toBe("");
+});
+
+test("player_numbers_follow_roles", () => {
+  let g = new GameState();
+  g.players[2] = "player3";
+  g.start();
+  expect(g.getStep().driverNumber).toBe(1);
+  expect(g.getStep().navigatorNumbers).toEqual([2, 3]);
+  g.nextStep();
+  expect(g.getStep().driverNumber).toBe(2);
+  expect(g.getStep().navigatorNumbers).toEqual([1, 3]);
+});
+
+test("recovered_game_uses_current_state_text", () => {
+  const oldRed = { ...states[0], description: "old text" };
+  delete oldRed.navigatorPrompt;
+  localStorage.setItem(
+    GameState.GAME_STATE,
+    JSON.stringify({ players: ["a", "b"], state: oldRed, iterations: [] })
+  );
+  const recovered = GameState.recoverSavedGame();
+  expect(recovered.state).toBe(states[0]);
 });
 
 test("recover_game_saved_before_finish_existed", () => {

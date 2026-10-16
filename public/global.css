@@ -29,6 +29,11 @@
 
 	--text-color: #2b2d2e;
 	--text-muted: #55595b;
+
+	/* one colour per player, kept distinct from the red/green/blue phase colours */
+	--player-1: #6a3fb5;
+	--player-2: #b35600;
+	--player-3: #007a85;
 }
 
 html {

@@ -1,3 +1,5 @@
+import { fizzbuzzGoals } from "./content/fizzbuzzGoals.js";
+
 export const states = [
   {
     id: "red",
@@ -6,7 +8,9 @@ export const states = [
     class: "red",
     next: 1,
     description:
-      "For a FizzBuzz app write the simplest test you can think of that will fail, then run the test. [Hint: the test you are thinking about is probably too complex]",
+      "Write the simplest test you can think of that will fail, then run the test. [Hint: the test you are thinking about is probably too complex]",
+    navigatorPrompt:
+      "Before the driver types, say out loud what behaviour this test should check.",
     buttonText: "Done: There is ONE failing (red) test",
   },
   {
@@ -16,6 +20,7 @@ export const states = [
     class: "swap",
     next: 2,
     description: "Swap the roles of driver and navigator",
+    navigatorPrompt: "",
     buttonText: "",
   },
   {
@@ -25,6 +30,8 @@ export const states = [
     class: "green",
     next: 3,
     description: "Write just enough code to make the failing test pass",
+    navigatorPrompt:
+      "Watch for code the test doesn't need. Speak up if the driver writes more than that.",
     buttonText: "Done: All the test are now passing (green)",
   },
   {
@@ -34,6 +41,8 @@ export const states = [
     class: "refactor",
     next: 0,
     description: "Clean up the code you've just written",
+    navigatorPrompt:
+      "Point out one piece of duplication or unclear naming, or agree there's nothing worth changing yet.",
     buttonText: "Done: The code is better and all tests are still passing!",
   },
 ];
@@ -55,7 +64,8 @@ export class GameState {
       this.players = r.players;
       this.driver = r.driver;
       this.navigator = r.navigator;
-      this.state = r.state;
+      // look up by id so saved games pick up text changes in states
+      this.state = states.find((s) => s.id == r.state?.id) || r.state;
       this.stepNumber = r.stepNumber;
       this.iteration = r.iteration;
       this.started = r.started;
@@ -158,6 +168,11 @@ export class GameState {
   #navigator = () => this.players[this.navigator];
   #navigators = () =>
     this.players.filter((player, index) => index != this.driver);
+  // player numbers start at 1, matching the --player-N colours in global.css
+  #navigatorNumbers = () =>
+    this.players
+      .map((player, index) => index + 1)
+      .filter((number) => number - 1 != this.driver);
 
   #navigatorText = () => {
     if (this.#navigators().length == 1)
@@ -178,7 +193,12 @@ export class GameState {
       driver: this.#driver(),
       navigator: this.#navigator(),
       navigators: this.#navigators(),
+      driverNumber: this.driver + 1,
+      navigatorNumbers: this.#navigatorNumbers(),
+      navigatorPrompt: this.state.navigatorPrompt || "",
+      goal: this.state.id == "red" ? fizzbuzzGoals[this.iteration] || "" : "",
       iteration: this.iteration,
+      totalIterations: this.totalIterations,
       stateName: this.state.id,
     };
 

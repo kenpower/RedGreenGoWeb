@@ -7,6 +7,7 @@
     driving: "icons/driving.png",
     navigation: "icons/navigation.png",
     keyboard: "icons/keyboard.png",
+    swap: "icons/swap.png",
   };
 
   let alts = {
@@ -14,6 +15,7 @@
     driving: "Driver",
     navigation: "Navigator",
     keyboard: "Keyboard",
+    swap: "Swap roles",
   };
 </script>
 

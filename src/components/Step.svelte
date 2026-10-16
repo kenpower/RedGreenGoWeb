@@ -60,6 +60,27 @@
     <p class="title">{step.title}</p>
 
     <div class="stepBody">
+      {#if step.stateName == "swap"}
+        <div class="handover" style="--player-col: var(--player-{step.driverNumber})">
+          <Icon icon="swap" size="40px" />
+          <p class="handoverText">Hand the keyboard to {step.driver}</p>
+          <p>{step.bodyText}</p>
+        </div>
+      {:else}
+        <div class="driverBanner" style="--player-col: var(--player-{step.driverNumber})">
+          <span class="iconChip"><Icon icon="keyboard" /></span>
+          <span>{step.driver} is driving</span>
+        </div>
+        {#each step.navigators as navigator, i}
+          <div class="navigatorLine" style="--player-col: var(--player-{step.navigatorNumbers[i]})">
+            <Icon icon="navigation" />
+            <span><strong class="playerName">{navigator}</strong> is navigating</span>
+          </div>
+        {/each}
+        {#if step.navigatorPrompt}
+          <p class="navigatorPrompt"><strong>Navigator:</strong> {step.navigatorPrompt}</p>
+        {/if}
+      {/if}
       <div style="display: flex;justify-content: center;">
         {#if step.helpName !== ""}
         <div>
@@ -72,23 +93,19 @@
           </div>
         </div>
         {/if}
+        {#if step.stateName != "swap"}
         <div style="display: flex;justify-content: center;flex-direction: column;">
+          {#if step.goal}
+            <p class="goal">
+              <span class="goalLabel">Iteration {step.iteration + 1} of {step.totalIterations}</span>
+              {step.goal}
+            </p>
+          {/if}
           <p>{step.bodyText}</p>
-          <div>
-            <div>
-              <Icon icon="keyboard" />
-              <span> {step.driver} is the driver</span>
-            </div>
-            {#each step.navigators as navigator}
-            <div>
-              <Icon icon="navigation" />
-                <span>{navigator} is the navigator</span>
-            </div>
-            {/each}
-          </div>
         </div>
-        
+        {/if}
       </div>
+      <slot name="checks" />
       <div style="display: flex; justify-content:space-evenly; ">
         <button on:click={() => dispatch("interact", "done")}
           >{step.buttonText}</button
@@ -116,6 +133,79 @@
 <Solutions bind:this={st} bind:dataReady />
 
 <style>
+  .driverBanner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5em;
+    margin: 0.5em;
+    padding: 0.35em;
+    border-radius: 5px;
+    background-color: var(--player-col);
+    color: white;
+    font-size: 1.25em;
+    font-weight: bold;
+  }
+
+  .iconChip {
+    display: flex;
+    padding: 3px;
+    border-radius: 4px;
+    background: white;
+  }
+
+  .navigatorLine {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4em;
+  }
+
+  .playerName {
+    color: var(--player-col);
+  }
+
+  .navigatorPrompt {
+    margin: 0.4em 1em;
+    padding: 0.3em 0.6em;
+    border-left: 4px solid var(--text-muted);
+    background: var(--opacity-50);
+    text-align: left;
+    font-size: 0.95em;
+  }
+
+  .goal {
+    font-weight: bold;
+    margin-bottom: 0;
+  }
+
+  .goalLabel {
+    display: block;
+    font-size: 0.8em;
+    font-weight: normal;
+    color: var(--text-muted);
+  }
+
+  .handover {
+    margin: 0.5em;
+    padding: 1em;
+    border-radius: 5px;
+    background-color: var(--player-col);
+    color: white;
+  }
+
+  .handover :global(img) {
+    background: white;
+    border-radius: 6px;
+    padding: 4px;
+  }
+
+  .handoverText {
+    font-size: 1.6em;
+    font-weight: bold;
+    margin: 0.3em 0;
+  }
+
   .deckPrompt {
     font-size: 0.85em;
     font-weight: bold;
