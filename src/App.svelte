@@ -7,16 +7,20 @@
   import { fly } from "svelte/transition";
   import HelperStatus from "./components/HelperStatus.svelte";
   import { startHelper, resetHelper } from "./helper.js";
+  import { startCoach, resetCoach, getClassCode, setClassCode } from "./coach.js";
 
   startHelper();
+  startCoach();
 
   let thirdPlayer;
+  let classCode = getClassCode();
   let gameState = GameState.recoverSavedGame();
   if (!gameState) {
     gameState = new GameState();
   }
   const startGame = () => {
     if (thirdPlayer) gameState.players[2] = thirdPlayer;
+    setClassCode(classCode);
     gameState.start();
     gameState = gameState;
   };
@@ -24,6 +28,7 @@
   const reStartGame = () => {
     gameState = new GameState();
     resetHelper();
+    resetCoach();
   };
 </script>
 
@@ -122,6 +127,20 @@
             bind:value={thirdPlayer}
           /><br />
         </span>
+        <span>
+          <label for="classCode">Class code (Optional)</label>
+          <input
+            type="text"
+            id="classCode"
+            name="classCode"
+            autocomplete="off"
+            bind:value={classCode}
+          /><br />
+        </span>
+        <p class="hint">
+          With a class code from your teacher and your code connected, an AI
+          coach gives feedback after each step.
+        </p>
 
         <button id="startBtn" on:click={startGame}>Start Game</button>
       </div>
@@ -160,6 +179,12 @@
 
   li {
     text-align: justify;
+  }
+
+  .hint {
+    font-size: 0.9em;
+    color: var(--text-muted);
+    margin: 0.2em 0 0.6em 0;
   }
 
   label {

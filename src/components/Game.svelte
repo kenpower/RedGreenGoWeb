@@ -5,6 +5,9 @@
   import { createEventDispatcher } from "svelte";
   import Solutions from "./Solutions.svelte";
   import ModalContainer from "./ModalContainer.svelte";
+  import CoachNote from "./CoachNote.svelte";
+  import { helper } from "../helper.js";
+  import { coachStep, covered, nextBehaviour, KATA } from "../coach.js";
 
   const dispatch = createEventDispatcher();
 
@@ -19,9 +22,23 @@
       : "";
 
   const nextStep = () => {
+    const finished = gameState.state.id;
     gameState.nextStep();
     gameState = gameState;
+    coachStep(finished, $helper);
   };
+
+  // Once the coach has seen what the pair covered, the goal follows the
+  // teacher's route from there instead of the fixed per-iteration list.
+  // Non-red steps are passed through unchanged, so a verdict arriving
+  // mid-step doesn't re-key (and re-animate) the step card.
+  const withCoachGoal = (step, coveredIds) => {
+    if (step?.stateName !== "red" || !coveredIds.length) return step;
+    const next = nextBehaviour(KATA, coveredIds);
+    return next ? { ...step, goal: next.hint } : step;
+  };
+  $: baseStep = gameState.getStep();
+  $: currentStep = withCoachGoal(baseStep, $covered);
 
   const pairNames = (players) => {
     const names = players.filter((p) => p);
@@ -35,9 +52,10 @@
   {/each}
 </div>
 <div>
-  {#if gameState.getStep()}
+  <CoachNote />
+  {#if currentStep}
     <div transition:fade>
-      <Step step={gameState.getStep()} on:interact={nextStep} />
+      <Step step={currentStep} on:interact={nextStep} />
     </div>
   {:else if gameState.finished}
     <div class="finished" in:fly={{ delay: 300, y: 400, duration: 1000 }}>
