@@ -1,0 +1,2 @@
+# Rendered by deploy.sh into /etc/nginx/conf.d/__APP_NAME__-ratelimit.conf (http context)
+limit_req_zone $binary_remote_addr zone=__APP_NAME__:1m rate=__RATE_PER_MINUTE__r/m;

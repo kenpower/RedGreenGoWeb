@@ -1,0 +1,5 @@
+# Scripts and templates that run or get installed on the Linux server
+*.sh text eol=lf
+coach/deploy/*.template text eol=lf
+coach/requirements.txt text eol=lf
+.env.deploy* text eol=lf

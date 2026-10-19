@@ -12,7 +12,8 @@ Run behind nginx (see deploy/), listening on localhost only:
   python coach_server.py classes                     list codes and today's use
   python coach_server.py usage [--days 7]            tokens per class per day
 
-Needs ANTHROPIC_API_KEY in the environment.
+Needs ANTHROPIC_API_KEY in the environment. RGG_COACH_PORT and RGG_COACH_DB
+override the port and the SQLite file.
 
 Endpoints:
   POST /coach    body: a step (see coach.py); returns the coach's verdict
@@ -22,6 +23,7 @@ Endpoints:
 import argparse
 import datetime
 import json
+import os
 import sqlite3
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -32,8 +34,8 @@ import anthropic
 from coach import MODEL, BadStep, ask_coach, validate
 
 ALLOWED_ORIGINS = {"http://localhost:8080", "https://kenpower.github.io"}
-PORT = 8100
-DB_PATH = Path(__file__).parent / "coach.sqlite3"
+PORT = int(os.environ.get("RGG_COACH_PORT", 8100))
+DB_PATH = Path(os.environ.get("RGG_COACH_DB", Path(__file__).parent / "coach.sqlite3"))
 DEFAULT_DAILY_LIMIT = 600  # requests per class per day; a pair does ~30 steps per kata
 MAX_BODY_BYTES = 250_000
 

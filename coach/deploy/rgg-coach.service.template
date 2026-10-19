@@ -1,0 +1,20 @@
+# systemd unit for the RedGreenGo coach proxy, rendered and installed by deploy.sh
+# as /etc/systemd/system/__APP_NAME__.service.
+# /etc/__APP_NAME__.env (root, chmod 600) holds ANTHROPIC_API_KEY, RGG_COACH_DB, RGG_COACH_PORT.
+[Unit]
+Description=RedGreenGo coach proxy
+After=network-online.target
+
+[Service]
+User=__APP_NAME__
+WorkingDirectory=__INSTALL_DIR__/app/coach
+EnvironmentFile=/etc/__APP_NAME__.env
+ExecStart=__INSTALL_DIR__/venv/bin/python coach_server.py serve
+Restart=on-failure
+StateDirectory=__APP_NAME__
+NoNewPrivileges=true
+ProtectSystem=strict
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
