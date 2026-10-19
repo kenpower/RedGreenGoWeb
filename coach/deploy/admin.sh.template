@@ -4,6 +4,7 @@
 # Over ssh, quote the whole command so the name survives:
 #   ssh -t user@host '__APP_NAME__-admin add-class SD2-2026 "Software Dev 2, 2026"'
 #      __APP_NAME__-admin classes | usage [--days 7] | disable-class CODE
+#      __APP_NAME__-admin progress [CODE] [--days N] [--csv] | clear-progress CODE [--yes]
 cd __INSTALL_DIR__/app/coach || exit 1
 exec sudo -u __APP_NAME__ env RGG_COACH_DB=/var/lib/__APP_NAME__/coach.sqlite3 \
     __INSTALL_DIR__/venv/bin/python coach_server.py "$@"
