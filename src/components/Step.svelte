@@ -1,29 +1,22 @@
 <script>
-  import HintCard from "./HintCard.svelte";
   import Solutions from "./Solutions.svelte";
   import ModalContainer from "./ModalContainer.svelte";
-  import Card from "./Card.svelte";
+  import HintLabel from "./HintLabel.svelte";
   import { fade, fly, blur, scale } from "svelte/transition";
-  import { tick } from "svelte";
   import { createEventDispatcher } from "svelte";
   import Icon from "./Icon.svelte";
 
   const dispatch = createEventDispatcher();
 
   export let step;
+  // Kept out of `step` so a hint that changes mid-step (when a coach verdict
+  // arrives) updates in place instead of re-keying the step and its timer.
+  export let hint = "";
   let isOpenModal;
   let solutionHTML = "";
   let dataReady = false;
 
   let st;
-
-  let showHint = false;
-
-  async function showCard() {
-    showHint = true;
-    await tick();
-    showHint = false;
-  }
 
   function peekAtSolution() {
     if (confirm("Try it yourself first!\n\nShow our solution anyway?"))
@@ -81,19 +74,7 @@
           <p class="navigatorPrompt"><strong>Navigator:</strong> {step.navigatorPrompt}</p>
         {/if}
       {/if}
-      <div style="display: flex;justify-content: center;">
-        {#if step.helpName !== ""}
-        <div>
-          <p class="deckPrompt">Stuck? Click a card for a tip</p>
-          <div class="cardDeck" on:click={showCard}>
-              <Card off={12} cardType={step.helpName} {showHint} />
-              <Card off={8} cardType={step.helpName} />
-              <Card off={4} cardType={step.helpName} />
-              <Card off={0} cardType={step.helpName} />
-          </div>
-        </div>
-        {/if}
-        {#if step.stateName != "swap"}
+      {#if step.stateName != "swap"}
         <div style="display: flex;justify-content: center;flex-direction: column;">
           {#if step.goal}
             <p class="goal">
@@ -102,9 +83,9 @@
             </p>
           {/if}
           <p>{step.bodyText}</p>
+          <div><HintLabel text={hint} /></div>
         </div>
-        {/if}
-      </div>
+      {/if}
       <slot name="checks" />
       <div style="display: flex; justify-content:space-evenly; ">
         <button on:click={() => dispatch("interact", "done")}
@@ -119,9 +100,6 @@
         </div>
       {/if}
     </div>
-    <!-- TODO move into game, or should I??? -->
-    <!-- TODO make hint a sub component of modalContainer -->
-    <!-- <HintCard {showHint} cardType={step.helpName} /> -->
     <ModalContainer bind:isOpenModal>
       <div style="background:white; text-align:left">
         {@html solutionHTML}
@@ -206,12 +184,6 @@
     margin: 0.3em 0;
   }
 
-  .deckPrompt {
-    font-size: 0.85em;
-    font-weight: bold;
-    margin: 0.5em 0 0 0;
-  }
-
   .peekRow {
     text-align: right;
     padding: 0 0.5em 0.25em 0;
@@ -227,13 +199,6 @@
     text-decoration: underline;
   }
 
-  .cardDeck {
-    cursor: pointer;
-    position: relative; /*absolute children position relative to this, not body*/
-    min-width: calc(var(--app-width) * 0.3);
-    min-height: calc(var(--app-width) * 0.45);
-    margin: 0.5em;
-  }
   span {
     vertical-align: top;
     padding-left: 0.3em;

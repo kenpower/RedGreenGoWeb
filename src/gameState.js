@@ -4,7 +4,6 @@ export const states = [
   {
     id: "red",
     title: "Make it Red",
-    helpName: "test",
     class: "red",
     next: 1,
     description:
@@ -16,7 +15,6 @@ export const states = [
   {
     id: "swap",
     title: "Swap",
-    helpName: "",
     class: "swap",
     next: 2,
     description: "Swap the roles of driver and navigator",
@@ -26,7 +24,6 @@ export const states = [
   {
     id: "green",
     title: "Make it Green",
-    helpName: "code",
     class: "green",
     next: 3,
     description: "Write just enough code to make the failing test pass",
@@ -37,7 +34,6 @@ export const states = [
   {
     id: "refactor",
     title: "Make it Clean",
-    helpName: "refactor",
     class: "refactor",
     next: 0,
     description: "Clean up the code you've just written",
@@ -189,7 +185,6 @@ export class GameState {
       bodyText: this.state.description,
       buttonText: this.state.buttonText,
       classes: "" + this.state.class + " step",
-      helpName: this.state.helpName,
       driver: this.#driver(),
       navigator: this.#navigator(),
       navigators: this.#navigators(),

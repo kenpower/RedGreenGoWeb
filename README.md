@@ -7,7 +7,6 @@ Web implementation of the [RedGreenGo coaching game](https://github.com/redgreen
 Todo:
 
 - [] fizbuzz solution
-- [] Card animation
 
 # Developers
 

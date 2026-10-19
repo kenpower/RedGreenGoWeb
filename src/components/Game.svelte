@@ -8,6 +8,7 @@
   import CoachNote from "./CoachNote.svelte";
   import { helper } from "../helper.js";
   import { coachStep, covered, nextBehaviour, KATA } from "../coach.js";
+  import { fizzbuzzHints, phaseHints } from "../content/fizzbuzzHints.js";
 
   const dispatch = createEventDispatcher();
 
@@ -40,6 +41,20 @@
   $: baseStep = gameState.getStep();
   $: currentStep = withCoachGoal(baseStep, $covered);
 
+  // The hint is for the behaviour this loop is about: on Red the one the goal
+  // points at, on Green and Refactor the one the Red test targeted. The
+  // coach's view wins once it has one, otherwise the teacher's route.
+  const hintFor = (step, coveredIds) => {
+    const phase = step?.stateName;
+    if (!phaseHints[phase]) return "";
+    const routed = KATA.teacherRoute[step.iteration]?.at(-1);
+    let id = routed;
+    if (coveredIds.length)
+      id = phase === "red" ? nextBehaviour(KATA, coveredIds)?.id : coveredIds.at(-1);
+    return fizzbuzzHints[id]?.[phase] || phaseHints[phase];
+  };
+  $: hint = hintFor(currentStep, $covered);
+
   const pairNames = (players) => {
     const names = players.filter((p) => p);
     return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
@@ -55,7 +70,7 @@
   <CoachNote />
   {#if currentStep}
     <div transition:fade>
-      <Step step={currentStep} on:interact={nextStep} />
+      <Step step={currentStep} {hint} on:interact={nextStep} />
     </div>
   {:else if gameState.finished}
     <div class="finished" in:fly={{ delay: 300, y: 400, duration: 1000 }}>
