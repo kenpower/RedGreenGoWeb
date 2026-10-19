@@ -50,7 +50,7 @@
     class={step.classes}
     id="theStep"
   >
-    <p class="title">{step.title}</p>
+    <p class="title aoc-heading">{step.title}</p>
 
     <div class="stepBody">
       {#if step.stateName == "swap"}
@@ -61,7 +61,7 @@
         </div>
       {:else}
         <div class="driverBanner" style="--player-col: var(--player-{step.driverNumber})">
-          <span class="iconChip"><Icon icon="keyboard" /></span>
+          <Icon icon="keyboard" />
           <span>{step.driver} is driving</span>
         </div>
         {#each step.navigators as navigator, i}
@@ -101,7 +101,7 @@
       {/if}
     </div>
     <ModalContainer bind:isOpenModal>
-      <div style="background:white; text-align:left">
+      <div class="solution">
         {@html solutionHTML}
       </div>
     </ModalContainer>
@@ -116,20 +116,13 @@
     align-items: center;
     justify-content: center;
     gap: 0.5em;
-    margin: 0.5em;
+    margin: 0.5em 0;
     padding: 0.35em;
-    border-radius: 5px;
-    background-color: var(--player-col);
-    color: white;
-    font-size: 1.25em;
-    font-weight: bold;
-  }
-
-  .iconChip {
-    display: flex;
-    padding: 3px;
-    border-radius: 4px;
-    background: white;
+    border: 1px solid var(--player-col);
+    color: var(--player-col);
+    text-shadow: 0 0 4px var(--player-col);
+    font-size: 1.2em;
+    font-weight: 500;
   }
 
   .navigatorLine {
@@ -144,59 +137,52 @@
   }
 
   .navigatorPrompt {
-    margin: 0.4em 1em;
+    margin: 0.6em 0;
     padding: 0.3em 0.6em;
-    border-left: 4px solid var(--text-muted);
+    border-left: 2px solid var(--text-muted);
     background: var(--opacity-50);
     text-align: left;
-    font-size: 0.95em;
   }
 
   .goal {
-    font-weight: bold;
+    color: var(--text-bright);
+    font-weight: 400;
     margin-bottom: 0;
   }
 
   .goalLabel {
     display: block;
-    font-size: 0.8em;
-    font-weight: normal;
-    color: var(--text-muted);
+    font-size: 0.9em;
+    color: var(--star);
+    text-shadow: 0 0 5px var(--star);
   }
 
   .handover {
-    margin: 0.5em;
+    margin: 0.5em 0;
     padding: 1em;
-    border-radius: 5px;
-    background-color: var(--player-col);
-    color: white;
-  }
-
-  .handover :global(img) {
-    background: white;
-    border-radius: 6px;
-    padding: 4px;
+    border: 1px solid var(--player-col);
+    text-align: center;
   }
 
   .handoverText {
-    font-size: 1.6em;
-    font-weight: bold;
+    font-size: 1.4em;
     margin: 0.3em 0;
+    color: var(--player-col);
+    text-shadow: 0 0 5px var(--player-col);
   }
 
   .peekRow {
     text-align: right;
-    padding: 0 0.5em 0.25em 0;
   }
 
   .peek {
-    background: none;
-    border: none;
-    padding: 0.2em;
     margin: 0;
-    font-size: 0.85em;
+    font-size: 0.9em;
     color: var(--text-muted);
-    text-decoration: underline;
+  }
+
+  .solution {
+    text-align: left;
   }
 
   span {
@@ -205,72 +191,37 @@
   }
 
   .step {
-    color: black;
     width: 100%;
-    border-radius: 5px;
-    border-width: 2px;
-    border-style: solid;
-    margin-top: 10px;
+    box-sizing: border-box;
+    border: 1px solid var(--phase-col);
+    background-color: var(--phase-bg);
+    margin-top: 1em;
+    padding: 0.8em 1em;
     min-height: 150px;
   }
 
-  .step p {
-    margin: 2;
-  }
-
-  .container .step .stepBody {
-    padding: 5px;
-    display: none;
-  }
-
   .step .title {
-    font-weight: bold;
-    padding: 4px;
-    margin: 0;
-  }
-
-  .red .title {
-    background-color: var(--testing-red-muted);
-  }
-
-  .green .title {
-    background-color: var(--coding-green-muted);
-  }
-
-  .refactor .title {
-    background-color: var(--refactoring-blue-muted);
-  }
-
-  .red.step {
-    background-color: var(--testing-red-hint);
-  }
-
-  .green.step {
-    background-color: var(--coding-green-hint);
-  }
-
-  .refactor.step {
-    background-color: var(--refactoring-blue-hint);
+    color: var(--phase-col);
+    text-shadow: 0 0 5px var(--phase-col);
   }
 
   .red {
-    border-color: var(--testing-red);
+    --phase-col: var(--testing-red);
+    --phase-bg: var(--testing-red-hint);
   }
 
   .green {
-    border-color: var(--coding-green);
+    --phase-col: var(--coding-green);
+    --phase-bg: var(--coding-green-hint);
   }
 
   .refactor {
-    border-color: var(--refactoring-blue);
+    --phase-col: var(--refactoring-blue);
+    --phase-bg: var(--refactoring-blue-hint);
   }
 
-  .iteration {
-    border-color: black;
-    border-radius: 5px;
-    border-width: 2px;
-    border-style: solid;
-    background-color: white;
-    padding: 8px;
+  .swap {
+    --phase-col: var(--text-bright);
+    --phase-bg: transparent;
   }
 </style>

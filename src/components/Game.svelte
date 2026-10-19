@@ -74,7 +74,7 @@
     </div>
   {:else if gameState.finished}
     <div class="finished" in:fly={{ delay: 300, y: 400, duration: 1000 }}>
-      <p class="title">Kata complete!</p>
+      <p class="title aoc-heading">Kata complete!</p>
       <p>
         {pairNames(gameState.players)} worked through all
         {gameState.totalIterations} iterations of the Red, Green, Refactor cycle,
@@ -112,15 +112,9 @@
   }
 
   .finished {
-    border: 2px solid var(--refactoring-blue);
-    border-radius: 5px;
-    background-color: var(--refactoring-blue-hint);
-    margin-top: 10px;
-    padding-bottom: 0.5em;
-  }
-
-  .finished p {
-    padding: 0 1em;
+    border: 1px solid var(--star);
+    margin-top: 1em;
+    padding: 0.8em 1em;
   }
 
   .actions {
@@ -129,15 +123,12 @@
   }
 
   .solution {
-    background: white;
     text-align: left;
   }
 
   .finished .title {
-    font-weight: bold;
-    font-size: 1.3em;
-    padding: 4px;
-    margin: 0;
-    background-color: var(--refactoring-blue-muted);
+    color: var(--star);
+    text-shadow: 0 0 5px var(--star);
+    font-size: 1.2em;
   }
 </style>

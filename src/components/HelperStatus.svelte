@@ -102,17 +102,16 @@
     align-items: center;
     gap: 0.4em;
     margin: 0;
-    padding: 0.25em 0.6em;
-    font-size: 0.85em;
-    border-radius: 1em;
+    padding: 0;
     white-space: nowrap;
     cursor: pointer;
   }
 
   .dot {
-    width: 0.7em;
-    height: 0.7em;
+    width: 0.6em;
+    height: 0.6em;
     border-radius: 50%;
+    box-shadow: 0 0 5px currentColor;
   }
 
   .dot.grey {
@@ -121,10 +120,12 @@
 
   .dot.red {
     background: var(--testing-red);
+    color: var(--testing-red);
   }
 
   .dot.green {
     background: var(--coding-green);
+    color: var(--coding-green);
   }
 
   .panel {
@@ -136,10 +137,9 @@
     padding: 0.5em 0.75em;
     text-align: left;
     font-size: 0.9em;
-    background: var(--color-tone-7);
-    border: 1px solid var(--color-tone-4);
-    border-radius: 5px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 0 12px #000;
   }
 
   .panel p {
@@ -194,13 +194,9 @@
   }
 
   .link {
-    background: none;
-    border: none;
     padding: 0;
     margin: 0.2em 0;
-    font-size: 0.85em;
+    font-size: 0.9em;
     color: var(--text-muted);
-    text-decoration: underline;
-    cursor: pointer;
   }
 </style>

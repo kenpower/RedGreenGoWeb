@@ -1,6 +1,5 @@
 <script>
   import Game from "./components/Game.svelte";
-  import IconButton from "./components/IconButton.svelte";
   //import {gameState} from './store.js';
   //import {reStartGame, startGame} from './gameLogic.js';
   import { GameState } from "./gameState";
@@ -34,27 +33,19 @@
 
 <main>
   <header>
-    <div class="menu">
-      <IconButton onclick={reStartGame} icon="restart" />
+    <div>
+      <h1 class="title">
+        <span id="red">Red</span>-<span id="green">Green</span>-<span id="blue"
+          >Go!</span
+        >
+      </h1>
+      <p class="tagline">// a game of TDD &amp; pairing</p>
     </div>
-    <div class="title">
-      <svg xmlns="http://www.w3.org/2000/svg">
-        <filter id="motion-blur-filter" filterUnits="userSpaceOnUse">
-          <feGaussianBlur stdDeviation="10 0" />
-          <feOffset dx="5" />
-          <feMorphology operator="erode" radius="1" />
-        </filter>
-      </svg>
-      <span id="red">Red</span>-<span id="green">Green</span>-<span
-        filter-content="G"
-        class="swoosh"
-        id="blue">G</span
-      ><span id="blue">o!</span>
-    </div>
-    <div class="menu"><HelperStatus /></div>
+    <nav class="menu">
+      <button on:click={reStartGame} title="Restart Game">Restart</button>
+      <HelperStatus />
+    </nav>
   </header>
-
-  <h2>A game of TDD & Pairing</h2>
 
   <section>
     {#if gameState.started}
@@ -62,6 +53,7 @@
         <Game {gameState} on:restart={reStartGame} />
       </div>
     {:else}
+      <h2 class="aoc-heading">How to play</h2>
       <p>
         Test Driven Development (TDD) is a process for writing code that
         involves repeatedly appying three distinct steps:
@@ -97,7 +89,8 @@
           required behaviour.
         </li>
       </ol>
-      <div>
+      <div class="setup">
+        <h2 class="aoc-heading">Who is playing?</h2>
         <span>
           <label for="name1">Player 1 (required)</label>
           <input
@@ -152,24 +145,39 @@
   header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--color-tone-4);
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.5em;
+    margin-bottom: 1.5em;
   }
 
   .title {
-    font-size: 2.5em;
-    font-weight: bold;
+    display: inline-block;
+    margin: 0;
+    font-size: 1.6em;
+    font-weight: 400;
   }
 
-  h2 {
-    font-size: 1.5em;
-    margin: 0.25em;
-    font-weight: 300;
-    color: var(--text-muted);
+  .tagline {
+    margin: 0 0 0 2.5em;
+    color: var(--glow-green);
+    text-shadow: 0 0 2px var(--glow-green), 0 0 5px var(--glow-green);
+    opacity: 0.6;
+  }
+
+  .menu {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+  }
+
+  .menu button {
+    margin: 0;
+    padding: 0;
   }
 
   main {
-    text-align: center;
+    text-align: left;
     padding: 1em;
     max-width: var(--app-width);
     margin: 0 auto;
@@ -177,8 +185,12 @@
     line-height: 1.45;
   }
 
-  li {
-    text-align: justify;
+  ol {
+    padding-left: 2em;
+  }
+
+  .setup {
+    margin-top: 1.5em;
   }
 
   .hint {
@@ -189,30 +201,26 @@
 
   label {
     display: inline-block;
-    min-width: 10rem;
-    text-align: right;
+    min-width: 13em;
+  }
+
+  #startBtn {
+    font-size: 1.1em;
   }
 
   #red {
     color: var(--testing-red);
+    text-shadow: 0 0 2px var(--testing-red), 0 0 5px var(--testing-red);
   }
 
   #green {
     color: var(--coding-green);
+    text-shadow: 0 0 2px var(--coding-green), 0 0 5px var(--coding-green);
   }
 
   #blue {
     color: var(--refactoring-blue);
-    font-style: italic;
-    transform: skew(45deg, 50deg);
-  }
-
-  .swoosh::before {
-    content: attr(filter-content);
-    filter: url(#motion-blur-filter);
-  }
-
-  svg {
-    display: none;
+    text-shadow: 0 0 2px var(--refactoring-blue),
+      0 0 5px var(--refactoring-blue);
   }
 </style>

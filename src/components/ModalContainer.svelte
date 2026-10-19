@@ -21,8 +21,17 @@
 
 {#if isOpenModal}
   <div transition:scale class="modal-frame">
+    <button class="close" on:click={closeModal}>Close</button>
     <div class="modal-content">
       <slot />
     </div>
   </div>
 {/if}
+
+<style>
+  .close {
+    float: right;
+    margin: 4px 6px 0 0;
+    padding: 0;
+  }
+</style>

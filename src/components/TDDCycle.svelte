@@ -5,16 +5,18 @@
   let hsize = size / 2;
   let radius = hsize * 0.65;
   let textScale = size / 50.0;
-  const phase1Col = "tomato";
-  const phase2Col = "olivedrab";
-  const phase3Col = "dodgerblue";
+  const phase1Col = "#ff6347";
+  const phase2Col = "#00cc00";
+  const phase3Col = "#3f9cff";
   let phase1FillCol = phase1Col;
   let phase2FillCol = phase2Col;
   let phase3FillCol = phase3Col;
+  // unfilled arrows match the dark iteration tile behind them
+  const emptyCol = "#10101a";
   $: {
-    phase1FillCol = phase < 2 ? "white" : phase1Col;
-    phase2FillCol = phase < 3 ? "white" : phase2Col;
-    phase3FillCol = phase < 4 ? "white" : phase3Col;
+    phase1FillCol = phase < 2 ? emptyCol : phase1Col;
+    phase2FillCol = phase < 3 ? emptyCol : phase2Col;
+    phase3FillCol = phase < 4 ? emptyCol : phase3Col;
   }
 </script>
 
@@ -28,7 +30,7 @@
       refY="1"
       orient="auto"
     >
-      <polygon points="0 0, 1.5 1, 0 2" fill="tomato" />
+      <polygon points="0 0, 1.5 1, 0 2" fill={phase1Col} />
     </marker>
     <marker
       id="arrowheadgreen"
@@ -38,7 +40,7 @@
       refY="1"
       orient="auto"
     >
-      <polygon points="0 0, 1.5 1, 0 2" fill="olivedrab" />
+      <polygon points="0 0, 1.5 1, 0 2" fill={phase2Col} />
     </marker>
     <marker
       id="arrowheadblue"
@@ -48,7 +50,7 @@
       refY="1"
       orient="auto"
     >
-      <polygon points="0 0, 1.5 1, 0 2" fill="dodgerblue" />
+      <polygon points="0 0, 1.5 1, 0 2" fill={phase3Col} />
     </marker>
   </defs>
 
@@ -59,6 +61,7 @@
         y="0"
         transform="translate({hsize} {hsize *
           1.25}) scale({textScale},{textScale})"
+        fill="#ffffff"
         style="text-anchor: middle">{text}</text
       >
     {/if}
@@ -83,7 +86,7 @@
           {#if phase == 1}
             <animate
               attributeName="fill"
-              values="white;{phase1Col};white"
+              values="{emptyCol};{phase1Col};{emptyCol}"
               dur="3s"
               repeatCount="indefinite"
             />
@@ -99,7 +102,7 @@
           {#if phase == 2}
             <animate
               attributeName="fill"
-              values="white;{phase2Col};white"
+              values="{emptyCol};{phase2Col};{emptyCol}"
               dur="3s"
               repeatCount="indefinite"
             />
@@ -115,7 +118,7 @@
           {#if phase == 3}
             <animate
               attributeName="fill"
-              values="white;{phase3Col};white"
+              values="{emptyCol};{phase3Col};{emptyCol}"
               dur="3s"
               repeatCount="indefinite"
             />

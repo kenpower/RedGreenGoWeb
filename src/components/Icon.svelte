@@ -30,5 +30,9 @@
   img {
     height: var(--size);
     width: var(--size);
+    /* the icons are black line art on white; invert them and let the dark
+       page show through the (now black) background */
+    filter: invert(0.85);
+    mix-blend-mode: lighten;
   }
 </style>

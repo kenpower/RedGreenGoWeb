@@ -10,20 +10,24 @@
   <div class="overlay" />
   <TDDCycle size={100} {phase} text={iterationCounter} />
   <p class="title">
-    {dimmed ? "" : "Iteration: " + iterationCounter}
+    {dimmed ? "" : "Iteration " + iterationCounter}
   </p>
 </div>
 
 <style>
   .iteration {
-    /* border-color: black; */
-    border-radius: 5px;
-    /* border-width: 2px; */
-    /* border-style: solid; */
-    background-color: #eee;
+    border: 1px solid var(--border);
+    background-color: var(--bg-panel);
     padding: 8px;
     max-width: calc(var(--global-game-width) / 5);
     position: relative;
+    text-align: center;
+  }
+
+  .title {
+    margin: 0;
+    font-size: 0.85em;
+    color: var(--text-muted);
   }
 
   .dimmed .overlay {
@@ -33,7 +37,6 @@
     width: 100%;
     height: 100%;
     opacity: 0.7;
-    background: #fff;
-    text-align: center;
+    background: var(--bg);
   }
 </style>
