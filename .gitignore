@@ -2,3 +2,4 @@ node_modules/
 /public/build
 __pycache__/
 /coach/results
+/coach/*.sqlite3

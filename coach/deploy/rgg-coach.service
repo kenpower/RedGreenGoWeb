@@ -1,0 +1,21 @@
+# systemd unit for the RedGreenGo coach proxy.
+# Install: sudo cp rgg-coach.service /etc/systemd/system/ && sudo systemctl enable --now rgg-coach
+# The API key goes in /etc/rgg-coach.env (chmod 600, owned by root):
+#   ANTHROPIC_API_KEY=sk-ant-...
+[Unit]
+Description=RedGreenGo coach proxy
+After=network-online.target
+
+[Service]
+User=rgg-coach
+WorkingDirectory=/opt/rgg-coach/RedGreenGoWeb/coach
+EnvironmentFile=/etc/rgg-coach.env
+ExecStart=/opt/rgg-coach/venv/bin/python coach_server.py serve
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/rgg-coach/RedGreenGoWeb/coach
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

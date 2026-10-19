@@ -19,62 +19,9 @@ from pathlib import Path
 
 import anthropic
 
+from coach import EFFORT, MODEL, ask_coach, validate
+
 HERE = Path(__file__).parent
-ROOT = HERE.parent
-MODEL = "claude-haiku-5-5"
-EFFORT = "low"
-
-SCHEMA = {
-    "type": "object",
-    "properties": {
-        "targeted": {"type": "string"},
-        "rule_problems": {"type": "array", "items": {"type": "string"}},
-        "ordering": {"type": "string", "enum": ["good", "fine", "questionable", "bad", "n_a"]},
-        "note": {"type": "string"},
-        "teacher_next": {"type": "string"},
-    },
-    "required": ["targeted", "rule_problems", "ordering", "note", "teacher_next"],
-    "additionalProperties": False,
-}
-
-
-def build_system(kata):
-    pack = (ROOT / "src" / "content" / "katas" / f"{kata}.js").read_text(encoding="utf-8")
-    return (HERE / "prompt.md").read_text(encoding="utf-8").replace("{{KATA_PACK}}", pack)
-
-
-def build_user(fx):
-    parts = [
-        f"Step just finished: {fx['phase'].upper()}",
-        f"Behaviours already covered before this step: {', '.join(fx['covered']) or 'none'}",
-    ]
-    if "code_before" in fx:
-        parts.append(f"Production code before this step:\n```cpp\n{fx['code_before'].strip()}\n```")
-    else:
-        parts.append("Production code was not changed during this step.")
-    parts.append(f"Test file now:\n```cpp\n{fx['tests'].strip()}\n```")
-    parts.append(f"Production code now:\n```cpp\n{fx['code'].strip()}\n```")
-    parts.append(f"Build and test result at the end of this step: {fx['test_result'].strip()}")
-    return "\n\n".join(parts)
-
-
-def ask_coach(client, fx):
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=4000,
-        # The system prompt (rules + kata pack) is identical for every step of
-        # a kata, so cache it; only the user message varies.
-        system=[{"type": "text", "text": build_system(fx["kata"]), "cache_control": {"type": "ephemeral"}}],
-        output_config={"effort": EFFORT, "format": {"type": "json_schema", "schema": SCHEMA}},
-        messages=[{"role": "user", "content": build_user(fx)}],
-    )
-    if response.stop_reason != "end_turn":
-        raise RuntimeError(f"stopped early: {response.stop_reason}")
-    text = next(b.text for b in response.content if b.type == "text")
-    verdict = json.loads(text)
-    # Derived here rather than asked for, so it can't contradict the list.
-    verdict["rules_ok"] = not verdict["rule_problems"]
-    return verdict, response.usage
 
 
 def score(verdict, expect):
@@ -102,6 +49,7 @@ def main(prefixes):
 
     for f in files:
         fx = tomllib.loads(f.read_text(encoding="utf-8"))
+        validate(fx)  # fixtures must be valid server requests too
         try:
             verdict, usage = ask_coach(client, fx)
         except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.BadRequestError) as e:
