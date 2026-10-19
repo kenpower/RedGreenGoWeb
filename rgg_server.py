@@ -8,14 +8,14 @@ next to the test .exe on every run, and the build writes <Project>.log; the help
 finds both under the solution folder.
 
 Run from the folder that holds your solution:
-  python rgg_server.py                  opens the game in your browser
+  python rgg_server.py                  opens the game (after the first test run, if there are tests)
   python rgg_server.py --dev            opens the dev build on http://localhost:8080
   python rgg_server.py --help           all options
 
 Endpoints (127.0.0.1:8000):
   GET  /events    Server-Sent Events stream; one message per change
-  GET  /results   the same data once (handy for debugging)
-  POST /reset     forget test results and build status (new game)
+  GET  /results   the same data once, re-read from disk
+  POST /reset     new game: forget the previous game's results, then re-read what is on disk
 """
 
 import argparse
@@ -39,6 +39,7 @@ POLL_SECONDS = 0.5
 SETTLE_SECONDS = 0.3  # ignore files modified more recently than this (still being written)
 RESCAN_SECONDS = 5  # how often to look for new result/log files (e.g. a new build configuration)
 BROWSER_GRACE_SECONDS = 4  # an already-open game tab reconnects within this time
+RESULTS_WAIT_SECONDS = 60  # longest the game waits for the first test run before opening anyway
 SSE_RETRY_MS = 2000
 SSE_PING_SECONDS = 15
 
@@ -54,6 +55,8 @@ MAX_README_CHARS = 8_000  # the problem description sent to the coach
 
 changed = threading.Condition()  # guards state and sse_clients; notified on every change
 sse_clients = 0
+have_results = threading.Event()  # set once any GoogleTest XML has been read; the game opens then
+config = {"project": ".", "results": [], "build_logs": []}  # set by main() from the command line
 state = {
     "version": 0,  # bumps on every change
     "run": 0,  # id of the latest test run
@@ -221,13 +224,38 @@ def publish(runs, build, files, readme):
         state["readme"] = readme
         state["version"] += 1
         changed.notify_all()
+    if runs:
+        have_results.set()
 
 
 def expand(patterns):
     return [path for pattern in patterns for path in glob.glob(pattern, recursive=True)]
 
 
-def watch(project_dir, result_patterns, build_log_patterns, beep_on_results):
+def find_inputs():
+    """The result files and build logs to read, from --results/--build-log or auto-detected."""
+    result_files = expand(config["results"]) if config["results"] else find_result_files(config["project"])
+    logs = expand(config["build_logs"]) if config["build_logs"] else find_build_logs(config["project"])
+    return result_files, logs
+
+
+def reload_from_disk(clear):
+    """Re-read every result file and the newest build log whether or not they changed, so
+    the state matches what is on disk now. Used on reset (clear=True: forget the previous
+    game first) and whenever the app asks for the state; the watch loop keeps its own
+    mtimes for spotting new runs."""
+    result_files, logs = find_inputs()
+    runs = check_result_files(result_files, {})
+    build = check_build_logs(logs, {})
+    with changed:  # an RLock, so publish() can take it again; the app sees one change
+        if clear:
+            state["tests"] = {}
+            state["build"] = None
+            state["runTime"] = None
+        publish(runs, build, read_sources(config["project"]), read_readme(config["project"]))
+
+
+def watch(beep_on_results):
     """Poll result files and build logs. Whatever is on disk at startup is reported too:
     it is the project's latest state, and the app can tell its age from the times."""
     seen_mtimes = {}
@@ -235,15 +263,14 @@ def watch(project_dir, result_patterns, build_log_patterns, beep_on_results):
     while True:
         try:
             if time.time() >= next_scan:
-                result_files = expand(result_patterns) if result_patterns else find_result_files(project_dir)
-                logs = expand(build_log_patterns) if build_log_patterns else find_build_logs(project_dir)
+                result_files, logs = find_inputs()
                 next_scan = time.time() + RESCAN_SECONDS
 
             runs = check_result_files(result_files, seen_mtimes)
             build = check_build_logs(logs, seen_mtimes)
 
             if runs or build:
-                publish(runs, build, read_sources(project_dir), read_readme(project_dir))
+                publish(runs, build, read_sources(config["project"]), read_readme(config["project"]))
                 for _, results in runs:
                     print("tests: " + ", ".join(f'{r["name"]}={r["status"]}' for r in results), flush=True)
                 if build:
@@ -268,15 +295,6 @@ def snapshot():
         }
 
 
-def reset():
-    with changed:
-        state["tests"] = {}
-        state["build"] = None
-        state["runTime"] = None
-        state["version"] += 1
-        changed.notify_all()
-
-
 class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         if not self.allowed():
@@ -294,6 +312,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/events":
             self.stream_events()
         elif path == "/results":
+            reload_from_disk(clear=False)
             self.send_json(snapshot())
         else:
             self.send_error(404)
@@ -305,8 +324,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split("?")[0] != "/reset":
             self.send_error(404)
             return
-        reset()
-        print("reset", flush=True)
+        reload_from_disk(clear=True)
+        print("reset: re-read results from disk", flush=True)
         self.send_response(204)
         self.send_cors_headers()
         self.end_headers()
@@ -371,6 +390,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def open_game_unless_connected(url):
+    """If the project has tests, wait for their first results (up to RESULTS_WAIT_SECONDS)
+    so the game starts from a real test run; a project with no tests yet opens straight
+    away. Then open the game unless a game tab is already connected."""
+    with changed:
+        has_tests = any(f["kind"] == "test" for f in state["files"])
+    if has_tests and not have_results.wait(timeout=1):
+        print("Waiting for your first test run in Test Explorer...", flush=True)
+        if not have_results.wait(timeout=RESULTS_WAIT_SECONDS):
+            print(f"No test results after {RESULTS_WAIT_SECONDS} s - opening the game anyway.", flush=True)
     time.sleep(BROWSER_GRACE_SECONDS)
     with changed:
         connected = sse_clients > 0
@@ -395,6 +423,7 @@ def main():
     args = parser.parse_args()
 
     project_dir = os.path.abspath(args.project)
+    config.update(project=project_dir, results=args.results, build_logs=args.build_log)
 
     with changed:
         state["files"] = read_sources(project_dir)
@@ -409,7 +438,7 @@ def main():
     print(f"Serving http://127.0.0.1:{PORT}  (Ctrl+C to stop)", flush=True)
 
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    threading.Thread(target=watch, args=(project_dir, args.results, args.build_log, args.beep), daemon=True).start()
+    threading.Thread(target=watch, args=(args.beep,), daemon=True).start()
     if not args.no_browser:
         threading.Thread(target=open_game_unless_connected,
                          args=(DEV_GAME_URL if args.dev else GAME_URL,), daemon=True).start()

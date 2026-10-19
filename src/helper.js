@@ -67,11 +67,15 @@ export function disableHelper() {
   helper.set({ status: "off", data: null });
 }
 
-// Forget results from the previous game. Harmless if the helper isn't running.
+// Forget results from the previous game; the helper then re-reads the results already
+// on disk. Fetch them straight away rather than waiting for the SSE push.
+// Harmless if the helper isn't running.
 export async function resetHelper() {
   if (!helperEnabled()) return;
   try {
     await fetch(HELPER_URL + "/reset", { method: "POST" });
+    const response = await fetch(HELPER_URL + "/results");
+    if (response.ok) helper.set({ status: "connected", data: await response.json() });
   } catch {
     // helper not running
   }
