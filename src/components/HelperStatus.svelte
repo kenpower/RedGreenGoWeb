@@ -2,6 +2,18 @@
   import { helper, enableHelper, disableHelper } from "../helper.js";
 
   let open = false;
+  let helperEl;
+
+  // Close on a click outside the badge and panel. composedPath() is fixed
+  // when the click starts, so a button that re-renders the panel (Connect,
+  // Disconnect) still counts as inside even though it has left the page.
+  // The badge is inside too, so its own toggle isn't undone here.
+  const closeIfOutside = (event) => {
+    if (open && !event.composedPath().includes(helperEl)) open = false;
+  };
+  const closeOnEscape = (event) => {
+    if (open && event.key === "Escape") open = false;
+  };
 
   $: data = $helper.data;
   $: tests = data?.tests || [];
@@ -32,10 +44,15 @@
       ? "green"
       : "grey";
 
+  // Copied next to the bundle by rollup.config.js
+  const HELPER_URL = "build/rgg_server.py";
+
   const icon = (status) => (status === "passed" ? "✔" : status === "failed" ? "✖" : "–");
 </script>
 
-<div class="helper">
+<svelte:window on:click={closeIfOutside} on:keydown={closeOnEscape} />
+
+<div class="helper" bind:this={helperEl}>
   <button class="badge" on:click={() => (open = !open)} title="Connection to your code">
     <span class="dot {dotClass}" />{badge}
   </button>
@@ -45,14 +62,18 @@
       {#if $helper.status === "off"}
         <p>
           Let the game see your tests and code as you work in Visual Studio.
-          In your solution folder, run <code>python rgg_server.py</code>, then
-          connect.
+          Save the helper into your solution folder, run
+          <code>python rgg_server.py</code> there, then connect.
         </p>
+        <a class="download" href={HELPER_URL} download>Download rgg_server.py</a>
         <button on:click={enableHelper}>Connect to my code</button>
       {:else if $helper.status !== "connected"}
         <p><strong>Can't reach the helper.</strong></p>
         <ol>
-          <li>In your solution folder, run <code>python rgg_server.py</code>.</li>
+          <li>
+            In your solution folder, run <code>python rgg_server.py</code>
+            (<a href={HELPER_URL} download>download it</a> if you don't have it).
+          </li>
           <li>
             If the browser asks to access apps on this device, click
             <strong>Allow</strong>.
@@ -191,6 +212,19 @@
   .errors li {
     margin-left: 0;
     color: var(--testing-red);
+  }
+
+  .download {
+    display: block;
+    margin: 0.4em 0;
+  }
+
+  .download::before {
+    content: "[";
+  }
+
+  .download::after {
+    content: "]";
   }
 
   .link {

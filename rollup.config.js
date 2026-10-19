@@ -5,8 +5,23 @@ import livereload from 'rollup-plugin-livereload';
 import { terser } from 'rollup-plugin-terser';
 import css from 'rollup-plugin-css-only';
 import json from '@rollup/plugin-json';
+import fs from 'fs';
 
 const production = !process.env.ROLLUP_WATCH;
+
+// Ships the student helper next to the bundle so the app can offer it as a
+// same-origin download (public/build/rgg_server.py, and docs/ after publish).
+function helperScript() {
+	const file = 'rgg_server.py';
+	return {
+		buildStart() {
+			this.addWatchFile(file);
+		},
+		generateBundle() {
+			this.emitFile({ type: 'asset', fileName: file, source: fs.readFileSync(file) });
+		}
+	};
+}
 
 function serve() {
 	let server;
@@ -58,6 +73,7 @@ export default {
 			dedupe: ['svelte']
 		}),
 		commonjs(),
+		helperScript(),
 
 		// In dev mode, call `npm run start` once
 		// the bundle has been generated
