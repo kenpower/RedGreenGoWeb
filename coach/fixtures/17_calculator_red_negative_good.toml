@@ -1,0 +1,62 @@
+description = "String calculator: a good Red later in the kata (negative numbers throw)"
+phase = "red"
+problem = "String calculator: add(const std::string& numbers) returns the sum of comma-separated numbers. An empty string returns 0. Newlines also separate numbers. Negative numbers throw std::invalid_argument."
+history = [
+  { phase = "red", decision = "advance", note = "Good test for numbers split by a newline." },
+  { phase = "green", decision = "advance", note = "Small change, all tests pass." },
+  { phase = "refactor", decision = "advance", note = "Nice: the splitting is now its own function." },
+]
+tests_before = '''
+TEST(Calc, EmptyIsZero) { EXPECT_EQ(0, add("")); }
+TEST(Calc, SingleNumber) { EXPECT_EQ(4, add("4")); }
+TEST(Calc, TwoNumbers) { EXPECT_EQ(3, add("1,2")); }
+TEST(Calc, NewlineSeparates) { EXPECT_EQ(6, add("1\n2,3")); }
+'''
+code_before = '''
+std::vector<int> split(const std::string& numbers) {
+  std::vector<int> result;
+  std::string current;
+  for (char c : numbers) {
+    if (c == ',' || c == '\n') { result.push_back(std::stoi(current)); current.clear(); }
+    else current += c;
+  }
+  if (!current.empty()) result.push_back(std::stoi(current));
+  return result;
+}
+
+int add(const std::string& numbers) {
+  int sum = 0;
+  for (int n : split(numbers)) sum += n;
+  return sum;
+}
+'''
+tests = '''
+TEST(Calc, EmptyIsZero) { EXPECT_EQ(0, add("")); }
+TEST(Calc, SingleNumber) { EXPECT_EQ(4, add("4")); }
+TEST(Calc, TwoNumbers) { EXPECT_EQ(3, add("1,2")); }
+TEST(Calc, NewlineSeparates) { EXPECT_EQ(6, add("1\n2,3")); }
+TEST(Calc, NegativeThrows) { EXPECT_THROW(add("-1"), std::invalid_argument); }
+'''
+code = '''
+std::vector<int> split(const std::string& numbers) {
+  std::vector<int> result;
+  std::string current;
+  for (char c : numbers) {
+    if (c == ',' || c == '\n') { result.push_back(std::stoi(current)); current.clear(); }
+    else current += c;
+  }
+  if (!current.empty()) result.push_back(std::stoi(current));
+  return result;
+}
+
+int add(const std::string& numbers) {
+  int sum = 0;
+  for (int n : split(numbers)) sum += n;
+  return sum;
+}
+'''
+test_result = '1 failed: Calc.NegativeThrows (Expected: add("-1") throws an exception of type std::invalid_argument. Actual: it throws nothing.); 4 passed'
+
+[expect]
+decision = ["advance"]
+max_problems = 0

@@ -1,26 +1,24 @@
-// The AI coach: after each Red, Green or Refactor step, sends the pair's code
-// (from the helper) to the coach proxy on compucore3, which asks Claude to
-// judge the step against the game rules and the kata pack (coach/coach.py).
+// The AI coach: when the pair clicks Done, Game sends the step (the pair's
+// code before and after, from the helper) to the coach proxy on compucore3,
+// which asks Claude whether they may move on and what to do next
+// (coach/coach.py). Works for any C++/GoogleTest problem.
 //
 // Opt-in twice over: it needs a class code (from the start screen, or a
 // ?class=CODE link from the teacher) and a connected helper, since the coach
 // can only judge code it can see. Without both the game works as before.
-import { writable } from "svelte/store";
-import { fizzbuzz } from "./content/katas/fizzbuzz.js";
+//
+// Game owns the flow (snapshots, history, holding, overrides); this module
+// builds the request, talks to the proxy and keeps the praise streak.
 
-export const KATA = fizzbuzz;
 const COACH_URL = "https://compucore3.setu.ie/rgg-coach";
 const DEV_COACH_URL = "http://127.0.0.1:8100"; // coach/coach_server.py run locally
 const CLASS_KEY = "RGG_CLASS_CODE";
-const PROGRESS_KEY = "RGG_COACH_PROGRESS"; // per game: covered behaviours, code at last Done
-const MASTERY_KEY = "RGG_COACH_MASTERY"; // per browser: good steps in a row, per phase
-export const MASTERY_STREAK = 3; // after this many good steps in a row, only speak up about problems
-const COACHED_PHASES = ["red", "green", "refactor"];
+const MASTERY_KEY = "RGG_COACH_MASTERY"; // per browser: good verdicts in a row, per phase
+export const MASTERY_STREAK = 3; // after this many, stop praising plain good steps in that phase
+const MAX_PROBLEM = 8000; // coach_server rejects longer problem text
 
-// status: "idle" | "asking" | "done" | "error"
-export const coach = writable({ status: "idle", phase: null, verdict: null, show: false, message: "" });
-// Behaviours covered this game; only set when that list changes.
-export const covered = writable(load(PROGRESS_KEY, emptyProgress()).covered);
+// Bumped on every new game, so a reply that arrives afterwards is ignored.
+let generation = 0;
 
 function storage() {
   try {
@@ -46,10 +44,6 @@ function save(key, value) {
   }
 }
 
-function emptyProgress() {
-  return { covered: [], codeAtLastDone: null };
-}
-
 function coachUrl(location = window.location) {
   return ["localhost", "127.0.0.1"].includes(location.hostname) ? DEV_COACH_URL : COACH_URL;
 }
@@ -70,44 +64,35 @@ export function startCoach(location = window.location) {
   if (code) setClassCode(code);
 }
 
-// New game: forget what was covered and the last code seen (mastery is kept).
+// New game: any reply still on its way belongs to the old game.
 export function resetCoach() {
-  covered.set([]);
-  save(PROGRESS_KEY, emptyProgress());
-  coach.set({ status: "idle", phase: null, verdict: null, show: false, message: "" });
+  generation++;
 }
 
-// The next behaviour on the teacher's route, given what has been covered in
-// any order. Behaviours the route visits twice need covering twice; an
-// optional behaviour is skipped once anything after it on the route is covered.
-export function nextBehaviour(pack, covered) {
-  const remaining = {};
-  for (const id of covered) remaining[id] = (remaining[id] || 0) + 1;
-  const route = pack.teacherRoute.flat();
-  const byId = Object.fromEntries(pack.behaviours.map((b) => [b.id, b]));
+// What the pair is building, first non-empty wins: the start-screen text box,
+// a ?problem= link from the teacher, the README in their solution folder
+// (the helper sends it as {path, content}, or null when there isn't one).
+export function resolveProblem(textBox, helperData, location = window.location) {
+  const fromLink = new URLSearchParams(location?.search || "").get("problem");
+  const candidates = [textBox, fromLink, helperData?.readme?.content];
+  const problem = candidates.map((p) => (typeof p === "string" ? p.trim() : "")).find((p) => p) || "";
+  return problem.slice(0, MAX_PROBLEM);
+}
 
-  for (let i = 0; i < route.length; i++) {
-    const id = route[i];
-    if (remaining[id] > 0) {
-      remaining[id]--;
-      continue;
-    }
-    const laterCovered = route.slice(i + 1).some((later) => remaining[later] > 0);
-    if (byId[id].optional && laterCovered) continue;
-    return byId[id];
-  }
-  return null;
+export function isCoached(helperState) {
+  return !!getClassCode() && helperState?.status === "connected" && !!helperState.data;
 }
 
 const joinFiles = (files) => files.map((f) => `// ${f.path}\n${f.content}`).join("\n\n");
+const filesOfKind = (snapshot, kind) => joinFiles((snapshot?.files || []).filter((f) => f.kind === kind));
 
 // One line describing the latest build and test run, as the coach expects.
-export function summariseResult(data) {
-  const build = data.build;
-  if (build?.status === "failed" && (!data.runTime || build.time >= data.runTime)) {
+export function summariseResult(snapshot) {
+  const build = snapshot?.build;
+  if (build?.status === "failed" && (!snapshot.runTime || build.time >= snapshot.runTime)) {
     return "Build failed: " + (build.errors.slice(0, 3).join(" | ") || "unknown error");
   }
-  const tests = data.tests || [];
+  const tests = snapshot?.tests || [];
   if (!tests.length) return "No test results yet";
   const failed = tests.filter((t) => t.status === "failed");
   const passed = tests.filter((t) => t.status === "passed").length;
@@ -116,75 +101,72 @@ export function summariseResult(data) {
   return `${failed.length} failed: ${details.join("; ")}; ${passed} passed`;
 }
 
-export function buildStep(phase, data, prog, pack = KATA) {
-  const files = data.files || [];
-  const code = joinFiles(files.filter((f) => f.kind === "production"));
-  const step = {
-    kata: pack.id,
+// The POST /coach body. `before` is the snapshot at the last accepted step,
+// or null at the start of a game.
+export function buildRequest({ phase, problem, before, after, ruleFindings = [], history = [] }) {
+  const request = {
     phase,
-    covered: prog.covered,
-    tests: joinFiles(files.filter((f) => f.kind === "test")),
-    code,
-    test_result: summariseResult(data),
+    problem: problem || "",
+    tests: filesOfKind(after, "test"),
+    code: filesOfKind(after, "production"),
+    test_result: summariseResult(after),
+    rule_findings: ruleFindings.slice(0, 20).map((f) => String(f).slice(0, 500)),
+    history: history.slice(-5).map((h) => ({
+      phase: h.phase,
+      decision: h.decision || "",
+      note: (h.note || "").slice(0, 500),
+    })),
   };
-  if (prog.codeAtLastDone !== null && prog.codeAtLastDone !== code) step.code_before = prog.codeAtLastDone;
-  return step;
-}
-
-export function isGood(verdict) {
-  return verdict.rules_ok && ["good", "fine", "n_a"].includes(verdict.ordering);
-}
-
-// Updates the per-phase streak and says whether to show this verdict.
-export function recordMastery(mastery, phase, verdict) {
-  const good = isGood(verdict);
-  const wasMastered = (mastery[phase] || 0) >= MASTERY_STREAK;
-  mastery[phase] = good ? (mastery[phase] || 0) + 1 : 0;
-  return !(good && wasMastered);
+  if (before) {
+    request.tests_before = filesOfKind(before, "test");
+    request.code_before = filesOfKind(before, "production");
+  }
+  return request;
 }
 
 const ERROR_MESSAGES = {
+  400: "The coach couldn't read this step (is the code very long?).",
   403: "The coach doesn't recognise your class code.",
   429: "Your class has used today's coaching allowance.",
-  503: "The coach is busy. It will try again on your next step.",
+  503: "The coach is busy. Carry on, it will look at your next step.",
 };
 
-// Called when the pair clicks Done on a step. `phase` is the step just finished.
-export async function coachStep(phase, helperState) {
-  const code = getClassCode();
-  if (!COACHED_PHASES.includes(phase) || !code || helperState.status !== "connected" || !helperState.data) return;
-
-  let prog = load(PROGRESS_KEY, emptyProgress());
-  const step = buildStep(phase, helperState.data, prog);
-  prog = { ...prog, codeAtLastDone: step.code };
-  save(PROGRESS_KEY, prog);
-  coach.set({ status: "asking", phase, verdict: null, show: true, message: "" });
-
+// Ask the coach about one step. Never throws: resolves to
+// { verdict, error, stale }, where verdict is null when error is set, and
+// stale is true when a new game started while waiting (ignore the result).
+export async function askCoach(step, fetchFn = fetch) {
+  const gen = generation;
+  let verdict = null;
+  let error = "";
   try {
-    const response = await fetch(coachUrl() + "/coach", {
+    const response = await fetchFn(coachUrl() + "/coach", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Class-Code": code },
-      body: JSON.stringify(step),
+      headers: { "Content-Type": "application/json", "X-Class-Code": getClassCode() },
+      body: JSON.stringify(buildRequest(step)),
     });
-    if (!response.ok) {
-      const message = ERROR_MESSAGES[response.status] || "The coach couldn't look at this step.";
-      coach.set({ status: "error", phase, verdict: null, show: true, message });
-      return;
-    }
-    const verdict = await response.json();
-
-    // Read again: the pair may have started a new game while we waited.
-    prog = load(PROGRESS_KEY, emptyProgress());
-    if (phase === "red" && KATA.behaviours.some((b) => b.id === verdict.targeted)) {
-      prog = { ...prog, covered: [...prog.covered, verdict.targeted] };
-      save(PROGRESS_KEY, prog);
-      covered.set(prog.covered);
-    }
-    const mastery = load(MASTERY_KEY, {});
-    const show = recordMastery(mastery, phase, verdict);
-    save(MASTERY_KEY, mastery);
-    coach.set({ status: "done", phase, verdict, show, message: "" });
+    if (response.ok) verdict = await response.json();
+    else error = ERROR_MESSAGES[response.status] || "The coach couldn't look at this step.";
   } catch {
-    coach.set({ status: "error", phase, verdict: null, show: true, message: "Can't reach the coach right now." });
+    error = "Can't reach the coach right now.";
   }
+  return { verdict, error, stale: gen !== generation };
+}
+
+// "hold": the pair stays on the step. "advice": they move on, with a
+// suggestion worth reading. "good": they move on.
+export function toneOf(verdict) {
+  if (verdict.decision !== "advance") return "hold";
+  return verdict.advice ? "advice" : "good";
+}
+
+// Records the verdict in the per-phase praise streak and says whether to show
+// it. Only plain good verdicts are ever hidden, once a phase has had
+// MASTERY_STREAK of them in a row. Call once per verdict received.
+export function shouldShow(phase, verdict) {
+  const mastery = load(MASTERY_KEY, {});
+  const good = toneOf(verdict) === "good";
+  const wasMastered = (mastery[phase] || 0) >= MASTERY_STREAK;
+  mastery[phase] = good ? (mastery[phase] || 0) + 1 : 0;
+  save(MASTERY_KEY, mastery);
+  return !(good && wasMastered);
 }

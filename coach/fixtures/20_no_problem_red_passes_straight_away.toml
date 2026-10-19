@@ -1,0 +1,33 @@
+description = "No problem text: new test passes straight away (app finding given)"
+phase = "red"
+problem = ""
+rule_findings = ["The new test Words.SingleWord passed straight away; a Red test must fail."]
+tests_before = '''
+TEST(Words, EmptyStringHasNoWords) { EXPECT_EQ(0, countWords("")); }
+TEST(Words, TwoWords) { EXPECT_EQ(2, countWords("hello world")); }
+'''
+code_before = '''
+int countWords(const std::string& text) {
+  if (text.empty()) return 0;
+  int count = 1;
+  for (char c : text) if (c == ' ') count++;
+  return count;
+}
+'''
+tests = '''
+TEST(Words, EmptyStringHasNoWords) { EXPECT_EQ(0, countWords("")); }
+TEST(Words, TwoWords) { EXPECT_EQ(2, countWords("hello world")); }
+TEST(Words, SingleWord) { EXPECT_EQ(1, countWords("hello")); }
+'''
+code = '''
+int countWords(const std::string& text) {
+  if (text.empty()) return 0;
+  int count = 1;
+  for (char c : text) if (c == ' ') count++;
+  return count;
+}
+'''
+test_result = "All 3 tests passed"
+
+[expect]
+decision = ["redo"]

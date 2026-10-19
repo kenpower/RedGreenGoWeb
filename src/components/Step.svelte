@@ -1,27 +1,45 @@
 <script>
-  import Solutions from "./Solutions.svelte";
-  import ModalContainer from "./ModalContainer.svelte";
   import HintLabel from "./HintLabel.svelte";
-  import { fade, fly, blur, scale } from "svelte/transition";
+  import { fade, fly } from "svelte/transition";
   import { createEventDispatcher } from "svelte";
   import Icon from "./Icon.svelte";
+  import WaitingDots from "./WaitingDots.svelte";
 
   const dispatch = createEventDispatcher();
+  const interact = (what) => dispatch("interact", what);
 
   export let step;
-  // Kept out of `step` so a hint that changes mid-step (when a coach verdict
-  // arrives) updates in place instead of re-keying the step and its timer.
+  // Kept out of `step` so values that change mid-step (when a coach verdict
+  // arrives) update in place instead of re-keying the card and the hint timer.
   export let hint = "";
-  let isOpenModal;
-  let solutionHTML = "";
-  let dataReady = false;
+  // The "What to do now" lines, already chosen by Game: {driver, navigator}.
+  export let instructions = { driver: "", navigator: "" };
+  // "red" | "amber" | "green" | "", computed by Game
+  export let tone = "";
+  // the one-line note carried over from the previous step's verdict
+  export let feedback = "";
+  // waiting: Done was clicked; the rules and the coach are looking at the step.
+  // held: the step broke the rules or the coach wasn't happy.
+  export let waiting = false;
+  export let held = false;
+  // The coach's verdict for this step, or null. Only read for why the pair is
+  // held, or why the coach disagreed that they're finished.
+  export let coach = null;
+  // rule findings [{rule, message}]: why we're held without the coach, or
+  // warnings when the rules aren't enforced
+  export let findings = [];
+  export let canAskAgain = true;
+  // the [Finished] flow, offered on Refactor steps only
+  export let finishState = "idle"; // "idle" | "asking" | "disagreed"
+  export let likelyFinished = false;
 
-  let st;
-
-  function peekAtSolution() {
-    if (confirm("Try it yourself first!\n\nShow our solution anyway?"))
-      isOpenModal = true;
-  }
+  $: isCycleStep = step.stateName != "swap";
+  $: busy = waiting || finishState == "asking";
+  $: heldByCoach = held && coach;
+  $: reasons = heldByCoach
+    ? coach.rule_problems || []
+    : findings.map((f) => f.message);
+  $: canFinish = step.stateName == "refactor" && !held && !waiting;
 
   //TODO move into game
   function scrollIntoView() {
@@ -30,12 +48,6 @@
     el.scrollIntoView({
       behavior: "smooth",
     });
-  }
-
-  $: {
-    console.log(step);
-    if (dataReady)
-      solutionHTML = st.getStepText(step.iteration + 1, step.stateName);
   }
 
   $: {
@@ -51,6 +63,31 @@
     id="theStep"
   >
     <p class="title aoc-heading">{step.title}</p>
+
+    {#if feedback && !held}
+      <p class="feedback tone-{tone}"><span class="who">Coach:</span> {feedback}</p>
+    {/if}
+
+    {#if held}
+      <div class="heldBox" transition:fade>
+        <p class="marker">{heldByCoach ? "Coach" : "Rules"}: not yet</p>
+        {#if heldByCoach && coach.note}
+          <p>{coach.note}</p>
+        {/if}
+        {#if reasons.length}
+          <ul>
+            {#each reasons as reason}<li>{reason}</li>{/each}
+          </ul>
+        {/if}
+      </div>
+    {:else if findings.length}
+      <div class="warnBox">
+        <p class="marker">Rule check</p>
+        <ul>
+          {#each findings as finding}<li>{finding.message}</li>{/each}
+        </ul>
+      </div>
+    {/if}
 
     <div class="stepBody">
       {#if step.stateName == "swap"}
@@ -70,45 +107,68 @@
             <span><strong class="playerName">{navigator}</strong> is navigating</span>
           </div>
         {/each}
-        {#if step.navigatorPrompt}
-          <p class="navigatorPrompt"><strong>Navigator:</strong> {step.navigatorPrompt}</p>
+
+        <h3 class="todoHeading">What to do now</h3>
+        <dl class="todo" class:heldTodo={held}>
+          {#if instructions.driver}
+            <dt style="--player-col: var(--player-{step.driverNumber})">Driver</dt>
+            <dd>{instructions.driver}</dd>
+          {/if}
+          {#if instructions.navigator}
+            <dt style="--player-col: var(--player-{step.navigatorNumbers[0]})">
+              Navigator{step.navigators.length > 1 ? "s" : ""}
+            </dt>
+            <dd>{instructions.navigator}</dd>
+          {/if}
+        </dl>
+
+        {#if !held}
+          <div><HintLabel text={hint} /></div>
         {/if}
       {/if}
-      {#if step.stateName != "swap"}
-        <div style="display: flex;justify-content: center;flex-direction: column;">
-          {#if step.goal}
-            <p class="goal">
-              <span class="goalLabel">Iteration {step.iteration + 1} of {step.totalIterations}</span>
-              {step.goal}
-            </p>
-          {/if}
-          <p>{step.bodyText}</p>
-          <div><HintLabel text={hint} /></div>
-        </div>
-      {/if}
-      <slot name="checks" />
-      <div style="display: flex; justify-content:space-evenly; ">
-        <button on:click={() => dispatch("interact", "done")}
-          >{step.buttonText}</button
-        >
-      </div>
-      {#if solutionHTML?.length != 0}
-        <div class="peekRow">
-          <button class="peek" on:click={peekAtSolution}
-            >Peek at our solution</button
+
+      <div class="actions">
+        {#if waiting}
+          <button disabled>Waiting for the coach<WaitingDots /></button>
+        {:else if held}
+          <button
+            disabled={!canAskAgain || busy}
+            title={canAskAgain ? "" : "Change your code first"}
+            on:click={() => interact("askAgain")}
+            >{heldByCoach ? "Ask the coach again" : "Check again"}</button
           >
+          <button class="override" disabled={busy} on:click={() => interact("override")}
+            >Progress despite this advice</button
+          >
+        {:else}
+          <button disabled={busy} on:click={() => interact("done")}>{step.buttonText}</button>
+        {/if}
+      </div>
+
+      {#if canFinish}
+        <div class="finish" class:likely={likelyFinished || finishState == "disagreed"}>
+          {#if finishState == "asking"}
+            <p class="muted">Asking the coach if you're finished<WaitingDots /></p>
+          {:else if finishState == "disagreed"}
+            <p class="marker">Coach: not finished yet</p>
+            {#if coach?.note}<p>{coach.note}</p>{/if}
+            {#if coach?.next_test}
+              <p><strong>Next test:</strong> {coach.next_test}</p>
+            {/if}
+            <button class="quiet" on:click={() => interact("finishAnyway")}>Finish anyway</button>
+          {:else}
+            {#if likelyFinished}
+              <p>The coach thinks you may have solved the problem.</p>
+            {/if}
+            <button class:quiet={!likelyFinished} on:click={() => interact("finish")}
+              >Finished</button
+            >
+          {/if}
         </div>
       {/if}
     </div>
-    <ModalContainer bind:isOpenModal>
-      <div class="solution">
-        {@html solutionHTML}
-      </div>
-    </ModalContainer>
   </div>
 {/key}
-
-<Solutions bind:this={st} bind:dataReady />
 
 <style>
   .driverBanner {
@@ -136,25 +196,84 @@
     color: var(--player-col);
   }
 
-  .navigatorPrompt {
-    margin: 0.6em 0;
-    padding: 0.3em 0.6em;
-    border-left: 2px solid var(--text-muted);
+  .feedback {
+    margin: 0 0 0.6em 0;
+    padding: 0.2em 0.6em;
+    border-left: 2px solid var(--tone-col, var(--text-muted));
     background: var(--opacity-50);
-    text-align: left;
   }
 
-  .goal {
-    color: var(--text-bright);
+  .feedback .who {
+    color: var(--tone-col, var(--text-muted));
+  }
+
+  .tone-red {
+    --tone-col: var(--testing-red);
+  }
+
+  .tone-amber {
+    --tone-col: var(--amber);
+  }
+
+  .tone-green {
+    --tone-col: var(--coding-green);
+  }
+
+  .heldBox,
+  .warnBox {
+    margin: 0 0 0.6em 0;
+    padding: 0.3em 0.8em;
+    border: 1px solid var(--box-col);
+    background: var(--bg-panel);
+    --box-col: var(--testing-red);
+  }
+
+  .warnBox {
+    --box-col: var(--amber);
+  }
+
+  .heldBox p,
+  .warnBox p {
+    margin: 0.3em 0;
+  }
+
+  .heldBox ul,
+  .warnBox ul {
+    margin: 0.3em 0;
+    padding-left: 1.5em;
+  }
+
+  .marker {
+    color: var(--box-col, var(--testing-red));
+    text-shadow: 0 0 5px var(--box-col, var(--testing-red));
+    font-weight: 500;
+  }
+
+  .todoHeading {
+    margin: 0.8em 0 0.3em 0;
+    font-size: 1em;
     font-weight: 400;
-    margin-bottom: 0;
+    color: var(--text-bright);
   }
 
-  .goalLabel {
-    display: block;
-    font-size: 0.9em;
-    color: var(--star);
-    text-shadow: 0 0 5px var(--star);
+  .todo {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.3em 0.8em;
+    margin: 0 0 0.5em 0;
+  }
+
+  .todo dt {
+    color: var(--player-col);
+  }
+
+  .todo dd {
+    margin: 0;
+  }
+
+  .heldTodo {
+    padding-left: 0.6em;
+    border-left: 2px solid var(--testing-red);
   }
 
   .handover {
@@ -171,18 +290,44 @@
     text-shadow: 0 0 5px var(--player-col);
   }
 
-  .peekRow {
-    text-align: right;
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+    gap: 0.5em;
+    margin-top: 0.5em;
   }
 
-  .peek {
-    margin: 0;
-    font-size: 0.9em;
+  .override,
+  .quiet {
     color: var(--text-muted);
   }
 
-  .solution {
+  .finish {
+    margin-top: 0.8em;
+    text-align: right;
+    font-size: 0.9em;
+  }
+
+  .finish p {
+    margin: 0.3em 0;
     text-align: left;
+  }
+
+  .finish.likely {
+    padding: 0.3em 0.8em;
+    border: 1px solid var(--star);
+    font-size: 1em;
+    --box-col: var(--star);
+  }
+
+  .finish.likely button:not(.quiet) {
+    color: var(--star);
+    text-shadow: 0 0 5px var(--star);
+  }
+
+  .muted {
+    color: var(--text-muted);
   }
 
   span {

@@ -13,6 +13,7 @@ Needs ANTHROPIC_API_KEY. Results are also saved to coach/results/.
 """
 import datetime
 import json
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -22,20 +23,34 @@ import anthropic
 from coach import EFFORT, MODEL, ask_coach, validate
 
 HERE = Path(__file__).parent
+# Shapes of real code, not prose: braces, operators, a statement ending in ';'.
+# Names like std::invalid_argument or add("4") in a sentence are fine.
+CODE_LIKE = re.compile(r"[{}]|==|!=|->|<<|#include|\)\s*;|\breturn\s+[^\s.,;]+\s*;")
+SHOWN = ("note", "driver_action", "navigator_action", "next_test")
 
 
-def score(verdict, expect):
-    """Return a list of (field, ok, detail) for each field the fixture checks."""
+def score(verdict, expect, phase):
+    """Return a list of (field, ok, detail): the fixture's [expect] checks, plus
+    two that apply to every fixture."""
     checks = []
-    if "targeted" in expect:
-        checks.append(("targeted", verdict["targeted"] in expect["targeted"], verdict["targeted"]))
-    if "ordering" in expect:
-        checks.append(("ordering", verdict["ordering"] in expect["ordering"], verdict["ordering"]))
-    if "rules_ok" in expect:
-        checks.append(("rules_ok", verdict["rules_ok"] == expect["rules_ok"], verdict["rules_ok"]))
+    if "decision" in expect:
+        checks.append(("decision", verdict["decision"] in expect["decision"], verdict["decision"]))
+    for field in ("likely_finished", "advice"):
+        if field in expect:
+            checks.append((field, verdict[field] == expect[field], verdict[field]))
+    if "next_test_known" in expect:
+        known = bool(verdict["next_test"].strip())
+        checks.append(("next_test_known", known == expect["next_test_known"], verdict["next_test"] or '""'))
     if "max_problems" in expect:
         count = len(verdict["rule_problems"])
         checks.append(("max_problems", count <= expect["max_problems"], count))
+
+    # A held pair must be told what to do; nothing the pair sees may contain code.
+    if verdict["decision"] != "advance" or phase != "finish":
+        has_actions = bool(verdict["driver_action"].strip() and verdict["navigator_action"].strip())
+        checks.append(("actions", has_actions, "present" if has_actions else "missing"))
+    leaks = [f for f in SHOWN if CODE_LIKE.search(verdict[f])]
+    checks.append(("no_code", not leaks, ", ".join(leaks) or "none"))
     return checks
 
 
@@ -49,6 +64,8 @@ def main(prefixes):
 
     for f in files:
         fx = tomllib.loads(f.read_text(encoding="utf-8"))
+        expect = fx.pop("expect")
+        description = fx.pop("description")
         validate(fx)  # fixtures must be valid server requests too
         try:
             verdict, usage = ask_coach(client, fx)
@@ -65,19 +82,23 @@ def main(prefixes):
         output_tokens += usage.output_tokens
         cache_written += usage.cache_creation_input_tokens or 0
         cache_read += usage.cache_read_input_tokens or 0
-        checks = score(verdict, fx["expect"])
+        checks = score(verdict, expect, fx["phase"])
         ok = all(c[1] for c in checks)
         passed += ok
 
-        print(f"{'PASS' if ok else 'FAIL'} {f.stem}  ({fx['description']})")
+        print(f"{'PASS' if ok else 'FAIL'} {f.stem}  ({description})")
         for field, field_ok, got in checks:
+            if field_ok and field in ("actions", "no_code"):
+                continue  # only worth a line when they fail
             mark = "  " if field_ok else "!!"
-            print(f"   {mark} {field}: {got}   expected {fx['expect'][field]}")
+            print(f"   {mark} {field}: {got}   expected {expect.get(field, 'ok')}")
         if verdict["rule_problems"]:
             print(f"      problems: {'; '.join(verdict['rule_problems'])}")
-        print(f"      note: {verdict['note']}")
-        print(f"      next: {verdict['teacher_next']}\n")
-        results.append({"fixture": f.stem, "pass": ok, "verdict": verdict})
+        print(f"      note:      {verdict['note']}")
+        print(f"      driver:    {verdict['driver_action']}")
+        print(f"      navigator: {verdict['navigator_action']}")
+        print(f"      next test: {verdict['next_test'] or '-'}\n")
+        results.append({"fixture": f.stem, "pass": ok, "checks": checks, "verdict": verdict})
 
     print(f"{passed}/{len(files)} passed. Tokens: {input_tokens} uncached in, {cache_written} cache written, "
           f"{cache_read} cache read, {output_tokens} out ({MODEL}, effort {EFFORT}).")

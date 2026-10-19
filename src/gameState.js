@@ -1,5 +1,3 @@
-import { fizzbuzzGoals } from "./content/fizzbuzzGoals.js";
-
 export const states = [
   {
     id: "red",
@@ -50,35 +48,51 @@ export const TDDPhase = {
   RED: 1,
 };
 
-// must match the number of <article id="loopN"> in public/content/fizzbuzz.html
-export const TOTAL_ITERATIONS = 9;
+export const HISTORY_LENGTH = 5; // verdicts sent back to the coach as context
 
+const newCycle = (index) => ({ phase: TDDPhase.RED, index, backToRed: 0 });
+
+// Cycles are open-ended: one Red, Swap, Green, Refactor loop per entry in
+// `iterations`, added as the pair reaches it, until they choose to finish.
 export class GameState {
   constructor(recoveredSavedGame) {
     if (recoveredSavedGame) {
       const r = recoveredSavedGame;
       this.players = r.players;
-      this.driver = r.driver;
-      this.navigator = r.navigator;
+      this.driver = r.driver ?? 0;
+      this.navigator = r.navigator ?? 1;
       // look up by id so saved games pick up text changes in states
-      this.state = states.find((s) => s.id == r.state?.id) || r.state;
-      this.stepNumber = r.stepNumber;
-      this.iteration = r.iteration;
-      this.started = r.started;
-      this.iterations = r.iterations;
-      this.totalIterations = r.totalIterations || TOTAL_ITERATIONS;
+      this.state = states.find((s) => s.id == r.state?.id) || states[0];
+      this.stepNumber = r.stepNumber ?? 1;
+      this.iteration = r.iteration ?? 0;
+      this.started = r.started ?? false;
+      // games saved before cycles were open-ended had 4 cycles laid out ahead
+      this.iterations = (r.iterations || [])
+        .slice(0, this.iteration + 1)
+        .map((i) => ({ ...i, backToRed: i.backToRed || 0 }));
       this.finished = r.finished || false;
+      this.overrides = r.overrides || 0;
+      this.enforceRules = r.enforceRules ?? true;
+      this.problem = r.problem || "";
+      this.before = r.before || null;
+      this.redBefore = r.redBefore || null;
+      this.history = r.history || [];
     } else {
-      (this.players = ["John", "Jane"]),
-        (this.driver = 0),
-        (this.navigator = 1),
-        (this.state = states[0]),
-        (this.stepNumber = 1),
-        (this.iteration = 0),
-        (this.started = false);
+      this.players = ["John", "Jane"];
+      this.driver = 0;
+      this.navigator = 1;
+      this.state = states[0];
+      this.stepNumber = 1;
+      this.iteration = 0;
+      this.started = false;
       this.iterations = [];
-      this.totalIterations = TOTAL_ITERATIONS;
       this.finished = false;
+      this.overrides = 0; // times the pair progressed despite the advice
+      this.enforceRules = true; // hold the pair on rule findings, even without the coach
+      this.problem = ""; // what the pair is building, from the start screen
+      this.before = null; // helper snapshot at the last satisfied Done
+      this.redBefore = null; // snapshot when this cycle's Red began, restored by backToRed
+      this.history = []; // last few coach verdicts, [{phase, decision, note}]
     }
     this.#save();
   }
@@ -91,74 +105,99 @@ export class GameState {
     this.navigator %= numInMob;
   };
 
-  #get4Iterations = (idx) => {
-    const its = [
-      { phase: 1, index: idx++ },
-      { phase: 0, index: idx++ },
-      { phase: 0, index: idx++ },
-      { phase: 0, index: idx++ },
-    ];
-    return its.slice(0, this.totalIterations - this.iterations.length);
-  };
-
   static GAME_STATE = "GAME_STATE";
 
   #save = () => {
-    localStorage.setItem(GameState.GAME_STATE, JSON.stringify(this));
+    try {
+      localStorage.setItem(GameState.GAME_STATE, JSON.stringify(this));
+    } catch {
+      // storage full (big source files in the snapshot) or blocked; the game still works
+    }
   };
 
   static recoverSavedGame = () => {
-    var ls = localStorage.getItem(GameState.GAME_STATE);
-    return ls ? new GameState(JSON.parse(ls)) : null;
+    try {
+      const ls = localStorage.getItem(GameState.GAME_STATE);
+      return ls ? new GameState(JSON.parse(ls)) : null;
+    } catch {
+      return null; // unreadable save: start a new game
+    }
   };
 
   start() {
     this.started = true;
-    this.iterations = this.#get4Iterations(1);
+    this.iterations = [newCycle(1)];
     this.#save();
   }
 
   nextStep() {
-    if (!this.state) {
-      console.log("Error: next step called but no state");
-    }
     if (this.finished) return;
-
-    const lastIteration = this.iteration + 1 >= this.totalIterations;
-    if (states[this.state.next].id == "red" && lastIteration) {
-      this.iterations[this.iteration].phase = TDDPhase.COMPLETED;
-      this.finished = true;
-      this.#save();
-      return;
-    }
 
     this.state = states[this.state.next];
     this.stepNumber++;
+    const cycle = this.iterations[this.iteration];
 
     if (this.state.id == "red") {
-      this.iterations[this.iteration].phase = TDDPhase.COMPLETED;
+      this.redBefore = this.before;
+      cycle.phase = TDDPhase.COMPLETED;
       this.iteration++;
-
-      if (this.iteration >= this.iterations.length) {
-        const its = this.#get4Iterations(this.iterations.length + 1);
-        this.iterations = [...this.iterations, ...its];
-      }
-
-      this.iterations[this.iteration].phase = TDDPhase.RED;
-    }
-
-    if (this.state.id == "green") {
-      this.iterations[this.iteration].phase = TDDPhase.GREEN;
-    }
-    if (this.state.id == "refactor") {
-      this.iterations[this.iteration].phase = TDDPhase.REFACTOR;
+      this.iterations.push(newCycle(this.iteration + 1));
     }
     if (this.state.id == "swap") {
-      this.iterations[this.iteration].phase = TDDPhase.GREEN;
+      cycle.phase = TDDPhase.GREEN;
       this.#swapPairRoles();
     }
+    if (this.state.id == "green") cycle.phase = TDDPhase.GREEN;
+    if (this.state.id == "refactor") cycle.phase = TDDPhase.REFACTOR;
     this.#save();
   }
+
+  // The coach sends the pair back to write a (better) test: same driver,
+  // same cycle, no swap. The rules compare with the code from before the
+  // cycle's Red again, so a rewritten test still counts as the one new test.
+  backToRed() {
+    if (this.finished || !["green", "refactor"].includes(this.state.id)) return;
+    this.before = this.redBefore;
+    this.state = states[0];
+    this.stepNumber++;
+    const cycle = this.iterations[this.iteration];
+    cycle.phase = TDDPhase.RED;
+    cycle.backToRed++;
+    this.#save();
+  }
+
+  finish() {
+    if (this.finished) return;
+    if (this.iterations[this.iteration]) this.iterations[this.iteration].phase = TDDPhase.COMPLETED;
+    this.finished = true;
+    this.#save();
+  }
+
+  override() {
+    this.overrides++;
+    this.#save();
+  }
+
+  setBefore(snapshot) {
+    this.before = snapshot;
+    this.#save();
+  }
+
+  // The code as the game starts, before the first Red.
+  setBaseline(snapshot) {
+    this.before = this.redBefore = snapshot;
+    this.#save();
+  }
+
+  addHistory(phase, verdict) {
+    this.history = [...this.history, { phase, decision: verdict.decision, note: verdict.note || "" }].slice(
+      -HISTORY_LENGTH
+    );
+    this.#save();
+  }
+
+  // Cycles finished, counting the current one only when the game is finished.
+  completedCycles = () => this.iterations.filter((i) => i.phase == TDDPhase.COMPLETED).length;
 
   #driver = () => this.players[this.driver];
   #navigator = () => this.players[this.navigator];
@@ -191,9 +230,8 @@ export class GameState {
       driverNumber: this.driver + 1,
       navigatorNumbers: this.#navigatorNumbers(),
       navigatorPrompt: this.state.navigatorPrompt || "",
-      goal: this.state.id == "red" ? fizzbuzzGoals[this.iteration] || "" : "",
-      iteration: this.iteration,
-      totalIterations: this.totalIterations,
+      cycle: this.iteration + 1,
+      stepNumber: this.stepNumber,
       stateName: this.state.id,
     };
 
@@ -208,16 +246,3 @@ export class GameState {
     return step;
   };
 }
-
-// export const resetGame = () => {
-//     const gs = copyOfInitialGameState();
-//     _gameState.set(gs);
-//     localStorage.setItem(GAME_STATE, JSON.stringify(gs))
-// }
-// const GAME_STATE = "GAME_STATE";
-// const copyOfInitialGameState = () => JSON.parse(JSON.stringify(initialGameState));
-
-// export const _gameState = writable(
-//     localStorage[GAME_STATE]
-//         ? JSON.parse(localStorage[GAME_STATE])
-//         : copyOfInitialGameState());

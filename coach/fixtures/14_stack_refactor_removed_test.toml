@@ -1,0 +1,35 @@
+description = "Stack: Refactor deletes a test (app finding given)"
+phase = "refactor"
+problem = "Build a Stack class for ints with push, pop, top, size and isEmpty. Popping an empty stack throws std::out_of_range."
+rule_findings = ["The test Stack.PopReturnsLastPushed was removed during Refactor; Refactor must keep the same tests."]
+tests_before = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+TEST(Stack, NotEmptyAfterPush) { Stack s; s.push(7); EXPECT_FALSE(s.isEmpty()); }
+TEST(Stack, PopReturnsLastPushed) { Stack s; s.push(1); s.push(2); EXPECT_EQ(2, s.pop()); }
+'''
+code_before = '''
+class Stack {
+  std::vector<int> items;
+public:
+  bool isEmpty() const { return items.empty(); }
+  void push(int value) { items.push_back(value); }
+  int pop() { int x = items.back(); items.pop_back(); return x; }
+};
+'''
+tests = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+TEST(Stack, NotEmptyAfterPush) { Stack s; s.push(7); EXPECT_FALSE(s.isEmpty()); }
+'''
+code = '''
+class Stack {
+  std::vector<int> items;
+public:
+  bool isEmpty() const { return items.empty(); }
+  void push(int value) { items.push_back(value); }
+  int pop() { int top = items.back(); items.pop_back(); return top; }
+};
+'''
+test_result = "All 2 tests passed"
+
+[expect]
+decision = ["redo"]

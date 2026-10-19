@@ -1,0 +1,24 @@
+description = "FizzBuzz: Refactor where nothing changes (allowed)"
+phase = "refactor"
+problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
+tests_before = '''
+TEST(FizzBuzz, Returns1For1) { EXPECT_EQ("1", fizzBuzz(1)); }
+'''
+code_before = '''
+std::string fizzBuzz(int n) {
+  return "1";
+}
+'''
+tests = '''
+TEST(FizzBuzz, Returns1For1) { EXPECT_EQ("1", fizzBuzz(1)); }
+'''
+code = '''
+std::string fizzBuzz(int n) {
+  return "1";
+}
+'''
+test_result = "All 1 tests passed"
+
+[expect]
+decision = ["advance"]
+max_problems = 0

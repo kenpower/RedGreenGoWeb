@@ -1,0 +1,21 @@
+description = "Roman numerals: Finish clicked with only I, II, III and V covered"
+phase = "finish"
+problem = 'Write toRoman(int n) that converts a whole number from 1 to 3999 to Roman numerals, e.g. 4 gives "IV" and 1994 gives "MCMXCIV".'
+tests = '''
+TEST(Roman, OneIsI) { EXPECT_EQ("I", toRoman(1)); }
+TEST(Roman, TwoIsII) { EXPECT_EQ("II", toRoman(2)); }
+TEST(Roman, ThreeIsIII) { EXPECT_EQ("III", toRoman(3)); }
+TEST(Roman, FiveIsV) { EXPECT_EQ("V", toRoman(5)); }
+'''
+code = '''
+std::string toRoman(int n) {
+  if (n == 5) return "V";
+  return std::string(n, 'I');
+}
+'''
+test_result = "All 4 tests passed"
+
+[expect]
+decision = ["redo"]
+likely_finished = false
+next_test_known = true

@@ -1,0 +1,26 @@
+description = "String calculator: Green changes the test to match the code (app finding given)"
+phase = "green"
+problem = "String calculator: add(const std::string& numbers) returns the sum of comma-separated numbers. An empty string returns 0. Newlines also separate numbers. Negative numbers throw std::invalid_argument."
+rule_findings = ["Test files changed during Green; Green must not change the tests."]
+tests_before = '''
+TEST(Calc, EmptyIsZero) { EXPECT_EQ(0, add("")); }
+TEST(Calc, SingleNumber) { EXPECT_EQ(4, add("4")); }
+'''
+code_before = '''
+int add(const std::string& numbers) {
+  return 0;
+}
+'''
+tests = '''
+TEST(Calc, EmptyIsZero) { EXPECT_EQ(0, add("")); }
+TEST(Calc, SingleNumber) { EXPECT_EQ(0, add("4")); }
+'''
+code = '''
+int add(const std::string& numbers) {
+  return 0;
+}
+'''
+test_result = "All 2 tests passed"
+
+[expect]
+decision = ["redo"]

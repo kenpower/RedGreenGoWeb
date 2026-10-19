@@ -1,0 +1,17 @@
+description = "Stack: first test, a new stack is empty, fails to compile"
+phase = "red"
+problem = "Build a Stack class for ints with push, pop, top, size and isEmpty. Popping an empty stack throws std::out_of_range."
+tests_before = ""
+code_before = ""
+tests = '''
+TEST(Stack, NewStackIsEmpty) {
+  Stack s;
+  EXPECT_TRUE(s.isEmpty());
+}
+'''
+code = ""
+test_result = "Build failed: error C2065: 'Stack': undeclared identifier"
+
+[expect]
+decision = ["advance"]
+max_problems = 0

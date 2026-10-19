@@ -1,0 +1,16 @@
+description = "FizzBuzz: textbook first test, fails to compile"
+phase = "red"
+problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
+tests_before = ""
+code_before = ""
+tests = '''
+TEST(FizzBuzz, Returns1For1) {
+  EXPECT_EQ("1", fizzBuzz(1));
+}
+'''
+code = ""
+test_result = "Build failed: error C3861: 'fizzBuzz': identifier not found"
+
+[expect]
+decision = ["advance"]
+max_problems = 0

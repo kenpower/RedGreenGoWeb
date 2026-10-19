@@ -1,42 +1,59 @@
 <script>
+  // One tile on the cycle track. Cycles that haven't started yet (phase 0)
+  // render nothing, so the track grows as the pair plays.
   import TDDCycle from "./TDDCycle.svelte";
+  import { scale } from "svelte/transition";
+  import { TDDPhase } from "../gameState";
+
   export let iterationCounter = 0;
   export let phase = 0;
-  let dimmed = false;
-  $: dimmed = phase == 0 || phase == 4;
+  // times the coach sent this cycle back to Red
+  export let backToRed = 0;
+
+  $: done = phase == TDDPhase.COMPLETED;
 </script>
 
-<div class="iteration" class:dimmed>
-  <div class="overlay" />
-  <TDDCycle size={100} {phase} text={iterationCounter} />
-  <p class="title">
-    {dimmed ? "" : "Iteration " + iterationCounter}
-  </p>
-</div>
+{#if phase > 0}
+  <div
+    class="iteration"
+    class:done
+    in:scale
+    title={done ? "Cycle " + iterationCounter + " complete" : ""}
+  >
+    <TDDCycle size={done ? 44 : 80} {phase} text={iterationCounter} />
+    {#if !done}
+      <p class="title">Cycle {iterationCounter}</p>
+    {/if}
+    {#if backToRed}
+      <p class="backToRed" title="Sent back to Red {backToRed} time{backToRed == 1 ? '' : 's'}">
+        ↺ red{backToRed > 1 ? " ×" + backToRed : ""}
+      </p>
+    {/if}
+  </div>
+{/if}
 
 <style>
   .iteration {
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-strong);
     background-color: var(--bg-panel);
-    padding: 8px;
-    max-width: calc(var(--global-game-width) / 5);
-    position: relative;
+    padding: 6px;
     text-align: center;
+  }
+
+  .iteration.done {
+    border-color: var(--border);
+    padding: 3px;
   }
 
   .title {
     margin: 0;
     font-size: 0.85em;
-    color: var(--text-muted);
+    color: var(--text-bright);
   }
 
-  .dimmed .overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    opacity: 0.7;
-    background: var(--bg);
+  .backToRed {
+    margin: 0;
+    font-size: 0.75em;
+    color: var(--testing-red);
   }
 </style>

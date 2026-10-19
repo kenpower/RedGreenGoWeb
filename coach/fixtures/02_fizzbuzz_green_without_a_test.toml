@@ -1,0 +1,11 @@
+description = "The user's screenshot: Green clicked but no test was ever written"
+phase = "green"
+problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
+tests_before = ""
+code_before = ""
+tests = ""
+code = ""
+test_result = "No test results yet"
+
+[expect]
+decision = ["back_to_red"]

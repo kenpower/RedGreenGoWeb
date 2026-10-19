@@ -1,0 +1,28 @@
+description = "Stack: Green writes the whole class to pass the isEmpty test"
+phase = "green"
+problem = "Build a Stack class for ints with push, pop, top, size and isEmpty. Popping an empty stack throws std::out_of_range."
+tests_before = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+'''
+code_before = ""
+tests = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+'''
+code = '''
+class Stack {
+  std::vector<int> items;
+public:
+  bool isEmpty() const { return items.empty(); }
+  int size() const { return (int)items.size(); }
+  void push(int x) { items.push_back(x); }
+  int top() const { return items.back(); }
+  int pop() {
+    if (items.empty()) throw std::out_of_range("empty");
+    int x = items.back(); items.pop_back(); return x;
+  }
+};
+'''
+test_result = "All 1 tests passed"
+
+[expect]
+decision = ["redo"]

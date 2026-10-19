@@ -2,9 +2,9 @@
   export let phase;
   export let text = 1;
   export let size = 100;
-  let hsize = size / 2;
-  let radius = hsize * 0.65;
-  let textScale = size / 50.0;
+  $: hsize = size / 2;
+  $: radius = hsize * 0.65;
+  $: textScale = size / 50.0;
   const phase1Col = "#ff6347";
   const phase2Col = "#00cc00";
   const phase3Col = "#3f9cff";

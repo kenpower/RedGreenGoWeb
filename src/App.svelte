@@ -17,8 +17,17 @@
   if (!gameState) {
     gameState = new GameState();
   }
+  // A teacher can share a link with ?problem=... to fill in the problem box.
+  let problem =
+    gameState.problem ||
+    new URLSearchParams(window.location.search).get("problem") ||
+    "";
+  let enforceRules = gameState.enforceRules ?? true;
+
   const startGame = () => {
     if (thirdPlayer) gameState.players[2] = thirdPlayer;
+    gameState.problem = problem.trim();
+    gameState.enforceRules = enforceRules;
     setClassCode(classCode);
     gameState.start();
     gameState = gameState;
@@ -55,40 +64,31 @@
     {:else}
       <h2 class="aoc-heading">How to play</h2>
       <p>
-        Test Driven Development (TDD) is a process for writing code that
-        involves repeatedly appying three distinct steps:
+        Red-Green-Go! walks a pair (or three) through Test Driven Development
+        on any problem, one small step at a time. One of you
+        <em>drives</em> (types), the others <em>navigate</em> (think ahead and
+        talk it through). Each cycle has three steps:
       </p>
       <ol>
         <li>
-          <p>
-            Describe one very simple thing what your code <strong>should</strong
-            >
-            do. We write this description in a <em>"test"</em>. A test is a
-            special function that can check if a single peice of code does what
-            you say it should do.
-          </p>
-          <p>
-            After you write the test, the test will fail, but that is OK as you
-            won't have written the code yet.
-          </p>
+          <strong>Red.</strong> Write one small test for something your code
+          <em>should</em> do but doesn't yet, and watch it fail. A test that
+          doesn't compile counts as failing.
         </li>
         <li>
-          The next step is to to write enough code that will make the test pass.
-          You don't have to write very much, nor do you have to write clever
-          code. You can even hard code in results that will pass the test. The
-          code written at this stage will usually be low quality, and specifit
-          to the test. But that is ok, we will get a chance to improve the code
-          later on. During this step the important thing is to get the test
-          passing.
+          <strong>Green.</strong> Write just enough code to make that test
+          pass. Simple, even hard-coded, is fine. Don't change the tests.
         </li>
         <li>
-          Once the test is passing (green), the final step in the cycle is
-          refactoring. This is where we look at the code we just wrote and try
-          to find patterns that we can use to make the code more general. We
-          will repeat these three steps with tests covering more and more of the
-          required behaviour.
+          <strong>Refactor.</strong> With every test passing, tidy the code:
+          remove duplication, improve names, generalise. The tests must stay
+          green.
         </li>
       </ol>
+      <p>
+        You swap driver after each Red, and keep cycling until the problem is
+        solved.
+      </p>
       <div class="setup">
         <h2 class="aoc-heading">Who is playing?</h2>
         <span>
@@ -133,6 +133,30 @@
         <p class="hint">
           With a class code from your teacher and your code connected, an AI
           coach gives feedback after each step.
+        </p>
+
+        <h2 class="aoc-heading">What are you building?</h2>
+        <label class="block" for="problem">Describe the problem (optional)</label>
+        <textarea
+          id="problem"
+          name="problem"
+          rows="4"
+          placeholder="e.g. A function that converts numbers to Roman numerals"
+          bind:value={problem}
+        />
+        <p class="hint">
+          The coach uses this to suggest your next test. Leave it empty and it
+          works it out from your code (or a README.md in your solution folder).
+        </p>
+
+        <label class="checkbox">
+          <input type="checkbox" bind:checked={enforceRules} />
+          Enforce TDD rules
+        </label>
+        <p class="hint">
+          With your code connected, the game holds you on a step that breaks
+          the rules (e.g. more than one new test on Red). Unticked, it only
+          warns you.
         </p>
 
         <button id="startBtn" on:click={startGame}>Start Game</button>
@@ -202,6 +226,29 @@
   label {
     display: inline-block;
     min-width: 13em;
+  }
+
+  label.block {
+    display: block;
+  }
+
+  label.checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    margin-top: 1em;
+    color: var(--text-bright);
+  }
+
+  label.checkbox input {
+    margin: 0;
+    accent-color: var(--glow-green);
+  }
+
+  textarea {
+    display: block;
+    width: 100%;
+    resize: vertical;
   }
 
   #startBtn {

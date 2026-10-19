@@ -1,0 +1,21 @@
+description = "No problem text: Green with production code but no test at all"
+phase = "green"
+problem = ""
+tests_before = ""
+code_before = ""
+tests = ""
+code = '''
+int countWords(const std::string& text) {
+  int count = 0;
+  bool inWord = false;
+  for (char c : text) {
+    if (c == ' ') inWord = false;
+    else if (!inWord) { inWord = true; count++; }
+  }
+  return count;
+}
+'''
+test_result = "No test results yet"
+
+[expect]
+decision = ["back_to_red"]

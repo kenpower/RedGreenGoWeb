@@ -50,6 +50,7 @@ SKIP_FILES = re.compile(r"^(pch|stdafx|framework|targetver)\.(h|cpp)$", re.IGNOR
 TEST_MARKER = re.compile(r"\bTEST(?:_F|_P)?\s*\(")
 MAX_FILE_BYTES = 100_000
 MAX_FILES = 50
+MAX_README_CHARS = 8_000  # the problem description sent to the coach
 
 changed = threading.Condition()  # guards state and sse_clients; notified on every change
 sse_clients = 0
@@ -60,6 +61,7 @@ state = {
     "tests": {},  # "Suite.Name" -> {name, status, message, run}
     "build": None,  # {status, errors, time} from the latest build log
     "files": [],  # [{path, kind: test|production, content}] read when results/build arrive
+    "readme": None,  # {path, content} of the solution's README.md, read alongside the files
 }
 
 
@@ -169,6 +171,33 @@ def read_sources(project_dir):
     return files
 
 
+def read_readme(project_dir):
+    """README.md (any case) in the solution folder, else in one of its subfolders; it
+    tells the coach what the pair is building. Cut to MAX_README_CHARS."""
+    def find_in(folder):
+        try:
+            names = sorted(os.listdir(folder))
+        except OSError:
+            return None
+        return next((os.path.join(folder, n) for n in names
+                     if n.lower() == "readme.md" and os.path.isfile(os.path.join(folder, n))), None)
+
+    path = find_in(project_dir)
+    if path is None:
+        for name in sorted(os.listdir(project_dir)):
+            sub = os.path.join(project_dir, name)
+            if os.path.isdir(sub) and name not in SKIP_DIRS and not name.startswith("."):
+                path = find_in(sub)
+                if path:
+                    break
+    if path is None:
+        return None
+    return {
+        "path": os.path.relpath(path, project_dir).replace("\\", "/"),
+        "content": read_text(path)[:MAX_README_CHARS],
+    }
+
+
 def beep(runs):
     try:
         import winsound
@@ -178,7 +207,7 @@ def beep(runs):
     winsound.MessageBeep(winsound.MB_OK if all_passed else winsound.MB_ICONHAND)
 
 
-def publish(runs, build, files):
+def publish(runs, build, files, readme):
     """Apply new results/build/files as one change, so the app never sees a half-updated state."""
     with changed:
         for mtime, results in runs:
@@ -189,6 +218,7 @@ def publish(runs, build, files):
         if build:
             state["build"] = build
         state["files"] = files
+        state["readme"] = readme
         state["version"] += 1
         changed.notify_all()
 
@@ -213,7 +243,7 @@ def watch(project_dir, result_patterns, build_log_patterns, beep_on_results):
             build = check_build_logs(logs, seen_mtimes)
 
             if runs or build:
-                publish(runs, build, read_sources(project_dir))
+                publish(runs, build, read_sources(project_dir), read_readme(project_dir))
                 for _, results in runs:
                     print("tests: " + ", ".join(f'{r["name"]}={r["status"]}' for r in results), flush=True)
                 if build:
@@ -234,6 +264,7 @@ def snapshot():
             "tests": sorted(state["tests"].values(), key=lambda t: t["name"]),
             "build": state["build"],
             "files": state["files"],
+            "readme": state["readme"],
         }
 
 
@@ -367,9 +398,12 @@ def main():
 
     with changed:
         state["files"] = read_sources(project_dir)
+        state["readme"] = read_readme(project_dir)
         state["version"] = 1
 
     print(f"Project: {project_dir} ({len(state['files'])} source files)")
+    if state["readme"]:
+        print(f"  Problem description: {state['readme']['path']}")
     if not (args.results or find_result_files(project_dir)):
         print("  No test results yet - run your tests in Visual Studio's Test Explorer.")
     print(f"Serving http://127.0.0.1:{PORT}  (Ctrl+C to stop)", flush=True)

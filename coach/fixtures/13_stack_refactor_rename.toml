@@ -1,0 +1,32 @@
+description = "Stack: a clean refactor (rename, same behaviour)"
+phase = "refactor"
+problem = "Build a Stack class for ints with push, pop, top, size and isEmpty. Popping an empty stack throws std::out_of_range."
+tests_before = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+TEST(Stack, NotEmptyAfterPush) { Stack s; s.push(7); EXPECT_FALSE(s.isEmpty()); }
+'''
+code_before = '''
+class Stack {
+  std::vector<int> v;
+public:
+  bool isEmpty() const { return v.size() == 0; }
+  void push(int x) { v.push_back(x); }
+};
+'''
+tests = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+TEST(Stack, NotEmptyAfterPush) { Stack s; s.push(7); EXPECT_FALSE(s.isEmpty()); }
+'''
+code = '''
+class Stack {
+  std::vector<int> items;
+public:
+  bool isEmpty() const { return items.empty(); }
+  void push(int value) { items.push_back(value); }
+};
+'''
+test_result = "All 2 tests passed"
+
+[expect]
+decision = ["advance"]
+max_problems = 0

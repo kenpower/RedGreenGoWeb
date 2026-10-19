@@ -1,0 +1,24 @@
+description = "Roman numerals: new test fails only because of a typo in the test"
+phase = "red"
+problem = 'Write toRoman(int n) that converts a whole number from 1 to 3999 to Roman numerals, e.g. 4 gives "IV" and 1994 gives "MCMXCIV".'
+tests_before = '''
+TEST(Roman, OneIsI) { EXPECT_EQ("I", toRoman(1)); }
+'''
+code_before = '''
+std::string toRoman(int n) {
+  return "I";
+}
+'''
+tests = '''
+TEST(Roman, OneIsI) { EXPECT_EQ("I", toRoman(1)); }
+TEST(Roman, TwoIsII) { EXPECT_EQ("II", toRomn(2)); }
+'''
+code = '''
+std::string toRoman(int n) {
+  return "I";
+}
+'''
+test_result = "Build failed: error C3861: 'toRomn': identifier not found"
+
+[expect]
+decision = ["redo"]

@@ -1,0 +1,16 @@
+description = "Roman numerals: first test for 1, fails to compile"
+phase = "red"
+problem = 'Write toRoman(int n) that converts a whole number from 1 to 3999 to Roman numerals, e.g. 4 gives "IV" and 1994 gives "MCMXCIV".'
+tests_before = ""
+code_before = ""
+tests = '''
+TEST(Roman, OneIsI) {
+  EXPECT_EQ("I", toRoman(1));
+}
+'''
+code = ""
+test_result = "Build failed: error C3861: 'toRoman': identifier not found"
+
+[expect]
+decision = ["advance"]
+max_problems = 0

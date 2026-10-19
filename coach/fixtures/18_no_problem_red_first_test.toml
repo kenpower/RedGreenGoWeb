@@ -1,0 +1,16 @@
+description = "No problem text: a sensible first test (degenerate case), fails to compile"
+phase = "red"
+problem = ""
+tests_before = ""
+code_before = ""
+tests = '''
+TEST(Words, EmptyStringHasNoWords) {
+  EXPECT_EQ(0, countWords(""));
+}
+'''
+code = ""
+test_result = "Build failed: error C3861: 'countWords': identifier not found"
+
+[expect]
+decision = ["advance"]
+max_problems = 0

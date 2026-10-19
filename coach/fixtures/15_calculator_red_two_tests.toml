@@ -1,0 +1,26 @@
+description = "String calculator: two new tests in one Red (app finding given)"
+phase = "red"
+problem = "String calculator: add(const std::string& numbers) returns the sum of comma-separated numbers. An empty string returns 0. Newlines also separate numbers. Negative numbers throw std::invalid_argument."
+rule_findings = ["2 new tests were added (Calc.SingleNumber, Calc.TwoNumbers); Red allows exactly one."]
+tests_before = '''
+TEST(Calc, EmptyIsZero) { EXPECT_EQ(0, add("")); }
+'''
+code_before = '''
+int add(const std::string& numbers) {
+  return 0;
+}
+'''
+tests = '''
+TEST(Calc, EmptyIsZero) { EXPECT_EQ(0, add("")); }
+TEST(Calc, SingleNumber) { EXPECT_EQ(4, add("4")); }
+TEST(Calc, TwoNumbers) { EXPECT_EQ(3, add("1,2")); }
+'''
+code = '''
+int add(const std::string& numbers) {
+  return 0;
+}
+'''
+test_result = "2 failed: Calc.SingleNumber (Expected: 4, actual: 0); Calc.TwoNumbers (Expected: 3, actual: 0); 1 passed"
+
+[expect]
+decision = ["redo"]
