@@ -1,6 +1,8 @@
 #!/bin/sh
 # Installed by deploy.sh as /usr/local/bin/__APP_NAME__-admin
 # e.g. __APP_NAME__-admin add-class SD2-2026 "Software Dev 2, 2026"
+# Over ssh, quote the whole command so the name survives:
+#   ssh -t user@host '__APP_NAME__-admin add-class SD2-2026 "Software Dev 2, 2026"'
 #      __APP_NAME__-admin classes | usage [--days 7] | disable-class CODE
 cd __INSTALL_DIR__/app/coach || exit 1
 exec sudo -u __APP_NAME__ env RGG_COACH_DB=/var/lib/__APP_NAME__/coach.sqlite3 \

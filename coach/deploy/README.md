@@ -8,7 +8,7 @@ cp .env.deploy.example .env.deploy   # then fill in ANTHROPIC_API_KEY
 ./deploy.sh                          # first deploy and every later one
 ```
 
-`deploy.sh` packs the committed `coach/` and `src/content/katas/` (git archive HEAD),
+`deploy.sh` packs the committed `coach/` (git archive HEAD),
 uploads them and runs `remote_install.sh` on the server, which:
 
 - first time only: creates the `rgg-coach` system user and `/opt/rgg-coach/venv`
@@ -26,10 +26,16 @@ Check it: `curl https://compucore3.setu.ie/rgg-coach/health`.
 ## Classes
 
 ```bash
-ssh -t ken@compucore3.setu.ie rgg-coach-admin add-class SD2-2026 "Software Dev 2, 2026"
+# single quotes round the remote command, or ssh drops the inner quotes
+ssh -t ken@compucore3.setu.ie 'rgg-coach-admin add-class SD2-2026 "Software Dev 2, 2026"'
 ssh -t ken@compucore3.setu.ie rgg-coach-admin classes
 ssh -t ken@compucore3.setu.ie rgg-coach-admin usage
 ```
+
+Each class gets 600 requests and 2,000,000 tokens a day by default (uncached input + cache
+writes + output; cache reads aren't counted). Whichever runs out first stops coaching until
+midnight. Change them with `add-class CODE "Name" --limit 800 --tokens 3000000`; re-running
+`add-class` for an existing code updates it.
 
 ## Rollback
 
@@ -38,4 +44,4 @@ sudo mv /opt/rgg-coach/app /opt/rgg-coach/app.bad && sudo mv /opt/rgg-coach/app.
 sudo systemctl restart rgg-coach
 ```
 
-Run `coach/run_fixtures.py` before you deploy any change to `coach/prompt.md` or a kata pack.
+Run `coach/run_fixtures.py` before you deploy any change to `coach/prompt.md` or `coach/coach.py`.

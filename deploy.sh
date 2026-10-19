@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Deploys the coach proxy (coach/ + src/content/katas) to compucore3.
+# Deploys the coach proxy (coach/) to compucore3.
 # The web app itself is still published to GitHub Pages with `npm run publish`.
 #
 # Usage: ./deploy.sh [--yes] [--copy-key]
@@ -116,9 +116,9 @@ if [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "master" ]; then
     echo "WARNING: You are deploying from branch '${CURRENT_BRANCH}', not main/master."
     GIT_WARNINGS=$((GIT_WARNINGS + 1))
 fi
-UNCOMMITTED=$(git status --porcelain -- coach src/content/katas)
+UNCOMMITTED=$(git status --porcelain -- coach)
 if [ -n "$UNCOMMITTED" ]; then
-    echo "WARNING: Uncommitted changes in coach/ or src/content/katas/ will NOT be deployed:"
+    echo "WARNING: Uncommitted changes in coach/ will NOT be deployed:"
     echo "$UNCOMMITTED" | sed 's/^/    /'
     GIT_WARNINGS=$((GIT_WARNINGS + 1))
 fi
@@ -147,7 +147,7 @@ fi
 echo "[1/3] Building deploy bundle..."
 STAGE=$(mktemp -d)
 mkdir -p "$STAGE/bundle/app"
-git archive HEAD coach src/content/katas | tar -x -C "$STAGE/bundle/app"
+git archive HEAD coach | tar -x -C "$STAGE/bundle/app"
 echo "$COMMIT" > "$STAGE/bundle/app/DEPLOYED_COMMIT"
 
 render() {

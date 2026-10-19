@@ -7,7 +7,7 @@ request limits and token usage live in a SQLite file next to this script.
 
 Run behind nginx (see deploy/), listening on localhost only:
   python coach_server.py serve                       start on 127.0.0.1:8100
-  python coach_server.py add-class CODE "Name" [--limit 600]
+  python coach_server.py add-class CODE "Name" [--limit 600] [--tokens 2000000]
   python coach_server.py disable-class CODE
   python coach_server.py classes                     list codes and today's use
   python coach_server.py usage [--days 7]            tokens per class per day
@@ -36,8 +36,12 @@ from coach import MODEL, BadStep, ask_coach, validate
 ALLOWED_ORIGINS = {"http://localhost:8080", "https://kenpower.github.io"}
 PORT = int(os.environ.get("RGG_COACH_PORT", 8100))
 DB_PATH = Path(os.environ.get("RGG_COACH_DB", Path(__file__).parent / "coach.sqlite3"))
-DEFAULT_DAILY_LIMIT = 600  # requests per class per day; a pair does ~30 steps per kata
-MAX_BODY_BYTES = 250_000
+DEFAULT_DAILY_LIMIT = 600  # requests per class per day; a pair does ~30 steps per problem
+# Tokens per class per day: uncached input + cache writes + output. Cache reads
+# (the shared system prompt) cost a tenth as much and aren't counted. A step
+# uses ~2-3k, so 600 steps fit; padded requests run out well before that.
+DEFAULT_DAILY_TOKENS = 2_000_000
+MAX_BODY_BYTES = 100_000  # 4 fields of MAX_TEXT plus JSON escaping
 
 client = None  # created by serve(), so the admin commands don't need the API key
 
@@ -63,7 +67,18 @@ def db():
         CREATE INDEX IF NOT EXISTS usage_code_day ON usage (code, day);
         """
     )
+    columns = {r["name"] for r in con.execute("PRAGMA table_info(classes)")}
+    if "daily_tokens" not in columns:  # databases created before the token budget
+        con.execute(f"ALTER TABLE classes ADD COLUMN daily_tokens INTEGER NOT NULL DEFAULT {DEFAULT_DAILY_TOKENS}")
+        con.commit()
     return con
+
+
+def tokens_used(con, code):
+    return con.execute(
+        "SELECT COALESCE(SUM(input + cache_write + output), 0) FROM usage WHERE code = ? AND day = ?",
+        (code, today()),
+    ).fetchone()[0]
 
 
 def today():
@@ -72,19 +87,20 @@ def today():
 
 def check_class(con, code):
     """Return None if the class may make a request, else (status, message)."""
-    row = con.execute("SELECT daily_limit, active FROM classes WHERE code = ?", (code,)).fetchone()
+    row = con.execute("SELECT daily_limit, daily_tokens, active FROM classes WHERE code = ?", (code,)).fetchone()
     if not row or not row["active"]:
         return 403, "unknown class code"
     used = con.execute("SELECT COUNT(*) FROM usage WHERE code = ? AND day = ?", (code, today())).fetchone()[0]
-    if used >= row["daily_limit"]:
+    if used >= row["daily_limit"] or tokens_used(con, code) >= row["daily_tokens"]:
         return 429, "this class has used today's coaching allowance"
     return None
 
 
 def record_usage(con, code, step, usage):
+    # The kata column predates kata-agnostic coaching and is left NULL.
     con.execute(
-        "INSERT INTO usage (code, day, kata, phase, input, cache_write, cache_read, output) VALUES (?,?,?,?,?,?,?,?)",
-        (code, today(), step["kata"], step["phase"], usage.input_tokens,
+        "INSERT INTO usage (code, day, phase, input, cache_write, cache_read, output) VALUES (?,?,?,?,?,?,?)",
+        (code, today(), step["phase"], usage.input_tokens,
          usage.cache_creation_input_tokens or 0, usage.cache_read_input_tokens or 0, usage.output_tokens),
     )
     con.commit()
@@ -168,11 +184,12 @@ def serve(_args):
 def add_class(args):
     with db() as con:
         con.execute(
-            "INSERT INTO classes (code, name, daily_limit) VALUES (?, ?, ?) "
-            "ON CONFLICT(code) DO UPDATE SET name = excluded.name, daily_limit = excluded.daily_limit, active = 1",
-            (args.code.upper(), args.name, args.limit),
+            "INSERT INTO classes (code, name, daily_limit, daily_tokens) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(code) DO UPDATE SET name = excluded.name, daily_limit = excluded.daily_limit, "
+            "daily_tokens = excluded.daily_tokens, active = 1",
+            (args.code.upper(), args.name, args.limit, args.tokens),
         )
-    print(f"class {args.code.upper()} ({args.name}): {args.limit} requests/day")
+    print(f"class {args.code.upper()} ({args.name}): {args.limit} requests/day, {args.tokens} tokens/day")
 
 
 def disable_class(args):
@@ -184,14 +201,16 @@ def disable_class(args):
 def list_classes(_args):
     con = db()
     rows = con.execute(
-        "SELECT c.code, c.name, c.daily_limit, c.active, "
+        "SELECT c.code, c.name, c.daily_limit, c.daily_tokens, c.active, "
         "(SELECT COUNT(*) FROM usage u WHERE u.code = c.code AND u.day = ?) AS used "
         "FROM classes c ORDER BY c.code",
         (today(),),
     ).fetchall()
+    print("class        reqs today   tokens today         name")
     for r in rows:
         status = "" if r["active"] else "  (disabled)"
-        print(f"{r['code']:<12} {r['used']:>4}/{r['daily_limit']:<5} {r['name']}{status}")
+        tokens = f"{tokens_used(con, r['code'])}/{r['daily_tokens']}"
+        print(f"{r['code']:<12} {r['used']:>4}/{r['daily_limit']:<5} {tokens:<20} {r['name']}{status}")
 
 
 def show_usage(args):
@@ -215,6 +234,7 @@ def main(argv):
     p.add_argument("code")
     p.add_argument("name")
     p.add_argument("--limit", type=int, default=DEFAULT_DAILY_LIMIT, help="requests per day")
+    p.add_argument("--tokens", type=int, default=DEFAULT_DAILY_TOKENS, help="tokens per day (cache reads not counted)")
     p.set_defaults(func=add_class)
     p = sub.add_parser("disable-class")
     p.add_argument("code")

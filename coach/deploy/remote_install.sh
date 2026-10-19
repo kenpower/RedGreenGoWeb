@@ -80,14 +80,22 @@ done
 # server), the rate-limit zone in conf.d (it must be in http { }). If nginx -t
 # fails, the previous files are put back so the other sites keep working.
 echo "  Installing nginx config..."
-sudo cp "$BUNDLE/nginx.conf" "$INSTALL_DIR/nginx.conf"
 BACKUP=$INSTALL_DIR/nginx-backup
 sudo rm -rf "$BACKUP" && sudo mkdir -p "$BACKUP"
 for f in "$NGINX_SITE" "$NGINX_ZONE"; do
     if [ -f "$f" ]; then sudo cp "$f" "$BACKUP/"; fi
 done
-sudo install -m 644 -o root -g root "$BUNDLE/nginx.conf" "$NGINX_SITE"
 sudo install -m 644 -o root -g root "$BUNDLE/nginx-ratelimit.conf" "$NGINX_ZONE"
+# Not every nginx.conf includes conf.d/ in http { }. If this one doesn't load the
+# zone file, deploy without the per-IP limit (the per-class daily limit still applies).
+if ! sudo nginx -T 2>/dev/null | grep -q "^# configuration file ${NGINX_ZONE}:"; then
+    echo "  WARNING: nginx does not load ${NGINX_ZONE}, so the per-IP rate limit is off."
+    echo "           To turn it on, add 'include /etc/nginx/conf.d/*.conf;' to http { } in /etc/nginx/nginx.conf and deploy again."
+    sudo rm -f "$NGINX_ZONE"
+    sed -i '/limit_req /d' "$BUNDLE/nginx.conf"
+fi
+sudo install -m 644 -o root -g root "$BUNDLE/nginx.conf" "$NGINX_SITE"
+sudo cp "$BUNDLE/nginx.conf" "$INSTALL_DIR/nginx.conf"
 if ! sudo nginx -t; then
     echo "ERROR: nginx -t failed; restoring the previous nginx config."
     for f in "$NGINX_SITE" "$NGINX_ZONE"; do
