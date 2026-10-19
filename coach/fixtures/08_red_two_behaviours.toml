@@ -1,0 +1,24 @@
+description = "One new test checks both 3 and 5"
+kata = "fizzbuzz"
+phase = "red"
+covered = ["callable", "returns_string", "normal_one", "normal_more"]
+tests = '''
+TEST(FizzBuzz, Returns1For1) { EXPECT_EQ("1", fizzBuzz(1)); }
+TEST(FizzBuzz, Returns2For2) { EXPECT_EQ("2", fizzBuzz(2)); }
+TEST(FizzBuzz, Returns4For4) { EXPECT_EQ("4", fizzBuzz(4)); }
+TEST(FizzBuzz, SpecialNumbers) {
+  EXPECT_EQ("Fizz", fizzBuzz(3));
+  EXPECT_EQ("Buzz", fizzBuzz(5));
+}
+'''
+code = '''
+std::string fizzBuzz(int number) {
+  return std::to_string(number);
+}
+'''
+test_result = "1 failed: SpecialNumbers (2 failures); 3 passed"
+
+[expect]
+targeted = ["fizz_3", "buzz_5", "unclear"]
+rules_ok = false
+max_problems = 1

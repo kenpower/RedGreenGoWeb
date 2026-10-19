@@ -1,0 +1,23 @@
+description = "New test has no assertion"
+kata = "fizzbuzz"
+phase = "red"
+covered = ["callable", "returns_string", "normal_one", "normal_more"]
+tests = '''
+TEST(FizzBuzz, Returns1For1) { EXPECT_EQ("1", fizzBuzz(1)); }
+TEST(FizzBuzz, Returns2For2) { EXPECT_EQ("2", fizzBuzz(2)); }
+TEST(FizzBuzz, Returns4For4) { EXPECT_EQ("4", fizzBuzz(4)); }
+TEST(FizzBuzz, HandlesThree) {
+  std::string result = fizzBuzz(3);
+}
+'''
+code = '''
+std::string fizzBuzz(int number) {
+  return std::to_string(number);
+}
+'''
+test_result = "All 4 tests passed"
+
+[expect]
+targeted = ["fizz_3", "unclear"]
+rules_ok = false
+max_problems = 2  # no assertion, and so it never failed

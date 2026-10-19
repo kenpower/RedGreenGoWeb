@@ -1,0 +1,18 @@
+description = "Textbook first test: just call fizzBuzz"
+kata = "fizzbuzz"
+phase = "red"
+covered = []
+tests = '''
+TEST(FizzBuzz, CanCallFizzBuzz) {
+  fizzBuzz(1);
+}
+'''
+code = '''
+// fizzbuzz.cpp is empty
+'''
+test_result = "Build failed: error C3861: 'fizzBuzz': identifier not found"
+
+[expect]
+targeted = ["callable"]
+ordering = ["good"]
+rules_ok = true

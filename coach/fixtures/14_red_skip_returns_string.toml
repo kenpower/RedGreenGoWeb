@@ -1,0 +1,18 @@
+description = "Pair skips the optional returns-a-string test and goes straight to 1"
+kata = "fizzbuzz"
+phase = "red"
+covered = ["callable"]
+tests = '''
+TEST(FizzBuzz, CanCallFizzBuzz) { fizzBuzz(1); }
+TEST(FizzBuzz, Returns1For1) { EXPECT_EQ("1", fizzBuzz(1)); }
+'''
+code = '''
+void fizzBuzz(int number) {
+}
+'''
+test_result = "Build failed: error C2678: binary '==': no operator found which takes a left-hand operand of type 'const char [2]'"
+
+[expect]
+targeted = ["normal_one"]
+ordering = ["good", "fine"]
+rules_ok = true
