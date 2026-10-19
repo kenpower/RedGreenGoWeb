@@ -4,8 +4,8 @@
   import { fade, fly } from "svelte/transition";
   import { createEventDispatcher } from "svelte";
   import { helper } from "../helper.js";
-  import { isCoached, askCoach, resolveProblem, toneOf, shouldShow } from "../coach.js";
-  import { checkRules, snapshotOf } from "../rules.js";
+  import { isCoached, askCoach, resolveProblem, toneOf, shouldShow, sendProgress } from "../coach.js";
+  import { checkRules, snapshotOf, startState, failingTests } from "../rules.js";
   import { hintFor } from "../content/hints.js";
 
   const dispatch = createEventDispatcher();
@@ -33,9 +33,31 @@
   $: snapshot = $helper.status === "connected" ? snapshotOf($helper.data) : null;
   $: canAskAgain = held && JSON.stringify(snapshot) !== askedWith;
 
-  // The code at the start of the game is the baseline for the first Red.
-  $: if (snapshot && !gameState.before && gameState.stepNumber === 1 && !gameState.finished)
+  // Before a Red, check where the code is (rules.startState), live as the
+  // helper's data arrives: tests already failing, a broken build, or no
+  // results yet hold the Red until sorted. A clean start becomes the
+  // baseline for the Red's rule check. Without the helper, Red is as normal.
+  let freshStart = false; // the pair said the one failing test isn't their Red test
+  $: startChecked = gameState.startChecked;
+  $: startGate = step?.stateName === "red" && !startChecked && snapshot ? startState(snapshot) : "";
+  $: if (startGate === "clean") clearStart();
+  $: shownStartState = startGate === "clean" ? "" : startGate;
+  $: failing = shownStartState ? failingTests(snapshot) : [];
+  $: buildErrors = shownStartState === "build_failed" ? snapshot.build?.errors || [] : [];
+
+  const clearStart = () => {
     gameState.setBaseline(snapshot);
+    gameState.markStartChecked();
+    startChecked = true;
+    freshStart = false;
+  };
+
+  // "Yes, use it": the failing test is this Red's test, so Red is done.
+  const useExisting = () => {
+    if (startGate !== "one_failing") return;
+    clearStart();
+    advance();
+  };
 
   $: instructions = instructionsFor(step, held, verdict, advice);
   const instructionsFor = (step, held, verdict, advice) => {
@@ -62,6 +84,7 @@
       gameState.nextStep();
     }
     gameState = gameState;
+    freshStart = false;
     held = false;
     verdict = null;
     findings = [];
@@ -70,7 +93,13 @@
     feedback = carry.feedback || "";
     tone = carry.tone || "";
     advice = carry.advice || null;
+    report();
   };
+
+  // Records the pair's progress on the coach server after every step change,
+  // for grading. Fire and forget: sendProgress never throws, and skips
+  // without a class code.
+  const report = () => sendProgress(gameState.progress());
 
   const hold = (stepVerdict, stepFindings) => {
     held = true;
@@ -119,6 +148,8 @@
       after: snapshot,
       ruleFindings: ruleMessages(ruleFindings),
       history: gameState.history,
+      gameId: gameState.gameId,
+      players: gameState.players,
     });
 
   const done = async () => {
@@ -141,6 +172,7 @@
   const finishGame = () => {
     gameState.finish();
     gameState = gameState;
+    report();
   };
 
   const finish = async () => {
@@ -168,8 +200,14 @@
   const onInteract = (event) => {
     if (waiting) return;
     switch (event.detail) {
+      case "useExisting":
+        return useExisting();
+      case "startFresh":
+        freshStart = startGate === "one_failing";
+        return;
       case "done":
       case "askAgain":
+        if (shownStartState) return; // the start check is still holding this Red
         return done();
       case "override":
         gameState.override();
@@ -188,7 +226,7 @@
   };
 
   $: cycles = gameState.completedCycles();
-  $: backToRedCount = gameState.iterations.reduce((sum, i) => sum + (i.backToRed || 0), 0);
+  $: backToRedCount = gameState.backToRedCount();
 </script>
 
 <div class="iterations">
@@ -212,6 +250,10 @@
         {canAskAgain}
         {finishState}
         {likelyFinished}
+        startState={shownStartState}
+        failingTests={failing}
+        {buildErrors}
+        {freshStart}
         on:interact={onInteract}
       />
     </div>

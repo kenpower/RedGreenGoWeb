@@ -5,7 +5,8 @@
   import { GameState } from "./gameState";
   import { fly } from "svelte/transition";
   import HelperStatus from "./components/HelperStatus.svelte";
-  import { startHelper, resetHelper } from "./helper.js";
+  import { helper, startHelper, resetHelper } from "./helper.js";
+  import { testNames } from "./rules.js";
   import { startCoach, resetCoach, getClassCode, setClassCode } from "./coach.js";
 
   startHelper();
@@ -23,6 +24,14 @@
     new URLSearchParams(window.location.search).get("problem") ||
     "";
   let enforceRules = gameState.enforceRules ?? true;
+
+  // With the helper connected and tests in the source but no results yet, wait
+  // for a first run so the game starts from where the code really is. A project
+  // with no tests (nothing to run) or no helper starts straight away.
+  $: needsTestRun =
+    $helper.status === "connected" &&
+    testNames($helper.data).size > 0 &&
+    !($helper.data.run > 0 || $helper.data.tests?.length);
 
   const startGame = () => {
     if (thirdPlayer) gameState.players[2] = thirdPlayer;
@@ -159,7 +168,14 @@
           warns you.
         </p>
 
-        <button id="startBtn" on:click={startGame}>Start Game</button>
+        <div class="startRow">
+          <button id="startBtn" disabled={needsTestRun} on:click={startGame}
+            >Start Game</button
+          >
+          {#if needsTestRun}
+            <span class="hint">Run your tests in Visual Studio's Test Explorer first</span>
+          {/if}
+        </div>
       </div>
     {/if}
   </section>
@@ -251,8 +267,17 @@
     resize: vertical;
   }
 
+  .startRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5em 1em;
+    margin-top: 1em;
+  }
+
   #startBtn {
     font-size: 1.1em;
+    margin: 0;
   }
 
   #red {

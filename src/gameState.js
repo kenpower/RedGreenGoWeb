@@ -52,6 +52,16 @@ export const HISTORY_LENGTH = 5; // verdicts sent back to the coach as context
 
 const newCycle = (index) => ({ phase: TDDPhase.RED, index, backToRed: 0 });
 
+// Identifies one game in the progress records on the coach server.
+export function newGameId() {
+  try {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  } catch {
+    // randomUUID needs a secure context; fall through
+  }
+  return "g-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+}
+
 // Cycles are open-ended: one Red, Swap, Green, Refactor loop per entry in
 // `iterations`, added as the pair reaches it, until they choose to finish.
 export class GameState {
@@ -77,6 +87,10 @@ export class GameState {
       this.before = r.before || null;
       this.redBefore = r.redBefore || null;
       this.history = r.history || [];
+      // games saved before the start check existed were already under way
+      this.startChecked = r.startChecked ?? true;
+      // games started before progress was recorded get an id now
+      this.gameId = r.gameId || (this.started ? newGameId() : null);
     } else {
       this.players = ["John", "Jane"];
       this.driver = 0;
@@ -93,6 +107,8 @@ export class GameState {
       this.before = null; // helper snapshot at the last satisfied Done
       this.redBefore = null; // snapshot when this cycle's Red began, restored by backToRed
       this.history = []; // last few coach verdicts, [{phase, decision, note}]
+      this.startChecked = false; // whether this Red's starting code has been checked (rules.startState)
+      this.gameId = null; // set by start()
     }
     this.#save();
   }
@@ -127,6 +143,8 @@ export class GameState {
   start() {
     this.started = true;
     this.iterations = [newCycle(1)];
+    this.startChecked = false;
+    this.gameId = newGameId();
     this.#save();
   }
 
@@ -139,6 +157,7 @@ export class GameState {
 
     if (this.state.id == "red") {
       this.redBefore = this.before;
+      this.startChecked = false;
       cycle.phase = TDDPhase.COMPLETED;
       this.iteration++;
       this.iterations.push(newCycle(this.iteration + 1));
@@ -158,6 +177,7 @@ export class GameState {
   backToRed() {
     if (this.finished || !["green", "refactor"].includes(this.state.id)) return;
     this.before = this.redBefore;
+    this.startChecked = true; // the failing test is theirs: no need to check where they start
     this.state = states[0];
     this.stepNumber++;
     const cycle = this.iterations[this.iteration];
@@ -183,9 +203,14 @@ export class GameState {
     this.#save();
   }
 
-  // The code as the game starts, before the first Red.
+  // The code as a Red starts, once the start check has passed.
   setBaseline(snapshot) {
     this.before = this.redBefore = snapshot;
+    this.#save();
+  }
+
+  markStartChecked() {
+    this.startChecked = true;
     this.#save();
   }
 
@@ -198,6 +223,21 @@ export class GameState {
 
   // Cycles finished, counting the current one only when the game is finished.
   completedCycles = () => this.iterations.filter((i) => i.phase == TDDPhase.COMPLETED).length;
+
+  backToRedCount = () => this.iterations.reduce((sum, i) => sum + (i.backToRed || 0), 0);
+
+  // What the coach server records after each step, for grading.
+  progress = () => ({
+    game_id: this.gameId,
+    pair: this.players.filter((p) => p),
+    problem: this.problem,
+    steps: this.stepNumber - 1, // every step change: advances (Swap included) and backs to Red
+    cycles: this.completedCycles(),
+    phase: this.finished ? "finished" : this.state.id,
+    overrides: this.overrides,
+    back_to_red: this.backToRedCount(),
+    finished: this.finished,
+  });
 
   #driver = () => this.players[this.driver];
   #navigator = () => this.players[this.navigator];

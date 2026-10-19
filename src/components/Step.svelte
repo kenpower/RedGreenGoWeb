@@ -32,6 +32,71 @@
   // the [Finished] flow, offered on Refactor steps only
   export let finishState = "idle"; // "idle" | "asking" | "disagreed"
   export let likelyFinished = false;
+  // Before a Red step, where the pair's code stands. "" means a clean start
+  // (or no check): the normal Red card. Game re-checks on every helper update.
+  export let startState = ""; // "unknown" | "build_failed" | "one_failing" | "many_failing"
+  export let failingTests = [];
+  export let buildErrors = [];
+  // true after [No, start fresh] on one_failing
+  export let freshStart = false;
+
+  // What the start card says for each state. `box` picks the box colour,
+  // `wait` is what the game is waiting to see before carrying on.
+  const startCard = (state, failing, errors, fresh) => {
+    const name = failing[0] || "a test";
+    switch (state) {
+      case "unknown":
+        return {
+          box: "infoBox",
+          heading: "Where are you?",
+          message: "Run your tests in Visual Studio so the game can see where you are.",
+          driver: "Build the solution and run all the tests in Test Explorer.",
+          navigator: "Check the badge at the top of the page says the code is connected.",
+          wait: "Waiting for your test run",
+        };
+      case "build_failed":
+        return {
+          box: "heldBox",
+          heading: "Fix the build first",
+          message: "Your code doesn't build, so the game can't tell which tests pass.",
+          list: errors.slice(0, 5),
+          driver: "Fix the compile errors, then build and run the tests.",
+          navigator: "Read the first error aloud and find the line it points to.",
+          wait: "Waiting for a clean build",
+        };
+      case "one_failing":
+        return fresh
+          ? {
+              box: "warnBox",
+              heading: "Get to a clean start",
+              message: `Make ${name} pass, or comment it out. The game carries on once no tests fail.`,
+              driver: `Make ${name} pass or comment it out, then run the tests.`,
+              navigator: "Check no other test starts failing while you do it.",
+              wait: "Waiting for no failing tests",
+            }
+          : {
+              box: "questionBox",
+              heading: "Is this your Red test?",
+              message: `You already have one failing test (${name}). Is this your Red test?`,
+              driver: "Say whether this test is the next small behaviour you want to build.",
+              navigator: "Check the failing test belongs to the work you're about to do.",
+              ask: true,
+            };
+      case "many_failing":
+        return {
+          box: "warnBox",
+          heading: "Get to a clean start",
+          message: `${failing.length} tests fail. Fix them or comment them out until at most one fails.`,
+          list: failing,
+          driver: "Fix or comment out failing tests, running the tests as you go.",
+          navigator: "Check which failing test belongs to the work you're about to do; that one can stay.",
+          wait: "Waiting for at most one failing test",
+        };
+      default:
+        return null;
+    }
+  };
+  $: start = startCard(startState, failingTests, buildErrors, freshStart);
 
   $: isCycleStep = step.stateName != "swap";
   $: busy = waiting || finishState == "asking";
@@ -68,7 +133,17 @@
       <p class="feedback tone-{tone}"><span class="who">Coach:</span> {feedback}</p>
     {/if}
 
-    {#if held}
+    {#if start}
+      <div class={start.box}>
+        <p class="marker">{start.heading}</p>
+        <p>{start.message}</p>
+        {#if start.list?.length}
+          <ul>
+            {#each start.list as item}<li>{item}</li>{/each}
+          </ul>
+        {/if}
+      </div>
+    {:else if held}
       <div class="heldBox" transition:fade>
         <p class="marker">{heldByCoach ? "Coach" : "Rules"}: not yet</p>
         {#if heldByCoach && coach.note}
@@ -109,26 +184,31 @@
         {/each}
 
         <h3 class="todoHeading">What to do now</h3>
-        <dl class="todo" class:heldTodo={held}>
-          {#if instructions.driver}
+        <dl class="todo" class:heldTodo={held && !start}>
+          {#if (start || instructions).driver}
             <dt style="--player-col: var(--player-{step.driverNumber})">Driver</dt>
-            <dd>{instructions.driver}</dd>
+            <dd>{(start || instructions).driver}</dd>
           {/if}
-          {#if instructions.navigator}
+          {#if (start || instructions).navigator}
             <dt style="--player-col: var(--player-{step.navigatorNumbers[0]})">
               Navigator{step.navigators.length > 1 ? "s" : ""}
             </dt>
-            <dd>{instructions.navigator}</dd>
+            <dd>{(start || instructions).navigator}</dd>
           {/if}
         </dl>
 
-        {#if !held}
+        {#if !held && !start}
           <div><HintLabel text={hint} /></div>
         {/if}
       {/if}
 
       <div class="actions">
-        {#if waiting}
+        {#if start?.ask}
+          <button on:click={() => interact("useExisting")}>Yes, use it</button>
+          <button class="override" on:click={() => interact("startFresh")}>No, start fresh</button>
+        {:else if start}
+          <p class="muted">{start.wait}<WaitingDots /></p>
+        {:else if waiting}
           <button disabled>Waiting for the coach<WaitingDots /></button>
         {:else if held}
           <button
@@ -220,7 +300,9 @@
   }
 
   .heldBox,
-  .warnBox {
+  .warnBox,
+  .questionBox,
+  .infoBox {
     margin: 0 0 0.6em 0;
     padding: 0.3em 0.8em;
     border: 1px solid var(--box-col);
@@ -232,13 +314,24 @@
     --box-col: var(--amber);
   }
 
+  .questionBox {
+    --box-col: var(--star);
+  }
+
+  .infoBox {
+    --box-col: var(--text-bright);
+  }
+
   .heldBox p,
-  .warnBox p {
+  .warnBox p,
+  .questionBox p,
+  .infoBox p {
     margin: 0.3em 0;
   }
 
   .heldBox ul,
   .warnBox ul {
+    overflow-wrap: anywhere;
     margin: 0.3em 0;
     padding-left: 1.5em;
   }

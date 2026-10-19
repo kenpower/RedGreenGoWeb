@@ -77,6 +77,10 @@ def validate(step):
     for field in ("tests", "code", "tests_before", "code_before", "test_result"):
         if len(step.get(field) or "") > MAX_TEXT:
             raise BadStep(f"{field} is too long")
+    # Who and which game, for the teacher's progress view (coach_server records them).
+    for field, limit in (("pair", 200), ("game_id", 64)):
+        if not isinstance(step.get(field, ""), str) or len(step.get(field, "")) > limit:
+            raise BadStep(f"{field} must be text of at most {limit} characters")
     if not _short_strings(step.get("rule_findings", []), MAX_FINDINGS, MAX_NOTE):
         raise BadStep("rule_findings must be a short list of short strings")
     history = step.get("history", [])

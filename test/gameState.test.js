@@ -1,4 +1,4 @@
-import { GameState, states, TDDPhase, HISTORY_LENGTH } from "../src/gameState";
+import { GameState, states, TDDPhase, HISTORY_LENGTH, newGameId } from "../src/gameState";
 import { hintFor, phaseHints } from "../src/content/hints.js";
 
 class LocalStorageMock {
@@ -450,6 +450,96 @@ test("snapshots_are_saved", () => {
   const recovered = GameState.recoverSavedGame();
   expect(recovered.before).toEqual(snapshot);
   expect(recovered.redBefore).toEqual(snapshot);
+});
+
+test("start_check_is_due_at_each_red", () => {
+  let g = new GameState();
+  g.start();
+  expect(g.startChecked).toBe(false);
+  g.markStartChecked();
+  expect(g.startChecked).toBe(true);
+  steps(g, 3); // swap, green, refactor
+  expect(g.startChecked).toBe(true);
+  g.nextStep(); // next red
+  expect(g.startChecked).toBe(false);
+  expect(GameState.recoverSavedGame().startChecked).toBe(false);
+});
+
+test("back_to_red_skips_the_start_check", () => {
+  let g = new GameState();
+  g.start();
+  g.markStartChecked();
+  steps(g, 2);
+  g.backToRed();
+  expect(g.startChecked).toBe(true);
+});
+
+test("games_saved_before_the_start_check_count_as_checked", () => {
+  localStorage.setItem(
+    GameState.GAME_STATE,
+    JSON.stringify({ players: ["a", "b"], state: states[0], iterations: [], started: true })
+  );
+  expect(GameState.recoverSavedGame().startChecked).toBe(true);
+});
+
+test("start_creates_a_saved_game_id", () => {
+  let g = new GameState();
+  expect(g.gameId).toBeNull();
+  g.start();
+  expect(typeof g.gameId).toBe("string");
+  expect(g.gameId.length).toBeGreaterThan(8);
+  expect(GameState.recoverSavedGame().gameId).toBe(g.gameId);
+  const other = new GameState();
+  other.start();
+  expect(other.gameId).not.toBe(g.gameId);
+});
+
+test("game_id_falls_back_without_randomUUID", () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "crypto");
+  Object.defineProperty(globalThis, "crypto", { value: undefined, configurable: true });
+  try {
+    expect(newGameId()).toMatch(/^g-/);
+    expect(newGameId()).not.toBe(newGameId());
+  } finally {
+    if (original) Object.defineProperty(globalThis, "crypto", original);
+    else delete globalThis.crypto;
+  }
+});
+
+test("a_game_started_before_ids_existed_gets_one_on_recovery", () => {
+  localStorage.setItem(
+    GameState.GAME_STATE,
+    JSON.stringify({ players: ["a", "b"], state: states[0], iterations: [], started: true })
+  );
+  const g = GameState.recoverSavedGame();
+  expect(typeof g.gameId).toBe("string");
+});
+
+test("progress_summarises_the_game", () => {
+  let g = new GameState();
+  g.players = ["Jane", "John", ""];
+  g.problem = "A stack";
+  g.start();
+  expect(g.progress()).toEqual({
+    game_id: g.gameId,
+    pair: ["Jane", "John"],
+    problem: "A stack",
+    steps: 0,
+    cycles: 0,
+    phase: "red",
+    overrides: 0,
+    back_to_red: 0,
+    finished: false,
+  });
+
+  steps(g, 2); // swap, green
+  g.backToRed();
+  g.override();
+  steps(g, 4); // swap, green, refactor, next red
+  expect(g.progress()).toMatchObject({ steps: 7, cycles: 1, phase: "red", overrides: 1, back_to_red: 1 });
+
+  g.finish();
+  expect(g.progress()).toMatchObject({ steps: 7, cycles: 2, phase: "finished", finished: true });
 });
 
 test("steps_have_no_fizzbuzz_goal", () => {

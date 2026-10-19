@@ -114,6 +114,37 @@ export function checkRules(phase, before, after) {
   return findings;
 }
 
+// Results for the tests still in the source, so a deleted or renamed test's
+// old result doesn't count. When no names can be read from the source (a
+// macro we don't parse), all results count.
+function currentResults(snapshot) {
+  const names = testNames(snapshot);
+  const tests = snapshot?.tests || [];
+  return names.size ? tests.filter((t) => names.has(t.name)) : tests;
+}
+
+export function failingTests(snapshot) {
+  return currentResults(snapshot)
+    .filter((t) => t.status === "failed")
+    .map((t) => t.name);
+}
+
+// Where the code is before a Red step:
+// "unknown"      tests in the source but no results for them yet
+// "build_failed" the latest build failed
+// "one_failing"  exactly one test fails (maybe the pair's Red test already)
+// "many_failing" more than one test fails
+// "clean"        no tests, or all pass; also when there's no helper data
+export function startState(snapshot) {
+  if (!snapshot) return "clean";
+  if (buildFailed(snapshot)) return "build_failed";
+  const hasTests = testNames(snapshot).size > 0 || (snapshot.tests || []).length > 0;
+  if (!hasTests) return "clean";
+  if (!currentResults(snapshot).length) return "unknown";
+  const failing = failingTests(snapshot).length;
+  return failing === 0 ? "clean" : failing === 1 ? "one_failing" : "many_failing";
+}
+
 // Keeps only what the rules and the coach need from the helper's data.
 export function snapshotOf(data) {
   if (!data) return null;

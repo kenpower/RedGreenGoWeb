@@ -1,6 +1,8 @@
 import {
   askCoach,
   buildRequest,
+  pairKey,
+  sendProgress,
   isCoached,
   resolveProblem,
   resetCoach,
@@ -90,6 +92,19 @@ describe("buildRequest", () => {
       rule_findings: [],
       history: [],
     });
+  });
+
+  test("identifies the pair and the game", () => {
+    const request = buildRequest({
+      phase: "red", problem: "", before: null, after: snapshot(""),
+      gameId: "g-123", players: ["Jane ", "John", ""],
+    });
+    expect(request).toMatchObject({ pair: "jane__john", game_id: "g-123" });
+  });
+
+  test("pair and game id are empty when not given", () => {
+    const request = buildRequest({ phase: "red", problem: "", before: null, after: snapshot("") });
+    expect(request).toMatchObject({ pair: "", game_id: "" });
   });
 
   test("no before fields at the start of a game", () => {
@@ -195,6 +210,83 @@ describe("askCoach", () => {
     resetCoach();
     reply({ ok: true, status: 200, json: async () => verdict });
     expect((await pending).stale).toBe(true);
+  });
+});
+
+describe("pairKey", () => {
+  test("trims, lowercases and joins the names in the order entered", () => {
+    expect(pairKey(["  Jane", "JOHN "])).toEqual("jane__john");
+  });
+
+  test("drops blank names, such as an unused third player", () => {
+    expect(pairKey(["Jane", "John", "", "   "])).toEqual("jane__john");
+  });
+
+  test("copes with missing or odd input", () => {
+    expect(pairKey(undefined)).toEqual("");
+    expect(pairKey(["Ann", null, 7])).toEqual("ann");
+  });
+});
+
+describe("sendProgress", () => {
+  const summary = {
+    game_id: "g-123",
+    pair: ["Jane", "John", ""],
+    problem: "x".repeat(150),
+    steps: 7,
+    cycles: 2,
+    phase: "green",
+    overrides: 1,
+    back_to_red: 0,
+    finished: false,
+  };
+
+  test("posts the summary with the class code, keepalive", async () => {
+    setClassCode("sd2");
+    let sent;
+    const fetchFn = async (url, options) => {
+      sent = { url, options };
+      return { ok: true, status: 200 };
+    };
+    expect(await sendProgress(summary, fetchFn)).toBe(true);
+    expect(sent.url).toEqual("http://127.0.0.1:8100/progress");
+    expect(sent.options.headers["X-Class-Code"]).toEqual("SD2");
+    expect(sent.options.keepalive).toBe(true);
+    expect(JSON.parse(sent.options.body)).toEqual({
+      game_id: "g-123",
+      pair: "jane__john",
+      problem: "x".repeat(100),
+      steps: 7,
+      cycles: 2,
+      phase: "green",
+      overrides: 1,
+      back_to_red: 0,
+      finished: false,
+    });
+  });
+
+  test("does nothing without a class code", async () => {
+    let called = false;
+    expect(await sendProgress(summary, async () => (called = true))).toBe(false);
+    expect(called).toBe(false);
+  });
+
+  test("never throws, whatever the network does", async () => {
+    setClassCode("sd2");
+    expect(await sendProgress(summary, async () => ({ ok: false, status: 500 }))).toBe(false);
+    expect(await sendProgress(summary, async () => { throw new Error("offline"); })).toBe(false);
+    expect(await sendProgress(summary, () => { throw new Error("sync"); })).toBe(false);
+  });
+
+  test("counts are whole numbers in the range the server accepts", async () => {
+    setClassCode("sd2");
+    let body;
+    await sendProgress({ ...summary, steps: -3, cycles: 2.7, overrides: undefined, back_to_red: 20000 },
+      async (url, options) => {
+        body = JSON.parse(options.body);
+        return { ok: true };
+      });
+    expect(body).toMatchObject({ steps: 0, cycles: 2, overrides: 0, back_to_red: 10000 });
   });
 });
 

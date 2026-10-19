@@ -1,4 +1,4 @@
-import { checkRules, testNames, buildFailed, snapshotOf } from "../src/rules.js";
+import { checkRules, testNames, buildFailed, snapshotOf, startState, failingTests } from "../src/rules.js";
 
 // Builds a helper snapshot: test source from the names, results as given.
 const testSource = (names) =>
@@ -206,6 +206,62 @@ describe("refactor", () => {
   test("the build fails", () => {
     const after = snap({ source: ["F.a", "F.b"], results: { "F.a": "passed", "F.b": "passed" }, build: failedBuild() });
     expect(rules(checkRules("refactor", before, after))).toEqual(["build_fails"]);
+  });
+});
+
+describe("startState", () => {
+  test("no helper data counts as clean", () => {
+    expect(startState(null)).toBe("clean");
+  });
+
+  test("no tests at all", () => {
+    expect(startState(snap({ testFile: '#include "pch.h"\n' }))).toBe("clean");
+  });
+
+  test("all tests pass", () => {
+    expect(startState(snap({ source: ["F.a", "F.b"], results: { "F.a": "passed", "F.b": "passed" } }))).toBe("clean");
+  });
+
+  test("tests in the source but no results yet", () => {
+    expect(startState(snap({ source: ["F.a"] }))).toBe("unknown");
+  });
+
+  test("only results for tests that no longer exist", () => {
+    expect(startState(snap({ source: ["F.renamed"], results: { "F.old": "failed" } }))).toBe("unknown");
+  });
+
+  test("the build fails", () => {
+    expect(startState(snap({ source: ["F.a"], results: { "F.a": "passed" }, build: failedBuild() }))).toBe("build_failed");
+  });
+
+  test("a build failure older than the last run doesn't count", () => {
+    const s = snap({ source: ["F.a"], results: { "F.a": "passed" }, build: failedBuild(5), runTime: 10 });
+    expect(startState(s)).toBe("clean");
+  });
+
+  test("exactly one failing test", () => {
+    const s = snap({ source: ["F.a", "F.b"], results: { "F.a": "passed", "F.b": "failed" } });
+    expect(startState(s)).toBe("one_failing");
+    expect(failingTests(s)).toEqual(["F.b"]);
+  });
+
+  test("several failing tests", () => {
+    const s = snap({ source: ["F.a", "F.b", "F.c"], results: { "F.a": "failed", "F.b": "failed", "F.c": "passed" } });
+    expect(startState(s)).toBe("many_failing");
+    expect(failingTests(s)).toEqual(["F.a", "F.b"]);
+  });
+
+  test("a failing result for a test that was commented out doesn't count", () => {
+    const s = snap({
+      testFile: testSource(["F.a"]) + "\n// TEST(F, b) {}",
+      results: { "F.a": "passed", "F.b": "failed" },
+    });
+    expect(startState(s)).toBe("clean");
+  });
+
+  test("results count when no test names can be read from the source", () => {
+    const s = snap({ testFile: "TYPED_TEST(F, a) {}", results: { "F/0.a": "failed" } });
+    expect(startState(s)).toBe("one_failing");
   });
 });
 

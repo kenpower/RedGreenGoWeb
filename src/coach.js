@@ -101,11 +101,23 @@ export function summariseResult(snapshot) {
   return `${failed.length} failed: ${details.join("; ")}; ${passed} passed`;
 }
 
+// Identifies a pair on the coach server, for the teacher's grading view:
+// names as entered, trimmed and lowercased, blanks dropped, e.g. "jane__john".
+export function pairKey(players) {
+  return (players || [])
+    .map((p) => (typeof p === "string" ? p.trim().toLowerCase() : ""))
+    .filter((p) => p)
+    .join("__")
+    .slice(0, 200);
+}
+
 // The POST /coach body. `before` is the snapshot at the last accepted step,
 // or null at the start of a game.
-export function buildRequest({ phase, problem, before, after, ruleFindings = [], history = [] }) {
+export function buildRequest({ phase, problem, before, after, ruleFindings = [], history = [], gameId = "", players = [] }) {
   const request = {
     phase,
+    pair: pairKey(players),
+    game_id: String(gameId || "").slice(0, 64),
     problem: problem || "",
     tests: filesOfKind(after, "test"),
     code: filesOfKind(after, "production"),
@@ -150,6 +162,39 @@ export async function askCoach(step, fetchFn = fetch) {
     error = "Can't reach the coach right now.";
   }
   return { verdict, error, stale: gen !== generation };
+}
+
+// Whole numbers in the 0..10000 range coach_server accepts.
+const count = (n) => (Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 10000) : 0);
+
+// Records the pair's progress on the coach server for the teacher's grading
+// view. Fire and forget: resolves to whether it was sent, never throws, and
+// does nothing without a class code. No helper needed.
+export async function sendProgress(summary, fetchFn = fetch) {
+  const code = getClassCode();
+  if (!code || !summary?.game_id) return false;
+  try {
+    const response = await fetchFn(coachUrl() + "/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Class-Code": code },
+      // keepalive: still delivered if the pair closes the tab right after
+      keepalive: true,
+      body: JSON.stringify({
+        game_id: String(summary.game_id).slice(0, 64),
+        pair: pairKey(summary.pair),
+        problem: (summary.problem || "").trim().slice(0, 100),
+        steps: count(summary.steps),
+        cycles: count(summary.cycles),
+        phase: summary.phase || "",
+        overrides: count(summary.overrides),
+        back_to_red: count(summary.back_to_red),
+        finished: !!summary.finished,
+      }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 // "hold": the pair stays on the step. "advice": they move on, with a
