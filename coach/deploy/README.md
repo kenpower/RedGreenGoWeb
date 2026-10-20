@@ -49,7 +49,7 @@ codes one after another.
 # single quotes round the remote command, or ssh drops the inner quotes
 ssh -t ken@compucore3.setu.ie 'rgg-coach-admin add-class SD2-2026 "Software Dev 2, 2026"'
 ssh -t ken@compucore3.setu.ie rgg-coach-admin classes
-ssh -t ken@compucore3.setu.ie rgg-coach-admin usage      # "rescues": the "Show me the code" calls among the requests
+ssh -t ken@compucore3.setu.ie rgg-coach-admin usage      # orient / look / rescue: how many of the requests were each kind
 ```
 
 Each class gets 600 requests and 2,000,000 tokens a day by default (uncached input + cache
@@ -126,6 +126,8 @@ code it keeps:
 - what they said the next test would check, and their predictions
 - the names of their tests when they finish, and their git commit messages
 - the time of each step
+- the coach's one-line summary of what the pair is building (from Orient), and any problem
+  text they type to correct it
 - the IP address each game last reported from (shown on the pair's tile, to find the PC)
 
 It stores **no code**. Students must be told this before they use a class code. Delete it

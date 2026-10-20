@@ -65,7 +65,11 @@ DEFAULT_DAILY_LIMIT = 600  # requests per class per day; a pair does ~30 steps p
 # (the shared system prompt) cost a tenth as much and aren't counted. A step
 # uses ~2-3k, so 600 steps fit; padded requests run out well before that.
 DEFAULT_DAILY_TOKENS = 2_000_000
-MAX_BODY_BYTES = 100_000  # 4 fields of MAX_TEXT plus JSON escaping
+# A Look at its largest (coach.py's limits): tests, code, tests_before, code_before and
+# test_result at 10k characters each, an 8k problem, 20 findings and 5 history notes of 500,
+# a 60-step catalogue of ~360, plus the short fields: ~95k characters. JSON escaping and
+# UTF-8 add 10-50% on code, so 200k leaves room. nginx allows 256k.
+MAX_BODY_BYTES = 200_000
 MAX_PROGRESS_BYTES = 40_000  # 10 events of 500 characters, even if every one is escaped
 MAX_TEACHER_BYTES = 40_000
 
@@ -83,9 +87,10 @@ PROGRESS_ADDED_COLUMNS = {
 }
 MAX_COUNT = 10_000
 COACH_DECISIONS = ("advance", "redo", "back_to_red")
+NON_VERDICT_MODES = {"orient", "look", "next_steps"}
 
 EVENT_KINDS = {"advance", "hold", "release", "override", "back_to_red", "intent", "prediction",
-               "hint", "smell", "commit", "finish", "rescue", "passed_first_time"}
+               "hint", "smell", "commit", "finish", "rescue", "passed_first_time", "orient"}
 EVENT_PHASES = PROGRESS_PHASES | {"finish", ""}
 MAX_EVENTS_PER_CALL = 10
 MAX_EVENTS_PER_GAME = 3_000
@@ -193,6 +198,8 @@ def db():
     columns = {r["name"] for r in con.execute("PRAGMA table_info(usage)")}
     if "rescue" not in columns:  # 1 for a "Show me the code" request, an extra coach call
         con.execute("ALTER TABLE usage ADD COLUMN rescue INTEGER NOT NULL DEFAULT 0")
+    if "mode" not in columns:  # the request's mode (orient, look, ...); NULL in older rows
+        con.execute("ALTER TABLE usage ADD COLUMN mode TEXT")
     columns = {r["name"] for r in con.execute("PRAGMA table_info(progress)")}
     for column, kind in {**PROGRESS_ADDED_COLUMNS, "ip": "TEXT NOT NULL DEFAULT ''"}.items():
         if column not in columns:
@@ -240,17 +247,20 @@ def check_class(con, code):
 def record_usage(con, code, step, usage):
     # The kata column predates kata-agnostic coaching and is left NULL.
     con.execute(
-        "INSERT INTO usage (code, day, phase, rescue, input, cache_write, cache_read, output) VALUES (?,?,?,?,?,?,?,?)",
-        (code, today(), step["phase"], int(step.get("rescue") is True), usage.input_tokens,
+        "INSERT INTO usage (code, day, phase, mode, rescue, input, cache_write, cache_read, output) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (code, today(), step["phase"], step.get("mode", "verdict"), int(step.get("rescue") is True),
+         usage.input_tokens,
          usage.cache_creation_input_tokens or 0, usage.cache_read_input_tokens or 0, usage.output_tokens),
     )
     con.commit()
 
 
 def record_verdict(con, code, step, verdict):
-    """Count the coach's verdict in the game's progress row. Older clients send no game_id."""
+    """Count the coach's verdict in the game's progress row. Older clients send no game_id.
+    Only a Done verdict counts: Orient, Look and next-steps calls guide but never hold."""
     game_id = step.get("game_id")
-    if not game_id:
+    if not game_id or step.get("mode", "verdict") in NON_VERDICT_MODES:
         return
     decision = verdict.get("decision")
     counts = {f"coach_{d}": int(decision == d) for d in COACH_DECISIONS}
@@ -704,13 +714,17 @@ def show_usage(args):
     since = (datetime.date.today() - datetime.timedelta(days=args.days - 1)).isoformat()
     con = db()
     rows = con.execute(
-        "SELECT day, code, COUNT(*) AS n, SUM(rescue) AS rescues, SUM(input) AS i, SUM(cache_write) AS w, "
-        "SUM(cache_read) AS r, SUM(output) AS o FROM usage WHERE day >= ? GROUP BY day, code ORDER BY day, code",
+        "SELECT day, code, COUNT(*) AS n, COUNT(CASE WHEN mode = 'orient' THEN 1 END) AS orients, "
+        "COUNT(CASE WHEN mode = 'look' THEN 1 END) AS looks, "
+        "SUM(rescue) AS rescues, SUM(input) AS i, SUM(cache_write) AS w, SUM(cache_read) AS r, SUM(output) AS o "
+        "FROM usage WHERE day >= ? GROUP BY day, code ORDER BY day, code",
         (since,),
     ).fetchall()
-    print("day         class        reqs rescues   input  c.write   c.read   output")
+    # reqs counts every call; orient, look and rescue are the ones of each kind among them
+    print("day         class        reqs orient  look rescue   input  c.write   c.read   output")
     for r in rows:
-        print(f"{r['day']}  {r['code']:<12} {r['n']:>4} {r['rescues']:>7} {r['i']:>7} {r['w']:>8} {r['r']:>8} {r['o']:>8}")
+        print(f"{r['day']}  {r['code']:<12} {r['n']:>4} {r['orients']:>6} {r['looks']:>5} {r['rescues']:>6} "
+              f"{r['i']:>7} {r['w']:>8} {r['r']:>8} {r['o']:>8}")
 
 
 def write_csv(rows, columns):
