@@ -71,7 +71,9 @@ state = {
     "files": [],  # [{path, kind: test|production, content, mtime}] read when results/build arrive
     "readme": None,  # {path, content} of the solution's README.md, read alongside the files
     "git": None,  # see read_git()
+    "project": None,  # {path, name}: the folder being watched, so the app can show a wrong one
 }
+VS_PROJECT_EXTENSIONS = (".sln", ".slnx", ".vcxproj")
 
 
 def read_text(path):
@@ -206,6 +208,15 @@ def read_readme(project_dir):
         "path": os.path.relpath(path, project_dir).replace("\\", "/"),
         "content": read_text(path)[:MAX_README_CHARS],
     }
+
+
+def has_vs_project(project_dir):
+    """True if a solution or C++ project file is in the folder or up to 2 levels below it."""
+    for depth in range(3):
+        pattern = os.path.join(project_dir, *["*"] * depth, "*")
+        if any(p.lower().endswith(VS_PROJECT_EXTENSIONS) for p in glob.glob(pattern)):
+            return True
+    return False
 
 
 class GitError(Exception):
@@ -399,6 +410,7 @@ def snapshot():
             "files": state["files"],
             "readme": state["readme"],
             "git": state["git"],
+            "project": state["project"],
         }
 
 
@@ -536,9 +548,12 @@ def main():
         state["files"] = read_sources(project_dir)
         state["readme"] = read_readme(project_dir)
         state["git"] = read_git(project_dir)
+        state["project"] = {"path": project_dir, "name": os.path.basename(project_dir.rstrip("\\/")) or project_dir}
         state["version"] = 1
 
     print(f"Project: {project_dir} ({len(state['files'])} source files)")
+    if not has_vs_project(project_dir):
+        print("  WARNING: No Visual Studio solution or project found here. Run the helper from your project folder.")
     if state["readme"]:
         print(f"  Problem description: {state['readme']['path']}")
     git = state["git"]
