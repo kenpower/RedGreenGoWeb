@@ -80,9 +80,13 @@
       {label}
     {:else if buildFailed}
       <span class="fail">Build failed</span>
+    {:else if !tests.length}
+      <span class="none">No test results yet</span>
+    {:else if failed}
+      <!-- failing first: it's what the pair has to act on -->
+      <span class="fail">{failed} failing</span><span class="sep">·</span><span class="pass">{passed} passing</span>
     {:else}
-      Tests: <span class="pass">✔ {passed}</span>{#if failed}
-        <span class="fail">✖ {failed}</span>{/if}
+      <span class="pass">All {passed} passing ✓</span>
     {/if}
   </button>
 
@@ -204,12 +208,26 @@
     text-shadow: 0 0 5px var(--testing-red);
   }
 
+  /* words, not ✔/✖ glyphs: "1 failing · 0 passing", "All 4 passing ✓" */
   .badge .pass {
     color: var(--coding-green);
+    text-shadow: 0 0 4px var(--coding-green);
   }
 
   .badge .fail {
     color: var(--testing-red);
+    text-shadow: 0 0 4px var(--testing-red);
+    font-weight: 600;
+  }
+
+  .badge .sep {
+    margin: 0 0.5em;
+    padding: 0;
+    color: var(--text-muted);
+  }
+
+  .badge .none {
+    color: var(--text-muted);
   }
 
   .panel {
@@ -261,7 +279,7 @@
   }
 
   .tests .stale {
-    opacity: 0.55;
+    opacity: 0.7; /* was 0.55: below AA for the name text */
   }
 
   .removedHeading {

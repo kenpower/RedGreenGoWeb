@@ -226,13 +226,15 @@
     margin: 0 0 0 2.5em;
     color: var(--glow-green);
     text-shadow: 0 0 2px var(--glow-green), 0 0 5px var(--glow-green);
-    opacity: 0.6;
+    opacity: 0.85; /* was 0.6: ~3.7:1, below AA; now ~6.5:1 */
   }
 
   .menu {
     display: flex;
     align-items: center;
-    gap: 0.5em;
+    flex-wrap: wrap;
+    gap: 0.5em 1em;
+    font-size: 1.08em; /* the badge's counts should stand out */
   }
 
   .menu button {
