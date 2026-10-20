@@ -68,8 +68,10 @@ def hint_leaks(verdict, step):
     the test being worked on is already known."""
     question = verdict["hint_question"].lower()
     context = answer_specifics(step.get("problem", ""), step.get("code", ""))
-    if step["phase"] in ("green", "refactor"):
+    # an advancing Red's hints are about the coming Green, where the new test is known
+    if step["phase"] in ("green", "refactor") or (step["phase"] == "red" and verdict["decision"] == "advance"):
         context |= {name.lower() for name in TEST_NAME.findall(step.get("tests", ""))}
+        context |= answer_specifics(step.get("tests", ""))
     return sorted(s for s in answer_specifics(verdict["driver_action"], verdict["next_test"]) - context
                   if re.search(r"(?<!\w)" + re.escape(s) + r"(?!\w)", question))
 

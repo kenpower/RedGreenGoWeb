@@ -95,7 +95,15 @@ export { currentSnapshot, staleResults };
 // fact. `live` is rules.liveStatus for the step (or null): its focus test
 // names the test, and by the time the coach is asked the game has already
 // checked the counts.
-export function expectedFor(phase, live) {
+export function expectedFor(phase, live, { novice = false } = {}) {
+  const required = requiredFor(phase, live);
+  // the first cycles: the coach adds the why, briefly
+  return required && novice ? required + " " + NOVICE : required;
+}
+
+const NOVICE = "The pair is new to TDD: give the reason in one short clause.";
+
+function requiredFor(phase, live) {
   const test = live?.focusTest;
   switch (phase) {
     case "red":

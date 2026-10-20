@@ -32,5 +32,5 @@ test_result = "All 2 tests passed"
 [expect]
 decision = ["advance"]
 advice = true
-says = ["Works", "name"]
+says = ["Works", "name", "renam"]
 max_problems = 0

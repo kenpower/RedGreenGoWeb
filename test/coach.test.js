@@ -307,6 +307,13 @@ describe("expectedFor", () => {
     expect(expectedFor("green", { focusTest: "A.two" })).toMatch(/^Green: make A\.two pass/);
   });
 
+  test("in the first cycles, asks the coach for the reason", () => {
+    expect(expectedFor("green", { focusTest: "A.two" }, { novice: true })).toMatch(
+      /The game has checked all tests pass\. The pair is new to TDD: give the reason in one short clause\.$/
+    );
+    expect(expectedFor("swap", null, { novice: true })).toEqual("");
+  });
+
   test("falls back to the general requirement", () => {
     expect(expectedFor("red", null)).toEqual("Red: one new test that fails for the right reason.");
     expect(expectedFor("refactor", null)).toMatch(/^Refactor:/);

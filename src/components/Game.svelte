@@ -9,6 +9,7 @@
     checkRules, snapshotOf, startState, failingTests, uncommittedFiles, noRepo, liveStatus, codeFirstAdvice,
   } from "../rules.js";
   import { hintFor } from "../content/hints.js";
+  import { guideFor, GUIDE_CYCLES } from "../guide.js";
 
   const dispatch = createEventDispatcher();
 
@@ -43,6 +44,8 @@
   $: live = step && snapshot ? liveStatus(step.stateName, gameState.before, snapshot) : null;
   $: liveLines = live ? (live.backToRed && !gated ? [{ text: live.backToRed, ok: false }, ...live.lines] : live.lines) : [];
   $: doneLocked = (!!live && gated && !live.goalMet) || helperMissing;
+  // cycles 1–2: numbered steps, ticked live; [] from cycle 3
+  $: guide = step ? guideFor(step.stateName, step.cycle, gameState.before, snapshot, live) : [];
   // Advice lines, never a hold: vague test names, and in the first Red, code
   // written before any test calls it. Also passed to the coach, marked as advice.
   $: liveAdvice = live
@@ -204,7 +207,9 @@
   const ask = (phase, ruleFindings) =>
     askCoach({
       phase,
-      expected: expectedFor(phase, phase === "finish" ? null : liveStatus(phase, gameState.before, snapshot)),
+      expected: expectedFor(phase, phase === "finish" ? null : liveStatus(phase, gameState.before, snapshot), {
+        novice: (step?.cycle || 1) <= GUIDE_CYCLES,
+      }),
       problem: resolveProblem(gameState.problem, $helper.data),
       before: gameState.before,
       after: snapshot,
@@ -393,6 +398,7 @@
         entryProblem={live?.entryProblem || null}
         {liveAdvice}
         {helperMissing}
+        {guide}
         on:interact={onInteract}
       />
     </div>
