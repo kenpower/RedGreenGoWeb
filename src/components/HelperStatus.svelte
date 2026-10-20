@@ -27,6 +27,9 @@
   $: tests = allTests.filter(inSource);
   $: removedTests = allTests.filter((t) => !inSource(t));
   $: latestRun = data?.run || 0;
+  // which Visual Studio project the helper is watching, e.g. "scratch_test"
+  $: project = $helper.status === "connected" ? data?.project : null;
+  $: projectName = project?.vsName || project?.name || "";
   $: failed = tests.filter((t) => t.status === "failed").length;
   $: passed = tests.filter((t) => t.status === "passed").length;
   $: buildFailed = data?.build?.status === "failed";
@@ -76,6 +79,9 @@
     on:click={() => (open = !open)}
     title={tooltip}
   >
+    {#if projectName}
+      <span class="project" title={project.path || projectName}>{projectName}</span><span class="sep">·</span>
+    {/if}
     {#if label}
       {label}
     {:else if buildFailed}
@@ -192,10 +198,22 @@
   }
 
   .badge {
+    display: inline-flex;
+    align-items: baseline;
+    max-width: calc(100vw - 32px);
     margin: 0;
     padding: 0;
     white-space: nowrap;
     cursor: pointer;
+  }
+
+  /* the project name gives way first at narrow widths */
+  .badge .project {
+    min-width: 3em;
+    max-width: 14em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-bright);
   }
 
   .badge.offline {
