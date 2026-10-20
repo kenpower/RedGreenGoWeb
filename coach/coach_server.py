@@ -53,6 +53,8 @@ import anthropic
 from coach import MODEL, BadStep, ask_coach, validate
 
 ALLOWED_ORIGINS = {"http://localhost:8080", "https://kenpower.github.io"}
+# The game page served by the students' own helper (rgg_server.py); /coach and /progress only.
+HELPER_ORIGINS = {"http://127.0.0.1:8000", "http://localhost:8000"}
 APP_URL = "https://kenpower.github.io/RedGreenGoWeb/"
 PORT = int(os.environ.get("RGG_COACH_PORT", 8100))
 DB_PATH = Path(os.environ.get("RGG_COACH_DB", Path(__file__).parent / "coach.sqlite3"))
@@ -69,7 +71,8 @@ PROGRESS_PHASES = {"red", "swap", "green", "refactor", "finished"}
 PROGRESS_COUNTS = ("steps", "cycles", "overrides", "back_to_red")
 # Added with the learning features; optional so an old cached client still works.
 PROGRESS_EXTRA_COUNTS = ("overrides_in_row", "predictions_right", "predictions_total", "intents_given",
-                         "hints_l2", "hints_l3", "smells_shown", "smells_revealed", "rescues")
+                         "hints_l2", "hints_l3", "smells_shown", "smells_revealed", "rescues",
+                         "passed_first")
 PROGRESS_ADDED_COLUMNS = {
     "held": "INTEGER NOT NULL DEFAULT 0",
     "held_since": "REAL",
@@ -80,7 +83,7 @@ MAX_COUNT = 10_000
 COACH_DECISIONS = ("advance", "redo", "back_to_red")
 
 EVENT_KINDS = {"advance", "hold", "release", "override", "back_to_red", "intent", "prediction",
-               "hint", "smell", "commit", "finish", "rescue"}
+               "hint", "smell", "commit", "finish", "rescue", "passed_first_time"}
 EVENT_PHASES = PROGRESS_PHASES | {"finish", ""}
 MAX_EVENTS_PER_CALL = 10
 MAX_EVENTS_PER_GAME = 3_000
@@ -479,7 +482,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urlsplit(self.path)
         if url.path not in routes:
             return self.send_json(404, {"error": "not found"})
-        if self.headers.get("Origin") not in ALLOWED_ORIGINS:
+        if not self.origin_allowed():
             return self.send_json(403, {"error": "origin not allowed"})
 
         max_bytes, handle = routes[url.path]
@@ -628,9 +631,13 @@ class Handler(BaseHTTPRequestHandler):
         """nginx puts the real address in X-Real-IP; without nginx (local runs) it's the socket's."""
         return (self.headers.get("X-Real-IP") or self.client_address[0]).strip()[:45]
 
+    def origin_allowed(self):
+        origin = self.headers.get("Origin")
+        return origin in ALLOWED_ORIGINS or (origin in HELPER_ORIGINS and not self.path.startswith("/teacher/"))
+
     def send_cors_headers(self):
         origin = self.headers.get("Origin")
-        if origin in ALLOWED_ORIGINS:
+        if self.origin_allowed():
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
 
@@ -722,17 +729,17 @@ def show_progress(args):
         pairs.append(p)
 
     columns = ["class", "pair", "games", "last_active", "steps", "cycles", "coach_asks", "first_time_pct",
-               "holds", "overrides", "rescues", "finished", "coach_agreed"]
+               "holds", "overrides", "rescues", "passed_first", "finished", "coach_agreed"]
     ordered = sorted(pairs, key=lambda p: (p["class"], p["pair"]))
     if args.csv:
         return write_csv(ordered, columns)
     print(f"{'class':<10} {'pair':<28} {'games':>5}  {'last active':<19} {'steps':>5} {'cycles':>6} "
-          f"{'asks':>5} {'1st ok':>6} {'holds':>5} {'overr':>5} {'rescue':>6}  finished (coach agreed)")
+          f"{'asks':>5} {'1st ok':>6} {'holds':>5} {'overr':>5} {'rescue':>6} {'kept':>4}  finished (coach agreed)")
     for p in ordered:
         pct = f"{p['first_time_pct']}%" if p["coach_asks"] else "-"
         print(f"{p['class']:<10} {p['pair']:<28} {p['games']:>5}  {p['last_active']:<19} {p['steps']:>5} "
               f"{p['cycles']:>6} {p['coach_asks']:>5} {pct:>6} {p['holds']:>5} {p['overrides']:>5} "
-              f"{p['rescues']:>6}  {p['finished']}/{p['games']} ({p['coach_agreed']})")
+              f"{p['rescues']:>6} {p['passed_first']:>4}  {p['finished']}/{p['games']} ({p['coach_agreed']})")
     if not ordered:
         print("(no progress recorded)")
 

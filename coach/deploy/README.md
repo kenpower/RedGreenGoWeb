@@ -32,6 +32,11 @@ The class-code database is at `/var/lib/rgg-coach/coach.sqlite3`. Deploys never 
 
 Check it: `curl https://compucore3.setu.ie/rgg-coach/health`.
 
+The coach accepts requests from the game on GitHub Pages, from the dev server
+(`http://localhost:8080`) and from the game page served by a student's own helper
+(`http://127.0.0.1:8000` or `http://localhost:8000`; `rgg_server.py` serves it so Chrome lets the
+page reach the helper). The helper origins can use `/coach` and `/progress` but not `/teacher/...`.
+
 ## Classes
 
 ```bash
@@ -68,6 +73,7 @@ class code to list every class.
 | steps, cycles | Done clicks that moved on; Red-Green-Refactor rounds | browser |
 | overr | times they pressed "Progress despite this advice" | browser |
 | rescue | times they asked "Show me the code" after being held 3 times on one step; a pair that keeps needing it is worth a visit | browser |
+| kept | Red tests that passed straight away and that they chose to keep (skipping Green) | browser |
 | asks | steps the coach judged | **server** |
 | 1st ok | % of those the coach let through at once (advance / asks) | **server** |
 | holds | times the coach said redo or back to Red | **server** |
