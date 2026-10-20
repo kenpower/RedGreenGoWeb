@@ -38,7 +38,7 @@ Check it: `curl https://compucore3.setu.ie/rgg-coach/health`.
 # single quotes round the remote command, or ssh drops the inner quotes
 ssh -t ken@compucore3.setu.ie 'rgg-coach-admin add-class SD2-2026 "Software Dev 2, 2026"'
 ssh -t ken@compucore3.setu.ie rgg-coach-admin classes
-ssh -t ken@compucore3.setu.ie rgg-coach-admin usage
+ssh -t ken@compucore3.setu.ie rgg-coach-admin usage      # "rescues": the "Show me the code" calls among the requests
 ```
 
 Each class gets 600 requests and 2,000,000 tokens a day by default (uncached input + cache
@@ -67,6 +67,7 @@ class code to list every class.
 | last active | last update from any of their games | server clock |
 | steps, cycles | Done clicks that moved on; Red-Green-Refactor rounds | browser |
 | overr | times they pressed "Progress despite this advice" | browser |
+| rescue | times they asked "Show me the code" after being held 3 times on one step; a pair that keeps needing it is worth a visit | browser |
 | asks | steps the coach judged | **server** |
 | 1st ok | % of those the coach let through at once (advance / asks) | **server** |
 | holds | times the coach said redo or back to Red | **server** |

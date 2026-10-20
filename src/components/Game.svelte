@@ -10,6 +10,7 @@
   } from "../rules.js";
   import { hintFor } from "../content/hints.js";
   import { guideFor, unlockAction, GUIDE_CYCLES } from "../guide.js";
+  import { rescueOffer } from "../gameState.js";
 
   const dispatch = createEventDispatcher();
 
@@ -32,6 +33,20 @@
   let likelyFinished = false;
   let finishState = "idle"; // "idle" | "asking" | "disagreed"
   let askedWith = null; // the snapshot (as JSON) the pair last asked about while held
+
+  // Stuck on one step: Done/Ask again that ended held, counted in gameState.
+  // Mirrored here (reassigning gameState would re-key the step card). Only
+  // the pair's own clicks count, not the automatic re-checks.
+  let attempts = gameState.stuckAttempts;
+  let attemptPending = false; // the current done() came from the pair's click
+  let rescue = null; // {why, code} once the coach has shown the code for this step
+  const countAttempt = () => {
+    if (!attemptPending) return;
+    attemptPending = false;
+    gameState.noteHeld();
+    attempts = gameState.stuckAttempts;
+  };
+  $: offer = step && CHECKED_PHASES.includes(step.stateName) && !rescue ? rescueOffer(attempts, isCoached($helper)) : "";
 
   $: step = gameState.getStep();
   $: snapshot = $helper.status === "connected" ? snapshotOf($helper.data) : null;
@@ -167,6 +182,8 @@
     refused = false;
     feedback = carry.feedback || "";
     feedbackWho = carry.who || "";
+    rescue = null;
+    attempts = gameState.stuckAttempts; // 0 after moving on, kept after a back to Red
     tone = carry.tone || "";
     advice = carry.advice || null;
     report();
@@ -175,9 +192,14 @@
   // Records the pair's progress on the coach server after every step change,
   // for grading. Fire and forget: sendProgress never throws, and skips
   // without a class code.
-  const report = () => sendProgress(gameState.progress());
+  const report = async () => {
+    const progress = gameState.progress();
+    // events stay queued until the server has them
+    if ((await sendProgress(progress)) && progress.events.length) gameState.ackEvents(progress.events.length);
+  };
 
   const hold = (stepVerdict, stepFindings) => {
+    countAttempt();
     held = true;
     verdict = stepVerdict;
     findings = stepFindings;
@@ -203,6 +225,7 @@
 
     if (v.decision === "redo") return hold(v, []);
     if (v.decision === "back_to_red") {
+      countAttempt(); // not progress: still stuck on the same behaviour
       nextTest = v.next_test || nextTest;
       return advance(
         {
@@ -222,8 +245,9 @@
     });
   };
 
-  const ask = (phase, ruleFindings) =>
+  const ask = (phase, ruleFindings, extra = {}) =>
     askCoach({
+      ...extra,
       phase,
       expected: expectedFor(phase, phase === "finish" ? null : liveStatus(phase, gameState.before, snapshot), {
         novice: (step?.cycle || 1) <= GUIDE_CYCLES,
@@ -316,6 +340,24 @@
     decideByCoach(phase, v);
   };
 
+  // "Show me the code": after RESCUE_AFTER held attempts, the coach shows the
+  // code for this step only. The pair types it in themselves.
+  const askRescue = async () => {
+    const phase = gameState.state.id;
+    waiting = true;
+    const findingsNow = snapshot ? checkRules(phase, gameState.before, snapshot) : [];
+    const { verdict: v, error, stale } = await ask(phase, findingsNow, { rescue: true });
+    waiting = false;
+    if (stale) return;
+    if (!v?.rescue_code) {
+      rescue = { why: error || "The coach couldn't show the code this time. Ask your teacher.", code: "" };
+      return;
+    }
+    rescue = { why: v.rescue_why || "", code: v.rescue_code };
+    gameState.noteRescue(v.rescue_why);
+    report();
+  };
+
   const finishGame = () => {
     gameState.finish();
     gameState = gameState;
@@ -360,7 +402,11 @@
           refused = true; // the start check is still holding this Red
           return;
         }
-        return done();
+        attemptPending = true; // a hold from this click counts as an attempt
+        return done().finally(() => (attemptPending = false));
+      case "rescue":
+        if (offer === "show") return askRescue();
+        return; // no coach: the button only says to ask the teacher
       case "override":
         gameState.override();
         return advance();
@@ -418,6 +464,8 @@
         {liveAdvice}
         {helperMissing}
         {guide}
+        rescueOffer={offer}
+        {rescue}
         on:interact={onInteract}
       />
     </div>

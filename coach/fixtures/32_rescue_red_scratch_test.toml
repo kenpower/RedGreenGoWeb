@@ -1,0 +1,30 @@
+description = "RESCUE, Red: the user's scratch_test, stuck three times on a test that doesn't call fizzBuzz"
+phase = "red"
+rescue = true
+problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
+rule_findings = ["TestCaseName.TestName fails, but it doesn't call any of your code. Make it call the function you're about to write."]
+tests_before = '''
+TEST(TestCaseName, TestName) {
+  EXPECT_EQ(1, 1);
+  EXPECT_TRUE(true);
+}
+'''
+code_before = ""
+tests = '''
+std::string fizzBuzz(int i) {
+  if (i % 15 == 0) return "FizzBuzz";
+  if (i % 3 == 0) return "Fizz";
+  if (i % 5 == 0) return "Buzz";
+  return std::to_string(i);
+}
+
+TEST(TestCaseName, TestName) {
+  EXPECT_TRUE(false);
+}
+'''
+code = ""
+test_result = "1 failed: TestCaseName.TestName (Value of: false. Actual: false. Expected: true); 0 passed"
+
+[expect]
+decision = ["redo"]
+rescue_mentions = ["fizzBuzz"]

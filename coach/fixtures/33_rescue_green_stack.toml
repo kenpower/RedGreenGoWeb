@@ -1,0 +1,30 @@
+description = "RESCUE, Green: stuck three times making NotEmptyAfterPush pass"
+phase = "green"
+rescue = true
+problem = "Build a Stack class for ints with push, pop, top, size and isEmpty. Popping an empty stack throws std::out_of_range."
+expected = "Green: make Stack.NotEmptyAfterPush pass with the least production code, test files unchanged. The game has checked all tests pass."
+tests_before = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+TEST(Stack, NotEmptyAfterPush) { Stack s; s.push(7); EXPECT_FALSE(s.isEmpty()); }
+'''
+code_before = '''
+class Stack {
+public:
+  bool isEmpty() const { return true; }
+};
+'''
+tests = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+TEST(Stack, NotEmptyAfterPush) { Stack s; s.push(7); EXPECT_FALSE(s.isEmpty()); }
+'''
+code = '''
+class Stack {
+public:
+  bool isEmpty() const { return true; }
+};
+'''
+test_result = "Build failed: error C2039: 'push': is not a member of 'Stack'"
+
+[expect]
+decision = ["redo"]
+rescue_mentions = ["push"]

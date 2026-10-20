@@ -186,6 +186,11 @@ describe("buildRequest", () => {
     expect(request.previous).toEqual({ phase: "green", decision: "redo", note: "Too much code." });
   });
 
+  test("rescue is sent only when asked for", () => {
+    expect(buildRequest({ phase: "red", problem: "", before: null, after: snapshot(""), rescue: true }).rescue).toBe(true);
+    expect(buildRequest({ phase: "red", problem: "", before: null, after: snapshot("") })).not.toHaveProperty("rescue");
+  });
+
   test("no previous verdict at the start of a game", () => {
     expect(buildRequest({ phase: "red", problem: "", before: null, after: snapshot("") }).previous).toBeNull();
   });
@@ -371,7 +376,21 @@ describe("sendProgress", () => {
       overrides: 1,
       back_to_red: 0,
       finished: false,
+      rescues: 0,
+      events: [],
     });
+  });
+
+  test("sends rescues and events in the server's format", async () => {
+    setClassCode("sd2");
+    let body;
+    const events = [{ t: 1760000000.7, kind: "rescue", phase: "red", cycle: 0, detail: "y".repeat(600) }];
+    await sendProgress({ ...summary, rescues: 2, events }, async (url, options) => {
+      body = JSON.parse(options.body);
+      return { ok: true };
+    });
+    expect(body.rescues).toBe(2);
+    expect(body.events).toEqual([{ t: 1760000000, kind: "rescue", phase: "red", cycle: 1, detail: "y".repeat(500) }]);
   });
 
   test("does nothing without a class code", async () => {

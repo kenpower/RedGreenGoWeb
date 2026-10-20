@@ -49,6 +49,11 @@ export const TDDPhase = {
 };
 
 export const HISTORY_LENGTH = 5; // verdicts sent back to the coach as context
+export const RESCUE_AFTER = 3; // held this many times on one step: offer to show the code
+
+// What the "stuck" button offers: "show" (ask the coach for the code),
+// "teacher" (no coach: ask your teacher), or "" (not stuck yet).
+export const rescueOffer = (attempts, coached) => (attempts < RESCUE_AFTER ? "" : coached ? "show" : "teacher");
 
 const newCycle = (index) => ({ phase: TDDPhase.RED, index, backToRed: 0 });
 
@@ -91,6 +96,9 @@ export class GameState {
       this.startChecked = r.startChecked ?? true;
       // games started before progress was recorded get an id now
       this.gameId = r.gameId || (this.started ? newGameId() : null);
+      this.stuckAttempts = r.stuckAttempts || 0;
+      this.rescues = r.rescues || 0;
+      this.pendingEvents = r.pendingEvents || [];
     } else {
       this.players = ["John", "Jane"];
       this.driver = 0;
@@ -109,6 +117,9 @@ export class GameState {
       this.history = []; // last few coach verdicts, [{phase, decision, note}]
       this.startChecked = false; // whether this Red's starting code has been checked (rules.startState)
       this.gameId = null; // set by start()
+      this.stuckAttempts = 0; // Done/Ask again that ended held, on this step (see noteHeld)
+      this.rescues = 0; // times the pair asked to be shown the code
+      this.pendingEvents = []; // events for the coach server not yet acknowledged
     }
     this.#save();
   }
@@ -153,6 +164,7 @@ export class GameState {
 
     this.state = states[this.state.next];
     this.stepNumber++;
+    this.stuckAttempts = 0; // moving on: no longer stuck
     const cycle = this.iterations[this.iteration];
 
     if (this.state.id == "red") {
@@ -190,6 +202,42 @@ export class GameState {
     if (this.finished) return;
     if (this.iterations[this.iteration]) this.iterations[this.iteration].phase = TDDPhase.COMPLETED;
     this.finished = true;
+    this.#save();
+  }
+
+  // A Done or Ask again on this step that ended held (a rule hold or a coach
+  // redo or back to Red). Kept through a back to Red, which isn't progress;
+  // reset by nextStep. At RESCUE_AFTER the pair is offered the code.
+  noteHeld() {
+    this.stuckAttempts++;
+    this.#save();
+  }
+
+  // The pair asked to be shown the code for this step.
+  noteRescue(why) {
+    this.rescues++;
+    this.addEvent("rescue", (why || "").split("\n")[0]);
+  }
+
+  // Something worth recording for the teacher; sent with the next progress
+  // report and kept until the server has it (see ackEvents).
+  addEvent(kind, detail = "") {
+    this.pendingEvents = [
+      ...this.pendingEvents,
+      {
+        t: Math.floor(Date.now() / 1000),
+        kind,
+        phase: this.finished ? "finished" : this.state.id,
+        cycle: this.iteration + 1,
+        detail: String(detail).slice(0, 500),
+      },
+    ].slice(-50); // a long offline spell keeps only the latest
+    this.#save();
+  }
+
+  // The server stored the first `count` pending events.
+  ackEvents(count) {
+    this.pendingEvents = this.pendingEvents.slice(count);
     this.#save();
   }
 
@@ -243,6 +291,8 @@ export class GameState {
     overrides: this.overrides,
     back_to_red: this.backToRedCount(),
     finished: this.finished,
+    rescues: this.rescues,
+    events: this.pendingEvents.slice(0, 10), // acknowledged with ackEvents once sent
   });
 
   #driver = () => this.players[this.driver];

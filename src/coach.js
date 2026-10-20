@@ -151,7 +151,7 @@ export function pairKey(players) {
 // The POST /coach body. `before` is the snapshot at the last accepted step,
 // or null at the start of a game.
 export function buildRequest({
-  phase, problem, before, after, ruleFindings = [], history = [], gameId = "", players = [], expected = "",
+  phase, problem, before, after, ruleFindings = [], history = [], gameId = "", players = [], expected = "", rescue = false,
 }) {
   // Stale results go first: until the pair runs the tests again, nothing
   // else the coach could say about the results can be trusted.
@@ -180,6 +180,8 @@ export function buildRequest({
     request.tests_before = filesOfKind(before, "test");
     request.code_before = filesOfKind(before, "production");
   }
+  // stuck on this step: the one request where the coach may show code
+  if (rescue) request.rescue = true;
   return request;
 }
 
@@ -236,6 +238,14 @@ export async function sendProgress(summary, fetchFn = fetch) {
         overrides: count(summary.overrides),
         back_to_red: count(summary.back_to_red),
         finished: !!summary.finished,
+        rescues: count(summary.rescues),
+        events: (summary.events || []).slice(0, 10).map((e) => ({
+          t: Math.floor(Number(e.t) || 0),
+          kind: String(e.kind || ""),
+          phase: String(e.phase || ""),
+          cycle: Math.max(1, count(e.cycle)),
+          detail: String(e.detail || "").slice(0, 500),
+        })),
       }),
     });
     return response.ok;

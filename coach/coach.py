@@ -17,6 +17,7 @@ A step is a dict:
     expected       what the game requires of this step, already checked by it (optional)
     previous       the verdict on the step before: {phase, decision, note} or None (optional)
     pair, game_id  who and which game, for coach_server's records (optional)
+    rescue         true when the pair is stuck and asked to see the code (optional)
 """
 import json
 from functools import lru_cache
@@ -51,10 +52,14 @@ SCHEMA = {
         "hint_kind": {"type": "string"},
         "smell_question": {"type": "string"},
         "smell_detail": {"type": "string"},
+        # Only when the request has rescue: true; "" otherwise.
+        "rescue_code": {"type": "string"},
+        "rescue_why": {"type": "string"},
     },
     "required": ["decision", "rule_problems", "note", "driver_action", "navigator_action",
                  "next_test", "likely_finished", "advice", "intent_match",
-                 "hint_question", "hint_kind", "smell_question", "smell_detail"],
+                 "hint_question", "hint_kind", "smell_question", "smell_detail",
+                 "rescue_code", "rescue_why"],
     "additionalProperties": False,
 }
 
@@ -105,6 +110,10 @@ def validate(step):
         raise BadStep(f"expected must be text of at most {MAX_EXPECTED} characters")
     if step.get("previous") is not None and not _verdict_entry(step["previous"]):
         raise BadStep("previous needs a phase, a decision and a short note")
+    if not isinstance(step.get("rescue", False), bool):
+        raise BadStep("rescue must be true or false")
+    if step.get("rescue") and step["phase"] == "finish":
+        raise BadStep("rescue is for a Red, Green or Refactor step")
 
 
 def _verdict_entry(h):
@@ -124,6 +133,9 @@ def build_user(step):
         f"Step just finished: {phase.upper()}" if phase != "finish"
         else "The pair says they are FINISHED with the problem.",
     ]
+    if step.get("rescue"):
+        parts.append("RESCUE: the pair has been held on this step three times and asked to be shown the code. "
+                     "Fill rescue_code and rescue_why for this step only.")
     if step.get("expected", "").strip():
         parts.append(f"What the game requires of this step (already checked by the game, treat as true):\n"
                      f"{step['expected'].strip()}")

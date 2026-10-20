@@ -66,6 +66,11 @@
   // Cycles 1–2: a checklist [{text, short, why?, done, reason?, current?}],
   // ticked live; [] after. done true ✓, false ✖ (reason says why), null not yet.
   export let guide = [];
+  // Stuck (held 3 times on this step): "show" offers [Show me the code],
+  // "teacher" (no coach) says to ask the teacher, "" nothing. Once the coach
+  // has answered, rescue is {why, code}.
+  export let rescueOffer = "";
+  export let rescue = null;
 
   const DONE_HINT = {
     red: "Click Done when exactly one test is failing (red)",
@@ -279,6 +284,20 @@
           </div>
         {/each}
 
+        <h3 class="todoHeading">What to do now</h3>
+        <dl class="todo" class:heldTodo={held && !start}>
+          {#if (start || instructions).driver}
+            <dt style="--player-col: var(--player-{step.driverNumber})">Driver</dt>
+            <dd>{(start || instructions).driver}</dd>
+          {/if}
+          {#if (start || instructions).navigator}
+            <dt style="--player-col: var(--player-{step.navigatorNumbers[0]})">
+              Navigator{step.navigators.length > 1 ? "s" : ""}
+            </dt>
+            <dd>{(start || instructions).navigator}</dd>
+          {/if}
+        </dl>
+
         {#if !start && guide.length}
           <h3 class="todoHeading">Step by step</h3>
           <ul class="guide">
@@ -310,20 +329,6 @@
         {#each liveAdvice as text}
           <p class="advice"><span class="adviceLabel">Advice:</span> {text}</p>
         {/each}
-
-        <h3 class="todoHeading" class:compactHeading={guide.length > 0}>What to do now</h3>
-        <dl class="todo" class:heldTodo={held && !start} class:compact={guide.length > 0}>
-          {#if (start || instructions).driver}
-            <dt style="--player-col: var(--player-{step.driverNumber})">Driver</dt>
-            <dd>{(start || instructions).driver}</dd>
-          {/if}
-          {#if (start || instructions).navigator}
-            <dt style="--player-col: var(--player-{step.navigatorNumbers[0]})">
-              Navigator{step.navigators.length > 1 ? "s" : ""}
-            </dt>
-            <dd>{(start || instructions).navigator}</dd>
-          {/if}
-        </dl>
 
         {#if !held && !start}
           <div><HintLabel text={hint} /></div>
@@ -375,6 +380,27 @@
           >
         {/if}
       </div>
+
+      {#if rescueOffer && isCycleStep}
+        <div class="rescueRow">
+          {#if rescueOffer == "show"}
+            <button disabled={busy || helperMissing} on:click={() => interact("rescue")}>Show me the code</button>
+          {:else}
+            <!-- no coach: nothing to fetch; it only points them to their teacher -->
+            <button class="quiet">Stuck? Ask your teacher</button>
+          {/if}
+        </div>
+      {/if}
+      {#if rescue && isCycleStep}
+        <div class="rescueBox">
+          <p class="marker">The code for this step</p>
+          {#if rescue.why}<p>{rescue.why}</p>{/if}
+          {#if rescue.code}
+            <pre class="rescueCode">{rescue.code}</pre>
+            <p class="muted">Type it in yourself, then run the tests.</p>
+          {/if}
+        </div>
+      {/if}
 
       {#if canFinish}
         <div class="finish" class:likely={likelyFinished || finishState == "disagreed"}>
@@ -584,14 +610,6 @@
     color: var(--amber);
   }
 
-  .compactHeading {
-    margin-top: 0.4em;
-    font-size: 0.9em;
-  }
-
-  .todo.compact {
-    font-size: 0.9em;
-  }
 
   .doneHint {
     margin: 0.6em 0 0 0;
@@ -715,6 +733,32 @@
   .override,
   .quiet {
     color: var(--text-muted);
+  }
+
+  .rescueRow {
+    margin-top: 0.6em;
+    text-align: center;
+  }
+
+  .rescueBox {
+    margin: 0.8em 0 0 0;
+    padding: 0.3em 0.8em;
+    border: 1px solid var(--star);
+    background: var(--bg-panel);
+    --box-col: var(--star);
+  }
+
+  .rescueBox p {
+    margin: 0.3em 0;
+  }
+
+  .rescueCode {
+    margin: 0.4em 0;
+    white-space: pre;
+    overflow-x: auto;
+    font-size: 0.9em;
+    color: var(--text-bright);
+    user-select: text;
   }
 
   .finish {

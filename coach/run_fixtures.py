@@ -36,6 +36,7 @@ SECOND_TASK = re.compile(
     r";|\b(and|then)\s+(then\s+)?(make|write|add|run|fix|change|check|uncomment|comment|remove|rename|delete|"
     r"create|commit|build|keep|put|move|replace|extract|split|undo|revert|go|start|update|set)\b",
     re.IGNORECASE)
+MAX_RESCUE_LINES = 15
 MAX_ACTION_WORDS = 24  # the "new function, say X, ...: the compile error counts as Red" move needs a few more
 
 
@@ -142,6 +143,21 @@ def score(verdict, expect, step):
         checks.append(("actions", has_actions, "present" if has_actions else "missing"))
     leaks = [f for f in SHOWN if CODE_LIKE.search(verdict[f])]
     checks.append(("no_code", not leaks, ", ".join(leaks) or "none"))
+
+    # Rescue: code only in rescue_code, only when asked, short, for this step.
+    code = verdict["rescue_code"].strip()
+    if step.get("rescue"):
+        lines = [l for l in code.splitlines() if l.strip()]
+        plausible = bool(code) and len(lines) <= MAX_RESCUE_LINES and "{" in code and "#include" not in code
+        if phase == "red":
+            plausible = plausible and "TEST(" in code and code.count("TEST(") == 1
+        checks.append(("rescue_code", plausible, f"{len(lines)} lines" if code else '""'))
+        checks.append(("rescue_why", bool(verdict["rescue_why"].strip()), verdict["rescue_why"] or '""'))
+        if "rescue_mentions" in expect:
+            hit = any(w in code for w in expect["rescue_mentions"])
+            checks.append(("rescue_mentions", hit, code.splitlines()[0] if code else '""'))
+    else:
+        checks.append(("no_rescue_code", not code and not verdict["rescue_why"].strip(), code[:40] or "none"))
     return checks
 
 
@@ -180,7 +196,8 @@ def main(prefixes):
         print(f"{'PASS' if ok else 'FAIL'} {f.stem}  ({description})")
         for field, field_ok, got in checks:
             if field_ok and field in ("actions", "no_code", "single_action", "hint_is_question", "hint_no_answer",
-                                      "hint_kind_vague", "smell_complete", "smell_only_on_green"):
+                                      "hint_kind_vague", "smell_complete", "smell_only_on_green",
+                                      "no_rescue_code"):
                 continue  # only worth a line when they fail
             mark = "  " if field_ok else "!!"
             print(f"   {mark} {field}: {got}   expected {expect.get(field, 'ok')}")
@@ -195,6 +212,9 @@ def main(prefixes):
             print(f"      smell:     {verdict['smell_question']}  /  {verdict['smell_detail']}")
         if verdict["intent_match"] != "n_a":
             print(f"      intent:    {verdict['intent_match']}")
+        if verdict["rescue_code"]:
+            print(f"      rescue:    {verdict['rescue_why']}")
+            print("\n".join("        | " + line for line in verdict["rescue_code"].splitlines()))
         print()
         results.append({"fixture": f.stem, "pass": ok, "checks": checks, "verdict": verdict})
 

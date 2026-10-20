@@ -69,7 +69,7 @@ PROGRESS_PHASES = {"red", "swap", "green", "refactor", "finished"}
 PROGRESS_COUNTS = ("steps", "cycles", "overrides", "back_to_red")
 # Added with the learning features; optional so an old cached client still works.
 PROGRESS_EXTRA_COUNTS = ("overrides_in_row", "predictions_right", "predictions_total", "intents_given",
-                         "hints_l2", "hints_l3", "smells_shown", "smells_revealed")
+                         "hints_l2", "hints_l3", "smells_shown", "smells_revealed", "rescues")
 PROGRESS_ADDED_COLUMNS = {
     "held": "INTEGER NOT NULL DEFAULT 0",
     "held_since": "REAL",
@@ -80,7 +80,7 @@ MAX_COUNT = 10_000
 COACH_DECISIONS = ("advance", "redo", "back_to_red")
 
 EVENT_KINDS = {"advance", "hold", "release", "override", "back_to_red", "intent", "prediction",
-               "hint", "smell", "commit", "finish"}
+               "hint", "smell", "commit", "finish", "rescue"}
 EVENT_PHASES = PROGRESS_PHASES | {"finish", ""}
 MAX_EVENTS_PER_CALL = 10
 MAX_EVENTS_PER_GAME = 3_000
@@ -185,6 +185,9 @@ def db():
         con.execute(f"ALTER TABLE classes ADD COLUMN daily_tokens INTEGER NOT NULL DEFAULT {DEFAULT_DAILY_TOKENS}")
     if "teacher_key" not in columns:  # databases created before the teacher view
         con.execute("ALTER TABLE classes ADD COLUMN teacher_key TEXT")
+    columns = {r["name"] for r in con.execute("PRAGMA table_info(usage)")}
+    if "rescue" not in columns:  # 1 for a "Show me the code" request, an extra coach call
+        con.execute("ALTER TABLE usage ADD COLUMN rescue INTEGER NOT NULL DEFAULT 0")
     columns = {r["name"] for r in con.execute("PRAGMA table_info(progress)")}
     for column, kind in {**PROGRESS_ADDED_COLUMNS, "ip": "TEXT NOT NULL DEFAULT ''"}.items():
         if column not in columns:
@@ -232,8 +235,8 @@ def check_class(con, code):
 def record_usage(con, code, step, usage):
     # The kata column predates kata-agnostic coaching and is left NULL.
     con.execute(
-        "INSERT INTO usage (code, day, phase, input, cache_write, cache_read, output) VALUES (?,?,?,?,?,?,?)",
-        (code, today(), step["phase"], usage.input_tokens,
+        "INSERT INTO usage (code, day, phase, rescue, input, cache_write, cache_read, output) VALUES (?,?,?,?,?,?,?,?)",
+        (code, today(), step["phase"], int(step.get("rescue") is True), usage.input_tokens,
          usage.cache_creation_input_tokens or 0, usage.cache_read_input_tokens or 0, usage.output_tokens),
     )
     con.commit()
@@ -677,13 +680,13 @@ def show_usage(args):
     since = (datetime.date.today() - datetime.timedelta(days=args.days - 1)).isoformat()
     con = db()
     rows = con.execute(
-        "SELECT day, code, COUNT(*) AS n, SUM(input) AS i, SUM(cache_write) AS w, SUM(cache_read) AS r, "
-        "SUM(output) AS o FROM usage WHERE day >= ? GROUP BY day, code ORDER BY day, code",
+        "SELECT day, code, COUNT(*) AS n, SUM(rescue) AS rescues, SUM(input) AS i, SUM(cache_write) AS w, "
+        "SUM(cache_read) AS r, SUM(output) AS o FROM usage WHERE day >= ? GROUP BY day, code ORDER BY day, code",
         (since,),
     ).fetchall()
-    print("day         class        reqs   input  c.write   c.read   output")
+    print("day         class        reqs rescues   input  c.write   c.read   output")
     for r in rows:
-        print(f"{r['day']}  {r['code']:<12} {r['n']:>4} {r['i']:>7} {r['w']:>8} {r['r']:>8} {r['o']:>8}")
+        print(f"{r['day']}  {r['code']:<12} {r['n']:>4} {r['rescues']:>7} {r['i']:>7} {r['w']:>8} {r['r']:>8} {r['o']:>8}")
 
 
 def write_csv(rows, columns):
@@ -719,17 +722,17 @@ def show_progress(args):
         pairs.append(p)
 
     columns = ["class", "pair", "games", "last_active", "steps", "cycles", "coach_asks", "first_time_pct",
-               "holds", "overrides", "finished", "coach_agreed"]
+               "holds", "overrides", "rescues", "finished", "coach_agreed"]
     ordered = sorted(pairs, key=lambda p: (p["class"], p["pair"]))
     if args.csv:
         return write_csv(ordered, columns)
     print(f"{'class':<10} {'pair':<28} {'games':>5}  {'last active':<19} {'steps':>5} {'cycles':>6} "
-          f"{'asks':>5} {'1st ok':>6} {'holds':>5} {'overr':>5}  finished (coach agreed)")
+          f"{'asks':>5} {'1st ok':>6} {'holds':>5} {'overr':>5} {'rescue':>6}  finished (coach agreed)")
     for p in ordered:
         pct = f"{p['first_time_pct']}%" if p["coach_asks"] else "-"
         print(f"{p['class']:<10} {p['pair']:<28} {p['games']:>5}  {p['last_active']:<19} {p['steps']:>5} "
-              f"{p['cycles']:>6} {p['coach_asks']:>5} {pct:>6} {p['holds']:>5} {p['overrides']:>5}  "
-              f"{p['finished']}/{p['games']} ({p['coach_agreed']})")
+              f"{p['cycles']:>6} {p['coach_asks']:>5} {pct:>6} {p['holds']:>5} {p['overrides']:>5} "
+              f"{p['rescues']:>6}  {p['finished']}/{p['games']} ({p['coach_agreed']})")
     if not ordered:
         print("(no progress recorded)")
 

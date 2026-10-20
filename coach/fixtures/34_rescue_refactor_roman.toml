@@ -1,0 +1,35 @@
+description = "RESCUE, Refactor: stuck three times on the repeated hard-coded branches"
+phase = "refactor"
+rescue = true
+problem = 'Write toRoman(int n) that converts a whole number from 1 to 3999 to Roman numerals, e.g. 4 gives "IV" and 1994 gives "MCMXCIV".'
+expected = "Refactor: tidy the production code without changing what it does, same tests, all passing. The game has checked the tests."
+tests_before = '''
+TEST(Roman, OneIsI) { EXPECT_EQ("I", toRoman(1)); }
+TEST(Roman, TwoIsII) { EXPECT_EQ("II", toRoman(2)); }
+TEST(Roman, ThreeIsIII) { EXPECT_EQ("III", toRoman(3)); }
+'''
+code_before = '''
+std::string toRoman(int n) {
+  if (n == 1) return "I";
+  if (n == 2) return "II";
+  if (n == 3) return "III";
+  return "I";
+}
+'''
+tests = '''
+TEST(Roman, OneIsI) { EXPECT_EQ("I", toRoman(1)); }
+TEST(Roman, TwoIsII) { EXPECT_EQ("II", toRoman(2)); }
+TEST(Roman, ThreeIsIII) { EXPECT_EQ("III", toRoman(3)); }
+'''
+code = '''
+std::string toRoman(int n) {
+  if (n == 1) return "I";
+  if (n == 2) return "II";
+  if (n == 3) return "III";
+  return "I";
+}
+'''
+test_result = "All 3 tests passed"
+
+[expect]
+rescue_mentions = ["toRoman"]

@@ -1,4 +1,4 @@
-import { GameState, states, TDDPhase, HISTORY_LENGTH, newGameId } from "../src/gameState";
+import { GameState, states, TDDPhase, HISTORY_LENGTH, newGameId, rescueOffer, RESCUE_AFTER } from "../src/gameState";
 import { hintFor, phaseHints } from "../src/content/hints.js";
 
 class LocalStorageMock {
@@ -452,6 +452,60 @@ test("snapshots_are_saved", () => {
   expect(recovered.redBefore).toEqual(snapshot);
 });
 
+test("stuck_attempts_count_holds_on_one_step_and_reset_when_the_step_advances", () => {
+  let g = new GameState();
+  g.start();
+  g.noteHeld();
+  g.noteHeld();
+  expect(g.stuckAttempts).toBe(2);
+  expect(GameState.recoverSavedGame().stuckAttempts).toBe(2);
+  g.nextStep(); // Red done: swap
+  expect(g.stuckAttempts).toBe(0);
+});
+
+test("a_back_to_red_is_not_progress_so_the_attempts_carry_on", () => {
+  let g = new GameState();
+  g.start();
+  steps(g, 2); // green
+  g.noteHeld();
+  g.backToRed();
+  g.noteHeld();
+  g.noteHeld();
+  expect(g.stuckAttempts).toBe(3);
+});
+
+test("the_code_is_offered_after_three_attempts_and_only_with_the_coach", () => {
+  expect(rescueOffer(2, true)).toBe("");
+  expect(rescueOffer(RESCUE_AFTER, true)).toBe("show");
+  expect(rescueOffer(RESCUE_AFTER + 2, true)).toBe("show");
+  // coach off: no code to fetch, just a pointer to the teacher
+  expect(rescueOffer(RESCUE_AFTER, false)).toBe("teacher");
+  expect(rescueOffer(0, false)).toBe("");
+});
+
+test("rescues_are_counted_and_sent_as_events_until_acknowledged", () => {
+  let g = new GameState();
+  g.start();
+  g.noteRescue("This test calls fizzBuzz with 1.\nMore detail.");
+  const p = g.progress();
+  expect(p.rescues).toBe(1);
+  expect(p.events).toHaveLength(1);
+  expect(p.events[0]).toMatchObject({ kind: "rescue", phase: "red", cycle: 1, detail: "This test calls fizzBuzz with 1." });
+  expect(Number.isInteger(p.events[0].t)).toBe(true);
+  expect(GameState.recoverSavedGame().pendingEvents).toHaveLength(1); // survives a reload unsent
+  g.ackEvents(1);
+  expect(g.progress().events).toEqual([]);
+});
+
+test("progress_sends_at_most_ten_events_at_a_time", () => {
+  let g = new GameState();
+  g.start();
+  for (let i = 0; i < 12; i++) g.addEvent("hint", String(i));
+  expect(g.progress().events.map((e) => e.detail)).toEqual(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]);
+  g.ackEvents(10);
+  expect(g.progress().events.map((e) => e.detail)).toEqual(["10", "11"]);
+});
+
 test("the_red_baseline_is_taken_once_per_red_even_if_the_start_turns_clean_again", () => {
   let g = new GameState();
   g.start();
@@ -543,6 +597,8 @@ test("progress_summarises_the_game", () => {
     overrides: 0,
     back_to_red: 0,
     finished: false,
+    rescues: 0,
+    events: [],
   });
 
   steps(g, 2); // swap, green
