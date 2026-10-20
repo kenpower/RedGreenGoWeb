@@ -30,3 +30,5 @@ test_result = "All 2 tests passed"
 [expect]
 decision = ["advance"]
 max_problems = 0
+# good test names: no comment on them
+not_says = ["rename the test", "better name for the test", "NewStackIsEmpty to", "NotEmptyAfterPush to"]

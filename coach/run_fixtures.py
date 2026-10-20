@@ -100,6 +100,14 @@ def score(verdict, expect, step):
         checks.append(("driver_avoids", not found, ", ".join(found) or "none"))
     checks.append(("single_action", single_action(verdict["driver_action"]), verdict["driver_action"] or '""'))
 
+    # Anything the pair reads (note and both actions) must / mustn't mention these.
+    shown = " ".join(verdict[f] for f in ("note", "driver_action", "navigator_action")).lower()
+    if "says" in expect:
+        checks.append(("says", any(w.lower() in shown for w in expect["says"]), verdict["note"]))
+    if "not_says" in expect:
+        found = [w for w in expect["not_says"] if w.lower() in shown]
+        checks.append(("not_says", not found, ", ".join(found) or "none"))
+
     if "intent_match" in expect:
         checks.append(("intent_match", verdict["intent_match"] in expect["intent_match"], verdict["intent_match"]))
 

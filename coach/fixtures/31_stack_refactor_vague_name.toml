@@ -1,0 +1,36 @@
+description = "Stack: a clean Refactor, but one test is called Works (advise a better name, don't hold)"
+phase = "refactor"
+problem = "Build a Stack class for ints with push, pop, top, size and isEmpty. Popping an empty stack throws std::out_of_range."
+expected = "Refactor: tidy the production code without changing what it does, same tests, all passing. The game has checked the tests."
+rule_findings = ["Advice (not a broken rule): Rename Stack.Works to say what it checks."]
+tests_before = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+TEST(Stack, Works) { Stack s; s.push(7); EXPECT_FALSE(s.isEmpty()); }
+'''
+code_before = '''
+class Stack {
+  bool e = true;
+public:
+  bool isEmpty() const { return e; }
+  void push(int) { e = false; }
+};
+'''
+tests = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+TEST(Stack, Works) { Stack s; s.push(7); EXPECT_FALSE(s.isEmpty()); }
+'''
+code = '''
+class Stack {
+  bool empty = true;
+public:
+  bool isEmpty() const { return empty; }
+  void push(int) { empty = false; }
+};
+'''
+test_result = "All 2 tests passed"
+
+[expect]
+decision = ["advance"]
+advice = true
+says = ["Works", "name"]
+max_problems = 0

@@ -5,7 +5,9 @@
   import { createEventDispatcher, tick } from "svelte";
   import { helper, refreshHelper } from "../helper.js";
   import { isCoached, askCoach, resolveProblem, toneOf, shouldShow, sendProgress, expectedFor } from "../coach.js";
-  import { checkRules, snapshotOf, startState, failingTests, uncommittedFiles, noRepo, liveStatus } from "../rules.js";
+  import {
+    checkRules, snapshotOf, startState, failingTests, uncommittedFiles, noRepo, liveStatus, codeFirstAdvice,
+  } from "../rules.js";
   import { hintFor } from "../content/hints.js";
 
   const dispatch = createEventDispatcher();
@@ -40,7 +42,33 @@
   $: gated = gameState.enforceRules || isCoached($helper);
   $: live = step && snapshot ? liveStatus(step.stateName, gameState.before, snapshot) : null;
   $: liveLines = live ? (live.backToRed && !gated ? [{ text: live.backToRed, ok: false }, ...live.lines] : live.lines) : [];
-  $: doneLocked = !!live && gated && !live.goalMet;
+  $: doneLocked = (!!live && gated && !live.goalMet) || helperMissing;
+  // Advice lines, never a hold: vague test names, and in the first Red, code
+  // written before any test calls it. Also passed to the coach, marked as advice.
+  $: liveAdvice = live
+    ? [...(step.stateName === "red" && step.cycle === 1 ? codeFirstAdvice(snapshot) : []), ...live.advice]
+    : [];
+
+  // The steps need the helper: without it there is nothing to check, so Red,
+  // Green and Refactor wait for it (Swap doesn't). They carry on by themselves
+  // once it reconnects.
+  const HELPER_MISSING = "Helper disconnected: start rgg_server.py in your project folder to carry on";
+  $: helperMissing = !!step && step.stateName !== "swap" && $helper.status !== "connected";
+
+  // Done never refuses silently: say what's still missing, kept up to date
+  // from the live lines until the goal is met or the step changes.
+  let refused = false;
+  $: firstUnmet = live?.lines.find((l) => l.ok !== true)?.text || "";
+  $: notYet = refused && !helperMissing
+    ? shownStartState
+      ? "Not yet: sort out the check above first"
+      : firstUnmet
+        ? "Not yet: " + firstUnmet
+        : ""
+    : "";
+  $: if (refused && live?.goalMet && !shownStartState) refused = false;
+  $: shownFeedback = helperMissing ? HELPER_MISSING : notYet || feedback;
+  $: shownTone = helperMissing || notYet ? "red" : tone;
 
   // Entering Green with nothing failing means Red never had a failing test:
   // back to Red automatically (same driver, counted as a back to Red).
@@ -74,8 +102,7 @@
 
   const clearStart = () => {
     commitWarning = requireCommit ? [] : uncommittedFiles(snapshot);
-    gameState.setBaseline(snapshot);
-    gameState.markStartChecked();
+    gameState.takeBaseline(snapshot); // once per Red: a later "clean" never re-takes it
     startChecked = true;
     freshStart = false;
   };
@@ -123,6 +150,7 @@
     findings = [];
     askedWith = null;
     finishState = "idle";
+    refused = false;
     feedback = carry.feedback || "";
     tone = carry.tone || "";
     advice = carry.advice || null;
@@ -180,7 +208,8 @@
       problem: resolveProblem(gameState.problem, $helper.data),
       before: gameState.before,
       after: snapshot,
-      ruleFindings: ruleMessages(ruleFindings),
+      // advice goes along marked as such: the coach may mention it, never hold on it
+      ruleFindings: [...ruleMessages(ruleFindings), ...liveAdvice.map((a) => "Advice (not a broken rule): " + a)],
       history: gameState.history,
       gameId: gameState.gameId,
       players: gameState.players,
@@ -240,7 +269,10 @@
     await refreshSnapshot();
     // the live goal, again with the fresh data: Done is locked until it's met
     const status = snapshot ? liveStatus(phase, gameState.before, snapshot) : null;
-    if (gated && status && !status.goalMet) return;
+    if (gated && status && !status.goalMet) {
+      refused = true; // shows "Not yet: …"
+      return;
+    }
     const stepFindings = checkRules(phase, gameState.before, snapshot);
     if (isHardHold(phase, stepFindings)) {
       hardHold = true;
@@ -291,6 +323,8 @@
 
   const onInteract = (event) => {
     if (waiting) return;
+    // without the helper only Swap carries on; the feedback line says why
+    if (helperMissing) return;
     switch (event.detail) {
       case "useExisting":
         return useExisting();
@@ -299,7 +333,10 @@
         return;
       case "done":
       case "askAgain":
-        if (shownStartState) return; // the start check is still holding this Red
+        if (shownStartState) {
+          refused = true; // the start check is still holding this Red
+          return;
+        }
         return done();
       case "override":
         gameState.override();
@@ -335,8 +372,8 @@
         {hint}
         {waiting}
         {held}
-        {tone}
-        {feedback}
+        tone={shownTone}
+        feedback={shownFeedback}
         {findings}
         coach={verdict}
         {canAskAgain}
@@ -354,6 +391,8 @@
         {doneLocked}
         amberLive={!gated}
         entryProblem={live?.entryProblem || null}
+        {liveAdvice}
+        {helperMissing}
         on:interact={onInteract}
       />
     </div>

@@ -22,6 +22,74 @@ export function testNames(snapshot) {
   return names;
 }
 
+// The text of the { } block that starts after `from` (braces in strings are rare
+// enough in test code to ignore). To the end when it never closes.
+function blockAt(src, from) {
+  const open = src.indexOf("{", from);
+  if (open < 0) return src.slice(from);
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}" && --depth === 0) return src.slice(from, i + 1);
+  }
+  return src.slice(from);
+}
+
+// Each test's source, from its TEST macro to the end of its body, comments
+// stripped and whitespace squashed, so an edit to a test shows as a change.
+export function testBodies(snapshot) {
+  const bodies = {};
+  for (const file of snapshot?.files || []) {
+    if (file.kind !== "test") continue;
+    const src = stripComments(file.content || "");
+    for (const m of src.matchAll(TEST_MACRO)) bodies[`${m[1]}.${m[2]}`] = blockAt(src, m.index).replace(/\s+/g, " ").trim();
+  }
+  return bodies;
+}
+
+// Visual Studio's GoogleTest template test: a project with only this has no real tests yet.
+export const isPlaceholderTest = (name) => name === "TestCaseName.TestName";
+
+const VAGUE_TEST =
+  /^(?:test_?\d*|testname|mytest\d*|newtest\d*|foo|bar|baz|works|it|check\d*|example\d*|sample\d*|temp|tmp|untitled\d*|t\d*)$/i;
+
+// A name that doesn't say what the test checks: the template, Test1, MyTest,
+// Foo, Works, or anything under 3 characters.
+export function isVagueTestName(name) {
+  const test = name.split(".").pop();
+  return isPlaceholderTest(name) || test.length < 3 || VAGUE_TEST.test(test);
+}
+
+const GTEST_WORDS = /\b(?:EXPECT|ASSERT)_\w+\b|\b(?:true|false|nullptr|NULL)\b/g;
+const LITERALS = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b\d[\w.]*\b/g;
+
+// Whether a test body uses anything but gtest macros and literals, i.e. calls
+// some of the pair's code. EXPECT_TRUE(false) or EXPECT_EQ(1, 1) doesn't.
+export function callsCode(body) {
+  const inner = body.slice(body.indexOf("{") + 1); // skip the TEST(Suite, Name) header
+  return /[A-Za-z_]\w*/.test(inner.replace(LITERALS, " ").replace(GTEST_WORDS, " "));
+}
+
+const FUNC_DEF = /(?:[\w>*&]\s+|[*&])(\w+)\s*\([^;{}()]*\)\s*(?:const\s*)?(?:noexcept\s*)?(?:override\s*)?\{/g;
+const NOT_FUNCS = new Set(["if", "for", "while", "switch", "catch", "return", "else", "do", "sizeof", "main"]);
+
+// Functions defined anywhere in the source (the test files too, outside the
+// TEST blocks) that no test mentions: code written before its test.
+export function untestedFunctions(snapshot) {
+  const defined = new Set();
+  let testText = "";
+  for (const file of snapshot?.files || []) {
+    let src = stripComments(file.content || "");
+    if (file.kind === "test") {
+      const blocks = [...src.matchAll(TEST_MACRO)].map((m) => blockAt(src, m.index));
+      testText += blocks.join("\n");
+      for (const block of blocks) src = src.replace(block, " ");
+    }
+    for (const m of src.matchAll(FUNC_DEF)) if (!NOT_FUNCS.has(m[1])) defined.add(m[1]);
+  }
+  return [...defined].filter((name) => !new RegExp(`\\b${name}\\b`).test(testText));
+}
+
 // The latest build failed and is newer than the latest test run, so the
 // test results are out of date.
 export function buildFailed(snapshot) {
@@ -68,6 +136,47 @@ function oneFailing(failing, findings) {
   });
 }
 
+// Which test is this Red's test: a new test name, or an existing test that
+// passed when Red began and whose body has changed since (e.g. VS's template
+// test edited to fail). When the baseline's only tests are templates, there
+// are no real tests yet, so a template test that changed or fails counts as new.
+// Returns {name, how: "new" | "edited"} or {problem: {rule, message}}.
+export function pickRedTest(before, now) {
+  const oldAll = testNames(before);
+  const templatesOnly = oldAll.size > 0 && [...oldAll].every(isPlaceholderTest);
+  const old = templatesOnly ? new Set() : oldAll;
+  const was = results(before);
+  const ran = results(now);
+  const oldBodies = testBodies(before);
+  const newBodies = testBodies(now);
+  const changed = (name) => oldBodies[name] !== newBodies[name];
+  const names = [...testNames(now)];
+
+  const added = names.filter(
+    (n) => !old.has(n) && !(templatesOnly && oldAll.has(n) && !changed(n) && ran[n] !== "failed")
+  );
+  if (added.length > 1)
+    return {
+      names: added,
+      problem: { rule: "several_new_tests", message: `Only one new test at a time: ${added.join(", ")} are all new.` },
+    };
+  if (added.length === 1) return { name: added[0], how: "new" };
+
+  const edited = names.filter((n) => old.has(n) && was[n] === "passed" && changed(n));
+  const editedRed = edited.filter((n) => buildFailed(now) || ran[n] === "failed");
+  if (editedRed.length > 1)
+    return {
+      names: editedRed,
+      problem: { rule: "several_new_tests", message: `Only one test at a time: ${editedRed.join(", ")} all changed and fail.` },
+    };
+  if (editedRed.length === 1) return { name: editedRed[0], how: "edited" };
+  if (edited.length) return { name: edited[0], how: "edited" }; // changed, still passing
+  return { problem: { rule: "no_new_test", message: "Write one new test before moving on." } };
+}
+
+const noCodeMessage = (name) =>
+  `${name} fails, but it doesn't call any of your code. Make it call the function you're about to write.`;
+
 function checkRed(before, after, findings) {
   if (!before) {
     // no baseline (the helper connected mid-game): only check that something is red
@@ -76,17 +185,16 @@ function checkRed(before, after, findings) {
     oneFailing(failingTests(after), findings);
     return;
   }
-  const old = testNames(before);
-  const added = [...testNames(after)].filter((name) => !old.has(name));
-  if (added.length === 0) {
-    findings.push({ rule: "no_new_test", message: "Write one new test before moving on." });
+  const pick = pickRedTest(before, after);
+  if (pick.problem) {
+    findings.push(pick.problem);
     return;
   }
-  if (added.length > 1) {
-    findings.push({ rule: "several_new_tests", message: `Only one new test at a time: ${added.join(", ")} are all new.` });
+  const name = pick.name;
+  if (!callsCode(testBodies(after)[name] || "")) {
+    findings.push({ rule: "no_code_called", message: noCodeMessage(name) });
     return;
   }
-  const name = added[0];
   if (buildFailed(after)) {
     // a compile error counts as the one red, unless an older test was
     // already failing in the last run
@@ -100,7 +208,13 @@ function checkRed(before, after, findings) {
     return;
   }
   if (now[name] !== "failed")
-    findings.push({ rule: "new_test_passes", message: `${name} already passes. A new test should fail first.` });
+    findings.push({
+      rule: "new_test_passes",
+      message:
+        pick.how === "edited"
+          ? `${name} changed but still passes. Red's test should fail first.`
+          : `${name} already passes. A new test should fail first.`,
+    });
 
   const was = results(before);
   const broken = Object.keys(was).filter((t) => t !== name && was[t] === "passed" && now[t] === "failed");
@@ -171,6 +285,10 @@ export function startState(snapshot, { requireCommit = true } = {}) {
   if (requireCommit && uncommittedFiles(snapshot).length) return "uncommitted";
   const hasTests = testNames(snapshot).size > 0 || (snapshot.tests || []).length > 0;
   if (!hasTests) return "clean";
+  // only VS's template test: no real tests yet, whatever its result (the
+  // pair may already have edited it into their first Red test)
+  const names = [...testNames(snapshot)];
+  if (names.length && names.every(isPlaceholderTest)) return "clean";
   if (!currentResults(snapshot).length) return "unknown";
   const failing = failingTests(snapshot).length;
   return failing === 0 ? "clean" : failing === 1 ? "one_failing" : "many_failing";
@@ -227,31 +345,60 @@ export function liveStatus(phase, before, now) {
   if (!check || !now) return null;
   const status = { entryOk: true, entryProblem: null, focusTest: null, backToRed: null, lines: [], ...check(before, now) };
   status.goalMet = status.lines.length > 0 && status.lines.every((l) => l.ok === true);
+  status.advice = phase === "green" ? [] : nameAdvice(now, status.focusTest);
   return status;
+}
+
+// Advice only, never a hold: tests whose names don't say what they check
+// (at most two, and not the Red test, whose live line already says so).
+export function nameAdvice(snapshot, except = null) {
+  return [...testNames(snapshot)]
+    .filter((name) => name !== except && isVagueTestName(name))
+    .slice(0, 2)
+    .map((name) => `Rename ${name} to say what it checks.`);
+}
+
+// Advice only: functions written before any test calls them.
+export function codeFirstAdvice(snapshot) {
+  return untestedFunctions(snapshot)
+    .slice(0, 2)
+    .map((name) => `${name} was written before any test. In TDD the test comes first; consider deleting it and letting the tests drive it.`);
 }
 
 function liveRed(before, now) {
   if (!before) return { lines: [{ text: "Write one new test that fails", ok: false }] };
-  const old = testNames(before);
-  const added = [...testNames(now)].filter((name) => !old.has(name));
-  if (added.length === 0) return { lines: [{ text: "No new test yet: write one test that fails", ok: false }] };
-  if (added.length > 1)
-    return { lines: [{ text: `${added.length} new tests (${list(added)}): keep one, comment out the others`, ok: false }] };
+  const pick = pickRedTest(before, now);
+  if (pick.problem?.rule === "no_new_test") {
+    // say exactly why: a failing test that was already failing, or none failing
+    const failing = failingTests(now);
+    const text = failing.length
+      ? `${failing[0]} fails, but it hasn't changed since this Red began: change it, or write a new test`
+      : buildFailed(now)
+        ? "The build fails, but no test is new or changed since this Red began"
+        : "No test is failing yet: write one new test (or change one) so that it fails";
+    return { lines: [{ text, ok: false }] };
+  }
+  if (pick.problem)
+    return { lines: [{ text: `${pick.names.length} new tests (${list(pick.names)}): keep one, comment out the others`, ok: false }] };
 
-  const name = added[0];
+  const name = pick.name;
+  // the template's name says nothing: ask for a better one as they go
+  const rename = isVagueTestName(name) ? " (rename it to say what it checks)" : "";
+  const label = pick.how === "edited" ? name : `New test ${name}`;
   const lines = [];
   const ran = results(now);
   if (buildFailed(now)) {
-    lines.push({ text: `New test ${name}: doesn't compile yet ✓ (that counts as failing)`, ok: true });
+    lines.push({ text: `${label}: doesn't compile yet ✓ (that counts as failing)${rename}`, ok: true });
   } else if (changedSinceRun(now)) {
     lines.push(RUN_AGAIN);
   } else if (!(name in ran)) {
-    lines.push({ text: `New test ${name} hasn't run yet: run the tests`, ok: null });
+    lines.push({ text: `${label} hasn't run yet: run the tests`, ok: null });
   } else if (ran[name] === "failed") {
-    lines.push({ text: `New test ${name}: failing ✓`, ok: true });
+    lines.push({ text: pick.how === "edited" ? `${name} now fails ✓${rename}` : `New test ${name}: failing ✓${rename}`, ok: true });
   } else {
-    lines.push({ text: `New test ${name} passes: make it fail for the right reason`, ok: false });
+    lines.push({ text: `${label} passes: make it fail for the right reason`, ok: false });
   }
+  if (!callsCode(testBodies(now)[name] || "")) lines.push({ text: noCodeMessage(name), ok: false });
   const was = results(before);
   const broken = failingTests(now).filter((t) => t !== name && was[t] === "passed");
   const others = failingTests(now).filter((t) => t !== name && !broken.includes(t));

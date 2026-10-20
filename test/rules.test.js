@@ -2,6 +2,13 @@ import {
   checkRules,
   liveStatus,
   changedSinceRun,
+  pickRedTest,
+  callsCode,
+  isVagueTestName,
+  untestedFunctions,
+  codeFirstAdvice,
+  nameAdvice,
+  testBodies,
   testNames,
   buildFailed,
   snapshotOf,
@@ -13,7 +20,7 @@ import {
 
 // Builds a helper snapshot: test source from the names, results as given.
 const testSource = (names) =>
-  '#include "pch.h"\n' + names.map((n) => n.split(".")).map(([s, t]) => `TEST(${s}, ${t}) {\n  EXPECT_EQ(1, 1);\n}\n`).join("\n");
+  '#include "pch.h"\n' + names.map((n) => n.split(".")).map(([s, t]) => `TEST(${s}, ${t}) {\n  EXPECT_EQ(1, f());\n}\n`).join("\n");
 
 function snap({ source = [], results = {}, build = null, runTime = 10, code = "int f() { return 1; }", testFile, git } = {}) {
   return {
@@ -431,8 +438,39 @@ describe("liveStatus", () => {
   describe("red", () => {
     test("no new test yet", () => {
       const s = liveStatus("red", base, base);
-      expect(lines(s)).toEqual([["No new test yet: write one test that fails", false]]);
+      expect(lines(s)).toEqual([["No test is failing yet: write one new test (or change one) so that it fails", false]]);
       expect(s.goalMet).toBe(false);
+    });
+
+    test("a test failing since before this Red began says so", () => {
+      const failingStart = snap({ source: ["A.one"], results: { "A.one": "failed" } });
+      expect(lines(liveStatus("red", failingStart, failingStart))).toEqual([
+        ["A.one fails, but it hasn't changed since this Red began: change it, or write a new test", false],
+      ]);
+    });
+
+    test("the user's toggling: pass → fail → pass → fail on the same test, baseline pinned at the start", () => {
+      const PASSING = "TEST(TestCaseName, TestName) {\n  EXPECT_EQ(\"1\", fizzBuzz(1));\n}\n";
+      const FAILING = "TEST(TestCaseName, TestName) {\n  EXPECT_EQ(\"2\", fizzBuzz(1));\n}\n";
+      const at = (testFile, status) => snap({ testFile, results: { "TestCaseName.TestName": status } });
+      // a real (non-template) baseline: the same name, passing, at the start of this Red
+      const RENAMED = (body) => body.replace("TestCaseName, TestName", "FizzBuzz, OneGivesOne");
+      const baseline = snap({ testFile: RENAMED(PASSING), results: { "FizzBuzz.OneGivesOne": "passed" } });
+      const steps = [
+        [RENAMED(FAILING), "failed", true],
+        [RENAMED(PASSING), "passed", false],
+        [RENAMED(FAILING), "failed", true],
+      ];
+      for (const [file, status, met] of steps) {
+        const now = snap({ testFile: file, results: { "FizzBuzz.OneGivesOne": status } });
+        expect(liveStatus("red", baseline, now).goalMet).toBe(met);
+        expect(checkRules("red", baseline, now).length === 0).toBe(met);
+      }
+      // and with VS's template test as the baseline
+      const templateBase = at(PASSING, "passed");
+      expect(liveStatus("red", templateBase, at(FAILING, "failed")).goalMet).toBe(true);
+      expect(liveStatus("red", templateBase, at(PASSING, "passed")).goalMet).toBe(false);
+      expect(liveStatus("red", templateBase, at(FAILING, "failed")).goalMet).toBe(true);
     });
 
     test("only production code added (the user's placeholder game): still no new test", () => {
@@ -576,6 +614,128 @@ describe("liveStatus", () => {
       const failing = snap({ source: ["A.one"], results: { "A.one": "failed" } });
       expect(liveStatus("refactor", failing, failing).entryProblem.kind).toEqual("failing");
     });
+  });
+});
+
+describe("edited tests and the VS template", () => {
+  const PLACEHOLDER = "TEST(TestCaseName, TestName) {\n  EXPECT_EQ(1, 1);\n  EXPECT_TRUE(true);\n}\n";
+  const fileSnap = (testFile, results, extra = {}) => snap({ testFile, results, ...extra });
+
+  test("a fresh VS project (template test only) starts clean, even if the template already fails", () => {
+    expect(startState(fileSnap(PLACEHOLDER, { "TestCaseName.TestName": "passed" }))).toEqual("clean");
+    expect(startState(fileSnap(PLACEHOLDER, { "TestCaseName.TestName": "failed" }))).toEqual("clean");
+  });
+
+  test("the template edited to call the code and fail is this Red's test", () => {
+    const before = fileSnap(PLACEHOLDER, { "TestCaseName.TestName": "passed" });
+    const now = fileSnap('TEST(TestCaseName, TestName) {\n  EXPECT_EQ("1", fizzBuzz(1));\n}\n', { "TestCaseName.TestName": "failed" });
+    expect(pickRedTest(before, now)).toEqual({ name: "TestCaseName.TestName", how: "new" });
+    expect(checkRules("red", before, now)).toEqual([]);
+    const live = liveStatus("red", before, now);
+    expect(live.goalMet).toBe(true);
+    expect(live.lines[0].text).toEqual("New test TestCaseName.TestName: failing ✓ (rename it to say what it checks)");
+  });
+
+  test("an existing real test, edited and now failing, is this Red's test", () => {
+    const before = snap({ source: ["Calc.Sum"], results: { "Calc.Sum": "passed" } });
+    const now = snap({ testFile: "TEST(Calc, Sum) {\n  EXPECT_EQ(3, f());\n}\n", results: { "Calc.Sum": "failed" } });
+    expect(pickRedTest(before, now)).toEqual({ name: "Calc.Sum", how: "edited" });
+    expect(liveStatus("red", before, now).lines).toEqual([{ text: "Calc.Sum now fails ✓", ok: true }]);
+  });
+
+  test("an edited test that still passes isn't enough", () => {
+    const before = snap({ source: ["Calc.Sum"], results: { "Calc.Sum": "passed" } });
+    const now = snap({ testFile: "TEST(Calc, Sum) {\n  EXPECT_EQ(1, f()); // checked\n  EXPECT_TRUE(f() > 0);\n}\n", results: { "Calc.Sum": "passed" } });
+    expect(rules(checkRules("red", before, now))).toEqual(["new_test_passes"]);
+    expect(liveStatus("red", before, now).lines).toEqual([{ text: "Calc.Sum passes: make it fail for the right reason", ok: false }]);
+  });
+
+  test("an unchanged test that now fails doesn't count as the Red test", () => {
+    const before = snap({ source: ["Calc.Sum"], results: { "Calc.Sum": "passed" } });
+    const now = snap({ source: ["Calc.Sum"], results: { "Calc.Sum": "failed" } });
+    expect(rules(checkRules("red", before, now))).toEqual(["no_new_test"]);
+    expect(liveStatus("red", before, now).goalMet).toBe(false);
+  });
+
+  test("the user's scratch_test: code first, then the template edited to fail without calling it", () => {
+    const testFile =
+      'std::string fizzBuzz(int i) {\n  if (i % 15 == 0) return "FizzBuzz";\n  return std::to_string(i);\n}\n\n' +
+      "TEST(TestCaseName, TestName) {\n  EXPECT_TRUE(false);\n}\n";
+    const before = fileSnap(PLACEHOLDER, { "TestCaseName.TestName": "passed" }, { code: "" });
+    const now = fileSnap(testFile, { "TestCaseName.TestName": "failed" }, { code: "" });
+    expect(rules(checkRules("red", before, now))).toEqual(["no_code_called"]);
+    expect(checkRules("red", before, now)[0].message).toEqual(
+      "TestCaseName.TestName fails, but it doesn't call any of your code. Make it call the function you're about to write."
+    );
+    const live = liveStatus("red", before, now);
+    expect(live.goalMet).toBe(false);
+    expect(live.lines.map((l) => l.ok)).toEqual([true, false]);
+    expect(codeFirstAdvice(now)).toEqual([
+      "fizzBuzz was written before any test. In TDD the test comes first; consider deleting it and letting the tests drive it.",
+    ]);
+  });
+});
+
+describe("callsCode", () => {
+  const body = (inside) => `TEST(A, b) { ${inside} }`;
+
+  test("literals and gtest macros only: doesn't call any code", () => {
+    for (const inside of ["EXPECT_TRUE(false);", "EXPECT_EQ(1, 1);", 'ASSERT_FALSE(true); EXPECT_EQ("a", "a");', "EXPECT_EQ(nullptr, nullptr);"])
+      expect(callsCode(body(inside))).toBe(false);
+  });
+
+  test("anything else is the pair's code", () => {
+    for (const inside of ['EXPECT_EQ("1", fizzBuzz(1));', "Stack s; EXPECT_TRUE(s.isEmpty());", "EXPECT_THROW(add(\"-1\"), std::invalid_argument);"])
+      expect(callsCode(body(inside))).toBe(true);
+  });
+});
+
+describe("untestedFunctions", () => {
+  test("functions no test mentions, from production and test files alike", () => {
+    const s = snap({
+      testFile: "int helper(int x) { return x; }\nTEST(A, one) { EXPECT_EQ(1, f()); }\n",
+      code: "int f() { return 1; }\nbool isOdd(int n) { if (n % 2) { return true; } return false; }\n",
+    });
+    expect(untestedFunctions(s).sort()).toEqual(["helper", "isOdd"]);
+  });
+
+  test("a method a test calls is tested", () => {
+    const s = snap({
+      testFile: "TEST(Stack, empty) { Stack s; EXPECT_TRUE(s.isEmpty()); }\n",
+      code: "class Stack {\npublic:\n  bool isEmpty() const { return true; }\n};\n",
+    });
+    expect(untestedFunctions(s)).toEqual([]);
+  });
+});
+
+describe("test names", () => {
+  test("vague names", () => {
+    for (const name of ["TestCaseName.TestName", "A.Test1", "A.MyTest", "A.Test", "A.Foo", "A.Works", "A.ok", "Stack.t2"])
+      expect(isVagueTestName(name)).toBe(true);
+  });
+
+  test("names that say what they check", () => {
+    for (const name of ["Stack.NewStackIsEmpty", "Roman.OneIsI", "Calc.EmptyIsZero", "FizzBuzz.Returns1For1"])
+      expect(isVagueTestName(name)).toBe(false);
+  });
+
+  test("advice for vague names, but not the Red test (its line says so)", () => {
+    const s = snap({ source: ["A.Test1", "A.Foo", "A.Works", "A.SumOfTwo"], results: {} });
+    expect(nameAdvice(s, "A.Foo")).toEqual(["Rename A.Test1 to say what it checks.", "Rename A.Works to say what it checks."]);
+  });
+
+  test("live advice on Red and Refactor, never on the goal", () => {
+    const s = snap({ source: ["A.Test1"], results: { "A.Test1": "passed" } });
+    const live = liveStatus("refactor", s, s);
+    expect(live.advice).toEqual(["Rename A.Test1 to say what it checks."]);
+    expect(live.goalMet).toBe(true);
+    expect(liveStatus("green", s, s).advice).toEqual([]);
+  });
+
+  test("test bodies change with an edit, not with whitespace or comments", () => {
+    const a = snap({ testFile: "TEST(A, b) {\n  EXPECT_EQ(1, f());\n}\n" });
+    const b = snap({ testFile: "TEST(A, b) {   EXPECT_EQ(1, f()); // note\n}\n" });
+    expect(testBodies(a)).toEqual(testBodies(b));
   });
 });
 

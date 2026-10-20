@@ -1,0 +1,25 @@
+description = "FizzBuzz: a good first Red written in VS's template test, still called TestCaseName.TestName (advise a better name, don't hold)"
+phase = "red"
+problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
+expected = "Red: one new test, TestCaseName.TestName, that fails for the right reason. The game has checked it is the only new test and that it fails."
+rule_findings = ["Advice (not a broken rule): Rename TestCaseName.TestName to say what it checks."]
+tests_before = '''
+TEST(TestCaseName, TestName) {
+  EXPECT_EQ(1, 1);
+  EXPECT_TRUE(true);
+}
+'''
+code_before = ""
+tests = '''
+TEST(TestCaseName, TestName) {
+  EXPECT_EQ("1", fizzBuzz(1));
+}
+'''
+code = ""
+test_result = "Build failed: error C3861: 'fizzBuzz': identifier not found"
+
+[expect]
+decision = ["advance"]
+advice = true
+says = ["name"]
+max_problems = 0

@@ -203,10 +203,16 @@ export class GameState {
     this.#save();
   }
 
-  // The code as a Red starts, once the start check has passed.
-  setBaseline(snapshot) {
+  // The code as a Red starts: taken ONCE, when this Red's start check first
+  // passes, and never again while the same Red is live, even if the live
+  // start state flips back to clean (say the pair makes their test pass
+  // again). Returns whether it was taken now.
+  takeBaseline(snapshot) {
+    if (this.startChecked) return false;
     this.before = this.redBefore = snapshot;
+    this.startChecked = true;
     this.#save();
+    return true;
   }
 
   markStartChecked() {

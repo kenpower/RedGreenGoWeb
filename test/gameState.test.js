@@ -399,7 +399,7 @@ test("back_to_red_is_ignored_on_red_and_swap", () => {
 test("back_to_red_restores_the_snapshot_from_before_the_red", () => {
   let g = new GameState();
   g.start();
-  g.setBaseline("start");
+  g.takeBaseline("start");
   g.setBefore("after red");
   steps(g, 2); // green
   g.setBefore("after green");
@@ -446,10 +446,23 @@ test("snapshots_are_saved", () => {
   let g = new GameState();
   g.start();
   const snapshot = { tests: [{ name: "A.b", status: "failed" }], build: null, runTime: 1, files: [] };
-  g.setBaseline(snapshot);
+  g.takeBaseline(snapshot);
   const recovered = GameState.recoverSavedGame();
   expect(recovered.before).toEqual(snapshot);
   expect(recovered.redBefore).toEqual(snapshot);
+});
+
+test("the_red_baseline_is_taken_once_per_red_even_if_the_start_turns_clean_again", () => {
+  let g = new GameState();
+  g.start();
+  expect(g.takeBaseline("passing at the start")).toBe(true);
+  // the pair makes their test fail, then pass again: the start check sees
+  // "clean" again, but the baseline stays the one from the start of this Red
+  expect(g.takeBaseline("passing again")).toBe(false);
+  expect(g.before).toBe("passing at the start");
+  expect(GameState.recoverSavedGame().redBefore).toBe("passing at the start");
+  steps(g, 4); // swap, green, refactor, the next red
+  expect(g.takeBaseline("next red")).toBe(true);
 });
 
 test("start_check_is_due_at_each_red", () => {
