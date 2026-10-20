@@ -47,6 +47,37 @@
   export let noRepo = false;
   // git is missing or failing on this machine: not the pair's fault, so no tip
   $: gitError = $helper.data?.git?.error;
+  // who the feedback line is from: "Coach", or "" for the game's own notes
+  // ("Not yet: …", "Helper disconnected…", the automatic back to Red)
+  export let feedbackWho = "";
+
+  // Live steps (rules.liveStatus, computed by Game on every helper update):
+  // lines [{text, ok}] (ok true = met, false = not yet, null = waiting),
+  // the test this step is about, and whether Done may be clicked.
+  export let liveLines = [];
+  export let focusTest = null;
+  export let goalMet = false;
+  export let doneLocked = false;
+  // the rules aren't enforced and there's no coach: unmet lines are warnings
+  export let amberLive = false;
+  export let entryProblem = null; // {kind, message}, e.g. Refactor entered with failing tests
+  export let liveAdvice = []; // never a hold: vague test names, code written before its test
+  export let helperMissing = false; // Red/Green/Refactor wait for the helper
+  // Cycles 1–2: numbered steps [{text, why?, done}], ticked live; [] after
+  export let guide = [];
+
+  const DONE_HINT = {
+    red: "Click Done when exactly one test is failing (red)",
+    green: "Click Done when all tests pass (green)",
+    refactor: "Click Done when the code is tidier and all tests still pass",
+  };
+  const DONE_MET = { red: "Done: our one test fails ✓", green: "Done: all tests pass ✓", refactor: "Done: still green ✓" };
+  // the live Done: what's still missing while locked, the label once met
+  $: liveDone = isCycleStep && (liveLines.length > 0 || helperMissing);
+  $: lockReason = helperMissing ? "Waiting for the helper" : liveLines.find((l) => l.ok !== true)?.text || "";
+  $: doneLabel = liveDone ? (goalMet && !doneLocked ? DONE_MET[step.stateName] : "Done") : step.buttonText;
+  // the first guide step not yet ticked is the one to do now
+  $: currentGuide = guide.findIndex((g) => g.done !== true);
 
   // What the start card says for each state. `box` picks the box colour,
   // `wait` is what the game is waiting to see before carrying on.
@@ -132,7 +163,7 @@
   // the held marker names) comes first, otherwise the first finding.
   $: firstFinding = findings.find((f) => f.rule == "one_failing") || findings[0];
   $: reason = heldByCoach ? coach.rule_problems?.[0] : firstFinding?.message;
-  $: canFinish = step.stateName == "refactor" && !held && !waiting;
+  $: canFinish = step.stateName == "refactor" && !held && !waiting && !helperMissing;
 
   //TODO move into game
   function scrollIntoView() {
@@ -157,8 +188,11 @@
   >
     <p class="title aoc-heading">{step.title}</p>
 
-    {#if feedback && !held}
-      <p class="feedback tone-{tone}"><span class="who">Coach:</span> {feedback}</p>
+    {#if feedback && (!held || helperMissing)}
+      <p class="feedback tone-{tone}" class:banner={!feedbackWho}>
+        {#if feedbackWho}<span class="who">{feedbackWho}:</span>{/if}
+        {feedback}
+      </p>
     {/if}
 
     {#if start}
@@ -188,6 +222,13 @@
       </div>
     {/if}
 
+    {#if entryProblem && !start && !held}
+      <div class="warnBox">
+        <p class="marker">Heads up</p>
+        <p>{entryProblem.message}</p>
+      </div>
+    {/if}
+
     {#if commitWarning && !held}
       <div class="warnBox">
         <p class="marker">Heads up: commit first (you can carry on)</p>
@@ -204,6 +245,7 @@
           <Icon icon="swap" size="40px" />
           <p class="handoverText">Hand the keyboard to {step.driver}</p>
           <p>{step.bodyText}</p>
+          {#if guide[0]?.why}<p class="why">{guide[0].why}</p>{/if}
         </div>
       {:else}
         <div class="driverBanner" style="--player-col: var(--player-{step.driverNumber})">
@@ -217,8 +259,30 @@
           </div>
         {/each}
 
-        <h3 class="todoHeading">What to do now</h3>
-        <dl class="todo" class:heldTodo={held && !start}>
+        {#if !start && guide.length}
+          <h3 class="todoHeading">Step by step</h3>
+          <ol class="guide">
+            {#each guide as item, i}
+              <li class:current={i === currentGuide} class:ticked={item.done === true} class:wrong={item.done === false}>
+                <span class="tick" aria-hidden="true">{item.done === true ? "✓" : item.done === false ? "✗" : ""}</span>
+                {item.text}
+                {#if item.why}<span class="why">{item.why}</span>{/if}
+              </li>
+            {/each}
+          </ol>
+        {:else if !start && liveLines.length}
+          <ul class="live" class:amberLive title={focusTest ? `This step is about ${focusTest}` : ""}>
+            {#each liveLines as line}
+              <li class="ok-{line.ok}">{line.text}</li>
+            {/each}
+          </ul>
+        {/if}
+        {#each liveAdvice as text}
+          <p class="advice"><span class="adviceLabel">Advice:</span> {text}</p>
+        {/each}
+
+        <h3 class="todoHeading" class:compactHeading={guide.length > 0}>What to do now</h3>
+        <dl class="todo" class:heldTodo={held && !start} class:compact={guide.length > 0}>
           {#if (start || instructions).driver}
             <dt style="--player-col: var(--player-{step.driverNumber})">Driver</dt>
             <dd>{(start || instructions).driver}</dd>
@@ -245,26 +309,35 @@
         {/if}
       {/if}
 
+      {#if liveDone && !start && !held && !waiting}
+        <p class="doneHint" class:locked={doneLocked}>{doneLocked ? lockReason : DONE_HINT[step.stateName]}</p>
+      {/if}
       <div class="actions">
         {#if start?.ask}
-          <button on:click={() => interact("useExisting")}>Yes, use it</button>
-          <button class="override" on:click={() => interact("startFresh")}>No, start fresh</button>
+          <button disabled={helperMissing} on:click={() => interact("useExisting")}>Yes, use it</button>
+          <button class="override" disabled={helperMissing} on:click={() => interact("startFresh")}
+            >No, start fresh</button
+          >
         {:else if start}
           <p class="muted">{start.wait}<WaitingDots /></p>
         {:else if waiting}
           <button disabled>Waiting for the coach<WaitingDots /></button>
         {:else if held}
           <button
-            disabled={!canAskAgain || busy}
+            disabled={!canAskAgain || busy || helperMissing}
             title={canAskAgain ? "" : "Change your code first"}
             on:click={() => interact("askAgain")}
             >{heldByCoach ? "Ask the coach again" : "Check again"}</button
           >
-          <button class="override" disabled={busy} on:click={() => interact("override")}
+          <button class="override" disabled={busy || helperMissing} on:click={() => interact("override")}
             >Progress despite this advice</button
           >
         {:else}
-          <button disabled={busy} on:click={() => interact("done")}>{step.buttonText}</button>
+          <button
+            class:ready={liveDone && goalMet && !doneLocked}
+            disabled={busy || (isCycleStep && doneLocked)}
+            on:click={() => interact("done")}>{doneLabel}</button
+          >
         {/if}
       </div>
 
@@ -340,6 +413,127 @@
 
   .tone-green {
     --tone-col: var(--coding-green);
+  }
+
+  /* the game's own notes ("Not yet: …", helper disconnected, back to Red) */
+  .feedback.banner {
+    border-left-width: 3px;
+    color: var(--tone-col, var(--text-color));
+  }
+
+  /* live lines: ✓ green, not yet red (amber when the rules are off), waiting muted */
+  .live {
+    list-style: none;
+    margin: 0.6em 0;
+    padding: 0;
+  }
+
+  .live li {
+    margin: 0.2em 0;
+    padding-left: 1.2em;
+    text-indent: -1.2em;
+    overflow-wrap: anywhere;
+  }
+
+  .live li::before {
+    content: "·";
+    display: inline-block;
+    width: 1.2em;
+    text-indent: 0;
+  }
+
+  .live .ok-true {
+    color: var(--coding-green);
+  }
+
+  .live .ok-false {
+    color: var(--testing-red);
+  }
+
+  .live.amberLive .ok-false {
+    color: var(--amber);
+  }
+
+  .live .ok-null {
+    color: var(--text-muted);
+  }
+
+  /* cycles 1–2: the numbered guide */
+  .guide {
+    margin: 0.3em 0 0.6em 0;
+    padding-left: 1.8em;
+  }
+
+  .guide li {
+    margin: 0.3em 0;
+    overflow-wrap: anywhere;
+  }
+
+  .guide li.current {
+    color: var(--text-bright);
+    text-shadow: 0 0 4px var(--phase-col);
+  }
+
+  .guide li.ticked {
+    color: var(--text-muted);
+  }
+
+  .guide .tick {
+    display: inline-block;
+    min-width: 1em;
+    padding-left: 0;
+    color: var(--coding-green);
+    text-shadow: none;
+  }
+
+  .guide li.wrong .tick {
+    color: var(--testing-red);
+  }
+
+  .why {
+    display: block;
+    padding-left: 0;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    text-shadow: none;
+  }
+
+  .advice {
+    margin: 0.3em 0;
+    padding-left: 0.6em;
+    border-left: 2px solid var(--amber);
+    font-size: 0.9em;
+    overflow-wrap: anywhere;
+  }
+
+  .adviceLabel {
+    padding-left: 0;
+    color: var(--amber);
+  }
+
+  .compactHeading {
+    margin-top: 0.4em;
+    font-size: 0.9em;
+  }
+
+  .todo.compact {
+    font-size: 0.9em;
+  }
+
+  .doneHint {
+    margin: 0.6em 0 0 0;
+    text-align: center;
+    font-size: 0.9em;
+    color: var(--text-muted);
+  }
+
+  .doneHint.locked::before {
+    content: "Not yet: ";
+  }
+
+  button.ready {
+    color: var(--star);
+    text-shadow: 0 0 5px var(--star);
   }
 
   .heldBox,

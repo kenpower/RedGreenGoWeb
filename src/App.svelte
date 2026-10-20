@@ -5,7 +5,7 @@
   import { GameState } from "./gameState";
   import { fly } from "svelte/transition";
   import HelperStatus from "./components/HelperStatus.svelte";
-  import { helper, startHelper, resetHelper } from "./helper.js";
+  import { helper, startHelper, resetHelper, enableHelper } from "./helper.js";
   import { testNames } from "./rules.js";
   import { startCoach, resetCoach, getClassCode, setClassCode } from "./coach.js";
 
@@ -32,6 +32,10 @@
     $helper.status === "connected" &&
     testNames($helper.data).size > 0 &&
     !($helper.data.run > 0 || $helper.data.tests?.length);
+  // The game checks every step against the pair's code, so it needs the helper.
+  $: helperConnected = $helper.status === "connected";
+  // Copied next to the bundle by rollup.config.js
+  const HELPER_URL = "build/rgg_server.py";
 
   const startGame = () => {
     if (thirdPlayer) gameState.players[2] = thirdPlayer;
@@ -169,13 +173,25 @@
         </p>
 
         <div class="startRow">
-          <button id="startBtn" disabled={needsTestRun} on:click={startGame}
+          <button id="startBtn" disabled={!helperConnected || needsTestRun} on:click={startGame}
             >Start Game</button
           >
-          {#if needsTestRun}
+          {#if !helperConnected}
+            <span class="hint">Run <code>python rgg_server.py</code> in your project folder to start</span>
+          {:else if needsTestRun}
             <span class="hint">Run your tests in Visual Studio's Test Explorer first</span>
           {/if}
         </div>
+        {#if !helperConnected}
+          <p class="hint helperRow">
+            <a href={HELPER_URL} download>Download rgg_server.py</a>
+            {#if $helper.status === "off"}
+              <button on:click={enableHelper}>Connect</button>
+            {:else}
+              <span>Looking for the helper…</span>
+            {/if}
+          </p>
+        {/if}
       </div>
     {/if}
   </section>
@@ -277,6 +293,17 @@
 
   #startBtn {
     font-size: 1.1em;
+    margin: 0;
+  }
+
+  .helperRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5em 1em;
+  }
+
+  .helperRow button {
     margin: 0;
   }
 

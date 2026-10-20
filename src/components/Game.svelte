@@ -25,6 +25,7 @@
   let verdict = null; // the coach's verdict for this step
   let findings = []; // rule findings for this step
   let feedback = ""; // one line carried over from the previous step
+  let feedbackWho = ""; // "Coach" when that line is the coach's note; "" for the game's own
   let tone = "";
   let advice = null; // the coach's {driver, navigator} for this step, from the last advancing verdict
   let nextTest = ""; // the coach's suggested next test, shown as the hint on Red
@@ -71,6 +72,7 @@
     : "";
   $: if (refused && live?.goalMet && !shownStartState) refused = false;
   $: shownFeedback = helperMissing ? HELPER_MISSING : notYet || feedback;
+  $: shownWho = helperMissing || notYet ? "" : feedbackWho;
   $: shownTone = helperMissing || notYet ? "red" : tone;
 
   // Entering Green with nothing failing means Red never had a failing test:
@@ -155,6 +157,7 @@
     finishState = "idle";
     refused = false;
     feedback = carry.feedback || "";
+    feedbackWho = carry.who || "";
     tone = carry.tone || "";
     advice = carry.advice || null;
     report();
@@ -193,12 +196,18 @@
     if (v.decision === "back_to_red") {
       nextTest = v.next_test || nextTest;
       return advance(
-        { feedback: v.note, tone: "red", advice: { driver: v.driver_action, navigator: v.navigator_action } },
+        {
+          feedback: v.note,
+          who: "Coach",
+          tone: "red",
+          advice: { driver: v.driver_action, navigator: v.navigator_action },
+        },
         true
       );
     }
     advance({
       feedback: show ? v.note : "",
+      who: "Coach",
       tone: show ? TONES[toneOf(v)] : "",
       advice: { driver: v.driver_action, navigator: v.navigator_action },
     });
@@ -379,6 +388,7 @@
         {held}
         tone={shownTone}
         feedback={shownFeedback}
+        feedbackWho={shownWho}
         {findings}
         coach={verdict}
         {canAskAgain}
