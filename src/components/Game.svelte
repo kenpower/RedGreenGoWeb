@@ -1,6 +1,6 @@
 <script>
   import Step from "./Step.svelte";
-  import Iteration from "./Iteration.svelte";
+  import CycleLine from "./CycleLine.svelte";
   import { fade, fly } from "svelte/transition";
   import { createEventDispatcher, tick } from "svelte";
   import { helper, refreshHelper, BLOCKED_HELP } from "../helper.js";
@@ -427,11 +427,7 @@
   $: backToRedCount = gameState.backToRedCount();
 </script>
 
-<div class="iterations">
-  {#each gameState.iterations as i}
-    <Iteration iterationCounter={i.index} phase={i.phase} backToRed={i.backToRed} />
-  {/each}
-</div>
+<CycleLine iterations={gameState.iterations} stateName={step?.stateName || ""} finished={gameState.finished} />
 <div>
   {#if step}
     <div transition:fade>
@@ -493,15 +489,6 @@
 </div>
 
 <style>
-  .iterations {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    align-items: center;
-    gap: 6px;
-  }
-
   .finished {
     border: 1px solid var(--star);
     margin-top: 1em;
