@@ -3,7 +3,7 @@
   import Iteration from "./Iteration.svelte";
   import { fade, fly } from "svelte/transition";
   import { createEventDispatcher, tick } from "svelte";
-  import { helper, refreshHelper } from "../helper.js";
+  import { helper, refreshHelper, BLOCKED_HELP } from "../helper.js";
   import { isCoached, askCoach, resolveProblem, toneOf, shouldShow, sendProgress, expectedFor } from "../coach.js";
   import {
     checkRules, snapshotOf, startState, failingTests, uncommittedFiles, noRepo, liveStatus, codeFirstAdvice,
@@ -71,7 +71,7 @@
         : ""
     : "";
   $: if (refused && live?.goalMet && !shownStartState) refused = false;
-  $: shownFeedback = helperMissing ? HELPER_MISSING : notYet || feedback;
+  $: shownFeedback = helperMissing ? ($helper.status === "blocked" ? BLOCKED_HELP : HELPER_MISSING) : notYet || feedback;
   $: shownWho = helperMissing || notYet ? "" : feedbackWho;
   $: shownTone = helperMissing || notYet ? "red" : tone;
 

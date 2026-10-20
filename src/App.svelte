@@ -5,7 +5,7 @@
   import { GameState } from "./gameState";
   import { fly } from "svelte/transition";
   import HelperStatus from "./components/HelperStatus.svelte";
-  import { helper, startHelper, resetHelper, enableHelper } from "./helper.js";
+  import { helper, startHelper, resetHelper, enableHelper, BLOCKED_HELP } from "./helper.js";
   import { testNames } from "./rules.js";
   import { startCoach, resetCoach, getClassCode, setClassCode } from "./coach.js";
 
@@ -176,7 +176,9 @@
           <button id="startBtn" disabled={!helperConnected || needsTestRun} on:click={startGame}
             >Start Game</button
           >
-          {#if !helperConnected}
+          {#if $helper.status === "blocked"}
+            <span class="hint blockedHint">{BLOCKED_HELP}</span>
+          {:else if !helperConnected}
             <span class="hint">Run <code>python rgg_server.py</code> in your project folder to start</span>
           {:else if needsTestRun}
             <span class="hint">Run your tests in Visual Studio's Test Explorer first</span>
@@ -187,10 +189,16 @@
             <a href={HELPER_URL} download>Download rgg_server.py</a>
             {#if $helper.status === "off"}
               <button on:click={enableHelper}>Connect</button>
-            {:else}
+            {:else if $helper.status !== "blocked"}
               <span>Looking for the helper…</span>
             {/if}
           </p>
+          {#if $helper.status === "offline"}
+            <p class="hint">
+              Running it but still not connecting? Chrome may be blocking this page: click the icon left of
+              the address bar → Site settings → Local network access → Allow, then reload.
+            </p>
+          {/if}
         {/if}
       </div>
     {/if}
@@ -305,6 +313,10 @@
 
   .helperRow button {
     margin: 0;
+  }
+
+  .blockedHint {
+    color: var(--testing-red);
   }
 
   #red {

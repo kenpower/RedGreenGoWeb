@@ -10,12 +10,67 @@ export const HELPER_URL = "http://127.0.0.1:8000";
 const ENABLED_KEY = "RGG_HELPER_ENABLED";
 const RETRY_MS = 5000;
 
-// status: "off" (not opted in) | "connecting" | "connected" | "offline"
+// status: "off" (not opted in) | "connecting" | "connected" | "offline" (not
+// running, as far as we can tell) | "blocked" (the browser refused to let this
+// page reach 127.0.0.1: Chrome's Local Network Access permission was denied)
 // data: latest message from the helper, kept while offline so the UI doesn't flicker
 export const helper = writable({ status: "off", data: null });
 
+// What to tell the pair when the browser blocks the helper.
+export const BLOCKED_HELP =
+  "Chrome blocked this page from reaching the helper on your computer. Click the icon left of the address bar → " +
+  "Site settings → Local network access → Allow, then reload.";
+
 let source = null;
 let retryTimer = null;
+let diagnosing = false;
+
+// Chrome's name for the Local Network Access permission has changed between
+// versions; an unknown name makes query() throw.
+const PERMISSION_NAMES = ["local-network-access", "loopback-network", "local-network"];
+
+// The Local Network Access permission's state ("granted" | "denied" | "prompt"),
+// or null when this browser can't say.
+export async function networkPermission(permissions = globalThis.navigator?.permissions) {
+  if (!permissions?.query) return null;
+  for (const name of PERMISSION_NAMES) {
+    try {
+      const status = await permissions.query({ name });
+      if (status?.state) return status.state;
+    } catch {
+      // not this browser's name for it
+    }
+  }
+  return null;
+}
+
+// Why the helper can't be reached. A blocked request and a helper that isn't
+// running look the same to the page (fetch rejects with a TypeError), so
+// "blocked" needs the permission itself to say "denied"; anything else is
+// "offline". "reachable" when the helper answered after all.
+export async function diagnose({ fetchFn = fetch, permissions } = {}) {
+  try {
+    await fetchFn(HELPER_URL + "/results");
+    return "reachable";
+  } catch (e) {
+    if (!(e instanceof TypeError)) return "offline";
+    return (await networkPermission(permissions)) === "denied" ? "blocked" : "offline";
+  }
+}
+
+// After a failed connection: work out whether it's blocked or offline and say
+// so in the store (unless a message arrived meanwhile). One check at a time.
+export async function checkReachability(options) {
+  if (diagnosing) return null;
+  diagnosing = true;
+  try {
+    const why = await diagnose(options);
+    if (why !== "reachable") helper.update((h) => (h.status === "connected" ? h : { ...h, status: why }));
+    return why;
+  } finally {
+    diagnosing = false;
+  }
+}
 
 function storage() {
   try {
@@ -36,7 +91,8 @@ function connect() {
   source = new EventSource(HELPER_URL + "/events");
   source.onmessage = (e) => helper.set({ status: "connected", data: JSON.parse(e.data) });
   source.onerror = () => {
-    helper.update((h) => ({ ...h, status: "offline" }));
+    helper.update((h) => ({ ...h, status: h.status === "blocked" ? "blocked" : "offline" }));
+    checkReachability(); // blocked by the browser, or just not running?
     // EventSource retries by itself while CONNECTING; once CLOSED (e.g. a 403) it gives up.
     if (source.readyState === EventSource.CLOSED) {
       source = null;

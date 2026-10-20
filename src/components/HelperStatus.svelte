@@ -1,5 +1,5 @@
 <script>
-  import { helper, enableHelper, disableHelper } from "../helper.js";
+  import { helper, enableHelper, disableHelper, BLOCKED_HELP } from "../helper.js";
   import { testNames } from "../rules.js";
 
   let open = false;
@@ -47,6 +47,8 @@
       ? "Connecting…"
       : $helper.status === "offline"
       ? "Helper offline"
+      : $helper.status === "blocked"
+      ? "Browser blocked helper"
       : "";
 
   $: tooltip =
@@ -70,6 +72,7 @@
   <button
     class="badge"
     class:offline={$helper.status === "offline"}
+    class:blocked={$helper.status === "blocked"}
     on:click={() => (open = !open)}
     title={tooltip}
   >
@@ -93,6 +96,11 @@
         </p>
         <a class="download" href={HELPER_URL} download>Download rgg_server.py</a>
         <button on:click={enableHelper}>Connect to my code</button>
+      {:else if $helper.status === "blocked"}
+        <p class="blockedText"><strong>The browser blocked the helper.</strong></p>
+        <p>{BLOCKED_HELP}</p>
+        <p class="muted">Retrying automatically…</p>
+        <button class="link" on:click={disableHelper}>Stop connecting</button>
       {:else if $helper.status !== "connected"}
         <p><strong>Can't reach the helper.</strong></p>
         <ol>
@@ -103,6 +111,10 @@
           <li>
             If the browser asks to access apps on this device, click
             <strong>Allow</strong>.
+          </li>
+          <li>
+            Running it but still not connecting? Chrome may be blocking it: click the
+            icon left of the address bar → Site settings → Local network access → Allow, then reload.
           </li>
         </ol>
         <p class="muted">Retrying automatically…</p>
@@ -184,6 +196,12 @@
 
   .badge.offline {
     color: var(--text-muted);
+  }
+
+  .badge.blocked,
+  .blockedText {
+    color: var(--testing-red);
+    text-shadow: 0 0 5px var(--testing-red);
   }
 
   .badge .pass {
