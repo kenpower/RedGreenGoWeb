@@ -1,4 +1,6 @@
-import { STEPS, stepById, catalogueFor, groupSteps, nextStepsDue, codeKey, runMark, NEXT_STEPS_GAP } from "../src/content/steps.js";
+import {
+  STEPS, stepById, catalogueFor, groupSteps, pickSteps, nextStepsDue, codeKey, runMark, NEXT_STEPS_GAP,
+} from "../src/content/steps.js";
 import { liveStatus } from "../src/rules.js";
 
 function snap({ testFile = "", code = "", results = {}, build = null, runTime = 10, git } = {}) {
@@ -128,7 +130,87 @@ describe("groupSteps", () => {
   });
 });
 
+describe("pickSteps: the card fits the code, without the coach", () => {
+  const ids = (phase, before, now, novice = true) =>
+    pickSteps(phase, before, now, liveStatus(phase, before, now), { novice }).map((s) => s.id);
+
+  test("every step has an applies()", () => {
+    for (const s of STEPS) expect(typeof s.applies).toBe("function");
+  });
+
+  test("the user's case: an empty fizzBuzz stub and a test that already calls it, not run yet", () => {
+    const now = snap({
+      testFile: '#include "fizz.hpp"\nTEST(TestCaseName, TestName) {\n  EXPECT_TRUE(fizzBuzz(1) == "1");\n}\n',
+      code: "std::string fizzBuzz(int n) {}",
+      results: {},
+    });
+    const picked = ids("red", now, now); // the start check took this as the baseline
+    expect(picked).not.toContain("red.call_missing_function");
+    expect(picked).toEqual(expect.arrayContaining(["red.rename_test"]));
+    expect(picked.length).toBeGreaterThanOrEqual(2);
+    expect(picked.length).toBeLessThanOrEqual(5);
+  });
+
+  test("...and once it has run and passes: make it fail for the right reason", () => {
+    const now = snap({
+      testFile: 'TEST(TestCaseName, TestName) {\n  EXPECT_TRUE(fizzBuzz(1) == "1");\n}\n',
+      code: "std::string fizzBuzz(int n) { return std::to_string(n); }",
+      results: { "TestCaseName.TestName": "passed" },
+    });
+    const picked = ids("red", now, now);
+    expect(picked[0]).toEqual("red.make_it_fail_for_right_reason");
+    expect(picked).not.toContain("red.call_missing_function");
+    expect(picked).toContain("red.rename_test");
+  });
+
+  test("a new test written but not run yet: run the tests", () => {
+    const before = snap({ testFile: 'TEST(F, One) {\n  EXPECT_EQ("1", fizzBuzz(1));\n}\n', results: { "F.One": "passed" } });
+    const now = snap({
+      testFile: 'TEST(F, One) {\n  EXPECT_EQ("1", fizzBuzz(1));\n}\nTEST(F, Three) {\n  EXPECT_EQ("Fizz", fizzBuzz(3));\n}\n',
+      results: { "F.One": "passed" },
+    });
+    expect(ids("red", before, now)).toContain("red.run_tests");
+  });
+
+  test("a truly empty project (VS's template only): call a function that doesn't exist yet", () => {
+    const empty = snap({ testFile: PLACEHOLDER, results: { "TestCaseName.TestName": "passed" } });
+    const picked = ids("red", empty, empty);
+    expect(picked[0]).toEqual("red.call_missing_function");
+  });
+
+  test("code written before any test: suggest removing it", () => {
+    const codeFirst = snap({
+      testFile: PLACEHOLDER,
+      code: 'std::string fizzBuzz(int n) { if (n % 3 == 0) return "Fizz"; return std::to_string(n); }',
+      results: { "TestCaseName.TestName": "passed" },
+    });
+    expect(ids("red", codeFirst, codeFirst)).toContain("red.remove_code_before_test");
+  });
+
+  test("required steps come before good practice, and later cycles get less practice", () => {
+    const empty = snap({ testFile: PLACEHOLDER, results: { "TestCaseName.TestName": "passed" } });
+    const novice = pickSteps("red", empty, empty, liveStatus("red", empty, empty), { novice: true });
+    const later = pickSteps("red", empty, empty, liveStatus("red", empty, empty), { novice: false });
+    const required = (list) => list.map((s) => stepById(s.id).required);
+    expect(required(novice)).toEqual([...required(novice)].sort((a, b) => b - a)); // trues first
+    expect(later.length).toBeLessThanOrEqual(novice.length);
+  });
+
+  test("green: the build can't find the function", () => {
+    const redEnd = snap({ testFile: 'TEST(F, One) {\n  EXPECT_EQ("1", fizzBuzz(1));\n}\n', results: {} });
+    const now = {
+      ...redEnd,
+      build: { status: "failed", time: 20, errors: ["test.cpp(2): error C3861: 'fizzBuzz': identifier not found"] },
+    };
+    expect(ids("green", redEnd, now)).toEqual(expect.arrayContaining(["green.create_function"]));
+  });
+});
+
 describe("when to ask for next steps", () => {
+  test("as soon as a step starts with code, even before any run", () => {
+    expect(nextStepsDue(null, 1, snap({ code: "int f() { return 1; }", runTime: 0 }), 1000)).toBe(true);
+  });
+
   const a = snap({ code: "a", runTime: 100 });
   const look = (s, step, at) => ({ step, run: runMark(s), code: codeKey(s), at });
 

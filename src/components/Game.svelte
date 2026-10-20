@@ -12,7 +12,7 @@
   import { hintFor } from "../content/hints.js";
   import { guideFor, unlockAction, GUIDE_CYCLES } from "../guide.js";
   import { rescueOffer } from "../gameState.js";
-  import { catalogueFor, groupSteps, nextStepsDue, runMark, codeKey } from "../content/steps.js";
+  import { catalogueFor, groupSteps, pickSteps, nextStepsDue, runMark, codeKey } from "../content/steps.js";
   import { askNextSteps } from "../coach.js";
 
   const dispatch = createEventDispatcher();
@@ -108,6 +108,9 @@
     nextStepsAnswer = gameState.nextStepsFor(forStep.stepNumber);
   };
   $: chosen = step && nextStepsAnswer?.stepNumber === step.stepNumber ? nextStepsAnswer : null;
+  // Without a coach answer (coach off, or not answered yet): the steps that
+  // fit the code as it is, picked by rules (steps.pickSteps), never a script
+  // that assumes an empty project.
   $: nextSteps = chosen
     ? groupSteps(
         step.stateName,
@@ -117,7 +120,18 @@
         snapshot,
         live
       )
-    : null;
+    : step && snapshot && CHECKED_PHASES.includes(step.stateName)
+      ? groupSteps(
+          step.stateName,
+          pickSteps(step.stateName, gameState.before, snapshot, live, { novice: step.cycle <= GUIDE_CYCLES }),
+          null,
+          gameState.before,
+          snapshot,
+          live
+        )
+      : null;
+  // the step to work on now: what the Driver/Navigator lines say
+  $: currentStep = nextSteps?.needed.find((s) => s.current) || null;
   // Advice lines, never a hold: vague test names, and in the first Red, code
   // written before any test calls it. Also passed to the coach, marked as advice.
   $: liveAdvice = live
@@ -196,19 +210,26 @@
     advance();
   };
 
-  $: instructions = instructionsFor(step, held, verdict, advice, live, doneLocked, snapshot);
+  $: instructions = instructionsFor(step, held, verdict, advice, live, doneLocked, snapshot, currentStep);
   // `snapshot` is passed only so Svelte re-runs this when the code changes
-  const instructionsFor = (step, held, verdict, advice, live, locked, snapshot) => {
+  const instructionsFor = (step, held, verdict, advice, live, locked, snapshot, current) => {
     if (!step) return { driver: "", navigator: "" };
-    // While Done is locked, or the app's rules hold the step, the lines say
-    // what unlocks it, so the card never contradicts the lock. A coach hold
-    // keeps the coach's own actions.
+    // A coach hold keeps the coach's own actions. A rule hold says what
+    // unlocks it, naming the test. Otherwise the step to work on now (from
+    // the coach's next steps, or the rules' pick for this code), so the card
+    // never shows a script that doesn't fit the code.
     const coachHold = held && verdict;
-    if (!coachHold && (locked || held)) {
+    if (coachHold) return { driver: verdict.driver_action || step.bodyText, navigator: verdict.navigator_action || step.navigatorPrompt };
+    if (held) {
       const unlock = unlockAction(step.stateName, gameState.before, snapshot, live);
       if (unlock) return unlock;
     }
-    const coachSays = held ? verdict : advice && { driver_action: advice.driver, navigator_action: advice.navigator };
+    if (current) return { driver: current.detail || current.text, navigator: current.navigator || step.navigatorPrompt };
+    if (locked) {
+      const unlock = unlockAction(step.stateName, gameState.before, snapshot, live);
+      if (unlock) return unlock;
+    }
+    const coachSays = advice && { driver_action: advice.driver, navigator_action: advice.navigator };
     // with the helper, the card names the real test; the static text is the fallback
     const liveDriver =
       step.stateName === "green" && live?.focusTest ? `Make ${live.focusTest} pass with the smallest change.` : "";

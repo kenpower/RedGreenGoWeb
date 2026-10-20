@@ -10,13 +10,46 @@
     helperDownloadUrl,
   } from "./helper.js";
   import { testNames } from "./rules.js";
-  import { startCoach, resetCoach, getClassCode, setClassCode } from "./coach.js";
+  import {
+    startCoach, resetCoach, getClassCode, setClassCode, linkedClassCode, classCodeFromReadme, checkClassCode,
+  } from "./coach.js";
 
   startHelper();
   startCoach();
 
   let thirdPlayer;
-  let classCode = getClassCode();
+  // The class code, first wins: typed in the box > ?class= (a teacher's link,
+  // or the helper's --class-code) > a "Class code: …" line in README.md.
+  // A code remembered from an earlier game counts as typed.
+  const linked = linkedClassCode();
+  let classCode = linked?.code || getClassCode();
+  let classSource = linked ? linked.source : ""; // "" (typed) | "link" | "helper" | "readme"
+  $: readmeCode = classCodeFromReadme($helper.data?.readme?.content);
+  $: if (!classCode.trim() && readmeCode) {
+    classCode = readmeCode;
+    classSource = "readme";
+  }
+  const SOURCES = { link: "from the link", helper: "from the helper", readme: "from README.md" };
+
+  // Start needs a class code the coach server knows. Checked once per code
+  // (the check shares the students' rate limit), a moment after typing stops.
+  let classCheck = { status: "" }; // "" | "checking" | "ok" | "unknown" | "unreachable"
+  let checkTimer;
+  const checked = new Map();
+  const scheduleCheck = (code) => {
+    clearTimeout(checkTimer);
+    const clean = (code || "").trim().toUpperCase();
+    if (!clean) return (classCheck = { status: "" });
+    if (checked.has(clean)) return (classCheck = checked.get(clean));
+    classCheck = { status: "checking" };
+    checkTimer = setTimeout(async () => {
+      const result = await checkClassCode(clean);
+      if (result.status !== "unreachable") checked.set(clean, result); // can't-check is retried
+      if ((classCode || "").trim().toUpperCase() === clean) classCheck = result;
+    }, 700);
+  };
+  $: scheduleCheck(classCode);
+  $: classOk = classCheck.status === "ok";
   let gameState = GameState.recoverSavedGame();
   if (!gameState) {
     gameState = new GameState();
@@ -136,18 +169,33 @@
           /><br />
         </span>
         <span>
-          <label for="classCode">Class code (Optional)</label>
+          <label for="classCode">Class code (from your teacher)</label>
           <input
             type="text"
             id="classCode"
             name="classCode"
             autocomplete="off"
             bind:value={classCode}
+            on:input={() => (classSource = "")}
           /><br />
         </span>
+        <p class="classStatus" aria-live="polite">
+          {#if classCheck.status == "checking"}
+            <span class="muted">Checking the class code…</span>
+          {:else if classCheck.status == "ok"}
+            <span class="ok">✓ {classCheck.name}</span>{#if SOURCES[classSource]}
+              <span class="muted"> ({SOURCES[classSource]})</span>{/if}
+          {:else if classCheck.status == "unknown"}
+            <span class="bad">Unknown class code: check with your teacher</span>
+          {:else if classCheck.status == "unreachable"}
+            <span class="bad">Can't reach the coach server, try again</span>
+            <button class="retry" on:click={() => scheduleCheck(classCode)}>Try again</button>
+          {/if}
+        </p>
         <p class="hint">
-          With a class code from your teacher and your code connected, an AI
-          coach gives feedback after each step.
+          Needed to start. Your teacher gives you this code. You can also run the helper with
+          <code>python rgg_server.py --class-code=YOURCODE</code>, or put a line
+          <code>Class code: YOURCODE</code> in your project's README.md.
         </p>
 
         <h2 class="aoc-heading">What are you building?</h2>
@@ -175,10 +223,12 @@
         </p>
 
         <div class="startRow">
-          <button id="startBtn" disabled={!helperConnected || needsTestRun} on:click={startGame}
+          <button id="startBtn" disabled={!helperConnected || needsTestRun || !classOk} on:click={startGame}
             >Start Game</button
           >
-          {#if $helper.status === "blocked"}
+          {#if !classOk && helperConnected && !needsTestRun}
+            <span class="hint">Enter your class code above to start</span>
+          {:else if $helper.status === "blocked"}
             <span class="hint blockedHint">{BLOCKED_HELP}</span>
           {:else if !helperConnected}
             <span class="hint">Run <code>python rgg_server.py</code> in your project folder to start</span>
@@ -322,6 +372,28 @@
 
   .blockedHint {
     color: var(--testing-red);
+  }
+
+  .classStatus {
+    min-height: 1.4em;
+    margin: 0.1em 0;
+  }
+
+  .classStatus .ok {
+    color: var(--coding-green);
+    text-shadow: 0 0 4px var(--coding-green);
+  }
+
+  .classStatus .bad {
+    color: var(--testing-red);
+  }
+
+  .classStatus .muted {
+    color: var(--text-muted);
+  }
+
+  .classStatus .retry {
+    margin: 0 0 0 0.5em;
   }
 
   .playViaHelper {

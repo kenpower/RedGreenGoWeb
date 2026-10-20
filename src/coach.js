@@ -73,13 +73,48 @@ export function resetCoach() {
   generation++;
 }
 
+// A "Class code: XYZ" line in the pair's README.md gives the class code.
+const README_CLASS = /^\s*class code\s*:\s*([A-Za-z0-9-]{2,40})\s*$/im;
+
+export function classCodeFromReadme(content) {
+  return (typeof content === "string" && content.match(README_CLASS)?.[1].toUpperCase()) || "";
+}
+
+// The README without its class-code line, for the coach's problem text.
+const withoutClassLine = (text) => text.replace(new RegExp(README_CLASS.source, "gim"), "").trim();
+
+// The class code from a link: ?class=CODE, from the helper (it opens the game
+// with ?helper=1&class=… when started with --class-code) or a teacher's link.
+export function linkedClassCode(location = window.location) {
+  const params = new URLSearchParams(location?.search || "");
+  const code = (params.get("class") || "").trim().toUpperCase();
+  return code ? { code, source: params.has("helper") ? "helper" : "link" } : null;
+}
+
+// Is this a class the coach server knows? Resolves to {status: "ok", name},
+// {status: "unknown"} (404), or {status: "unreachable"} (network error, a
+// 429 or anything else: couldn't check, which is not the same as invalid).
+export async function checkClassCode(code, fetchFn = fetch) {
+  const clean = (code || "").trim().toUpperCase();
+  if (!clean) return { status: "unknown" };
+  try {
+    const response = await fetchFn(`${coachUrl()}/class?code=${encodeURIComponent(clean)}`);
+    if (response.status === 404) return { status: "unknown" };
+    if (!response.ok) return { status: "unreachable" };
+    const body = await response.json();
+    return body?.ok ? { status: "ok", name: body.name || clean } : { status: "unknown" };
+  } catch {
+    return { status: "unreachable" };
+  }
+}
+
 // What the pair is building, first non-empty wins: the start-screen text box,
 // a ?problem= link from the teacher, the README in their solution folder
 // (the helper sends it as {path, content}, or null when there isn't one).
 export function resolveProblem(textBox, helperData, location = window.location) {
   const fromLink = new URLSearchParams(location?.search || "").get("problem");
   const candidates = [textBox, fromLink, helperData?.readme?.content];
-  const problem = candidates.map((p) => (typeof p === "string" ? p.trim() : "")).find((p) => p) || "";
+  const problem = candidates.map((p) => (typeof p === "string" ? withoutClassLine(p) : "")).find((p) => p) || "";
   return problem.slice(0, MAX_PROBLEM);
 }
 

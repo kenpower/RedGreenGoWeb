@@ -1,6 +1,9 @@
 import {
   askCoach,
   coachUrl,
+  classCodeFromReadme,
+  linkedClassCode,
+  checkClassCode,
   buildRequest,
   pairKey,
   sendProgress,
@@ -251,6 +254,51 @@ describe("resolveProblem", () => {
 
   test("is cut to what the server accepts", () => {
     expect(resolveProblem("x".repeat(9000), null, { search: "" })).toHaveLength(8000);
+  });
+});
+
+describe("the class code", () => {
+  test("a 'Class code: …' line in the README, any case or spacing", () => {
+    expect(classCodeFromReadme("# FizzBuzz\n\nClass code: SD2-2026\n")).toEqual("SD2-2026");
+    expect(classCodeFromReadme("  class CODE :  sd2  ")).toEqual("SD2");
+    expect(classCodeFromReadme("CLASS CODE:abc-1")).toEqual("ABC-1");
+  });
+
+  test("no line, or not a code on it", () => {
+    expect(classCodeFromReadme("# FizzBuzz\nWrite fizzBuzz.")).toEqual("");
+    expect(classCodeFromReadme("Our class code is SD2")).toEqual(""); // not the line format
+    expect(classCodeFromReadme("Class code: x")).toEqual(""); // too short
+    expect(classCodeFromReadme("Class code: has spaces in it")).toEqual("");
+    expect(classCodeFromReadme(null)).toEqual("");
+  });
+
+  test("a ?class= link, and whether the helper made it", () => {
+    expect(linkedClassCode({ search: "?class=sd2" })).toEqual({ code: "SD2", source: "link" });
+    expect(linkedClassCode({ search: "?helper=1&class=sd2" })).toEqual({ code: "SD2", source: "helper" });
+    expect(linkedClassCode({ search: "" })).toBeNull();
+  });
+
+  test("the README's class-code line isn't sent to the coach as part of the problem", () => {
+    const readme = { readme: { path: "README.md", content: "Write fizzBuzz.\nClass code: SD2\nMultiples of 3 give Fizz." } };
+    expect(resolveProblem("", readme, { search: "" })).toEqual("Write fizzBuzz.\n\nMultiples of 3 give Fizz.");
+    expect(resolveProblem("", { readme: { content: "Class code: SD2" } }, { search: "" })).toEqual("");
+  });
+
+  test("checking a code with the coach server", async () => {
+    let url;
+    const ok = await checkClassCode(" sd2 ", async (u) => {
+      url = u;
+      return { ok: true, status: 200, json: async () => ({ ok: true, name: "Software Dev 2" }) };
+    });
+    expect(ok).toEqual({ status: "ok", name: "Software Dev 2" });
+    expect(url).toEqual("http://127.0.0.1:8100/class?code=SD2");
+    expect(await checkClassCode("NOPE", async () => ({ ok: false, status: 404 }))).toEqual({ status: "unknown" });
+  });
+
+  test("a rate limit or a network error means couldn't check, not invalid", async () => {
+    expect(await checkClassCode("SD2", async () => ({ ok: false, status: 429 }))).toEqual({ status: "unreachable" });
+    expect(await checkClassCode("SD2", async () => { throw new Error("offline"); })).toEqual({ status: "unreachable" });
+    expect(await checkClassCode("", async () => ({ ok: true }))).toEqual({ status: "unknown" });
   });
 });
 

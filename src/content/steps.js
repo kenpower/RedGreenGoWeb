@@ -2,10 +2,17 @@
 // Refactor, with fixed, reviewed texts. The coach only picks and orders ids
 // from it (coach/next_steps.md), so what the pair reads is always one of these.
 //
-// {id, phase, text, why?, required, check?(before, now, live) → true | false | null}
-//   required: needed to move on (shown under "Needed to move on"); otherwise
-//             good practice, never blocking and never shown as ✖.
-//   check:    ticks the step live from the helper's data; null = can't tell.
+// {id, phase, text, why?, navigator?, required, check?(before, now, live) → true | false | null,
+//  applies(before, now, live, {novice}) → bool}
+//   required:  needed to move on (shown under "Needed to move on"); otherwise
+//              good practice, never blocking and never shown as ✖.
+//   check:     ticks the step live from the helper's data; null = can't tell.
+//   applies:   whether the step fits the code as it is now, for the picker
+//              used without the coach (pickSteps). Steps only the coach can
+//              judge (a typo, a backwards assertion) never apply here.
+//   navigator: what the navigator does meanwhile, for the step card.
+// `applies` and `navigator` live in FIT below, keyed by id, so all the "when
+// does this step fit" rules can be read (and reviewed) together.
 import {
   pickRedTest, callsCode, testBodies, buildFailed, failingTests, changedSinceRun, isVagueTestName,
   untestedFunctions, testChanges, testNames, passedFirstTest,
@@ -79,6 +86,7 @@ export const STEPS = [
     phase: "red",
     required: true,
     text: "Check it fails. 'Doesn't compile' counts, because the function doesn't exist yet",
+    why: "The failing test proves it really checks something.",
     check: (b, n, live) => (ranRed(b, n) ? live?.lines?.[0]?.ok === true : null),
   },
   {
@@ -123,6 +131,13 @@ export const STEPS = [
     phase: "red",
     required: true,
     text: "Fix the assertion so it checks what the test's name says",
+  },
+  {
+    id: "red.fill_in_or_delete_stub",
+    phase: "red",
+    required: false,
+    text: "Leave the empty function (stub) as it is until a failing test needs it, or delete it",
+    why: "Code should only grow when a failing test asks for it.",
   },
   {
     id: "red.declare_function",
@@ -212,7 +227,8 @@ export const STEPS = [
     id: "green.least_code",
     phase: "green",
     required: true,
-    text: "Write the least code that makes the failing test pass",
+    text: "Write the least code that makes the failing test pass. Returning the exact expected value is allowed",
+    why: "The next test will force a real solution.",
     check: (b, n, live) => {
       const focus = live?.focusTest;
       return focus && fresh(n) && !buildFailed(n) && focus in results(n) ? results(n)[focus] === "passed" : null;
@@ -344,6 +360,155 @@ export const STEPS = [
   },
 ];
 
+// ---- When each step fits the code (for the picker without the coach) --------
+// (a function declaration: nextStepsDue below uses it too)
+function hasCode(snapshot) {
+  return (snapshot?.files || []).some((f) => (f.content || "").trim());
+}
+const bodies = (now) => Object.values(testBodies(now));
+// some test calls the pair's code (not just VS's template or EXPECT_TRUE(true))
+const anyTestCallsCode = (now) => bodies(now).some((body) => callsCode(body));
+const allRunAndGreen = (now) =>
+  fresh(now) && !buildFailed(now) && (now.tests || []).length > 0 && failingTests(now).length === 0;
+const buildErrors = (now) => (buildFailed(now) ? now.build.errors || [] : []);
+const missingName = (now) => buildErrors(now).some((e) => /identifier not found|undeclared identifier|is not a member/.test(e));
+const notRunYet = (b, n) => {
+  const name = redTest(b, n);
+  return !!name && !buildFailed(n) && !(name in results(n));
+};
+const assertions = (body) => (body.match(/\b(?:EXPECT|ASSERT)_\w+/g) || []).length;
+// empty or trivial functions (a stub: {} or a bare return)
+const STUB = /\b([A-Za-z_]\w*)\s*\([^;{}()]*\)\s*(?:const\s*)?\{\s*(?:return\b[^;{}]*;)?\s*\}/g;
+const hasStub = (now) =>
+  (now?.files || []).some((f) => f.kind === "production" && [...(f.content || "").matchAll(STUB)].some((m) => !/^(?:if|for|while|switch)$/.test(m[1])));
+const focusOf = (live) => live?.focusTest || null;
+const focusPasses = (n, live) => !!focusOf(live) && fresh(n) && !buildFailed(n) && results(n)[focusOf(live)] === "passed";
+const testsChanged = (b, n) => {
+  if (!b || !n) return false;
+  const c = testChanges(b, n);
+  return c.added.length + c.removed.length + c.changed.length > 0;
+};
+
+const FIT = {
+  // Red
+  "red.new_test_passes_already": { applies: (b, n) => !!passedFirstTest(b, n) },
+  "red.pick_new_behaviour": {
+    applies: (b, n) => !!passedFirstTest(b, n),
+    navigator: "Suggest an input the code gets wrong today.",
+  },
+  "red.call_missing_function": {
+    applies: (b, n) => !anyTestCallsCode(n),
+    navigator: "Say what the function should be called and what the first test should check.",
+  },
+  "red.call_your_code": {
+    applies: (b, n) => !!redTest(b, n) && !callsCode(redBody(b, n)),
+    navigator: "Check the test calls your code, not just true or false.",
+  },
+  "red.add_assertion": {
+    applies: (b, n) => !!redTest(b, n) && callsCode(redBody(b, n)) && assertions(redBody(b, n)) === 0,
+    navigator: "Ask what result the test expects.",
+  },
+  "red.one_test_only": {
+    applies: (b, n) => !!b && !!n && pickRedTest(b, n).problem?.rule === "several_new_tests",
+    navigator: "Agree which test is the smallest next step.",
+  },
+  "red.make_it_fail_for_right_reason": {
+    // a test already calls existing code and everything passes, with no new or changed test yet
+    applies: (b, n) => !redTest(b, n) && anyTestCallsCode(n) && allRunAndGreen(n),
+    navigator: "Suggest a case your code doesn't handle yet.",
+  },
+  "red.run_tests": {
+    applies: (b, n) => !!redTest(b, n) && (changedSinceRun(n) || notRunYet(b, n)),
+    navigator: "Watch the results come in.",
+  },
+  "red.see_it_fail": {
+    applies: (b, n) => !!redTest(b, n) && !passedFirstTest(b, n),
+    navigator: "Read the failure message aloud: is it the reason you expected?",
+  },
+  "red.fix_typo": { applies: () => false }, // the coach's call
+  "red.fix_other_failure": {
+    applies: (b, n) => fresh(n) && !buildFailed(n) && failingTests(n).some((t) => t !== redTest(b, n)) && !!redTest(b, n),
+    navigator: "Check only this Red's test is failing.",
+  },
+  "red.fix_assertion": { applies: () => false }, // the coach's call
+  "red.fill_in_or_delete_stub": { applies: (b, n) => hasStub(n) },
+  "red.declare_function": { applies: (b, n) => !!redTest(b, n) && missingName(n) },
+  "red.include_header": { applies: () => false },
+  "red.simplest_case": { applies: (b, n) => !anyTestCallsCode(n) },
+  "red.one_behaviour": { applies: (b, n) => !!redTest(b, n) && assertions(redBody(b, n)) > 2 },
+  "red.rename_test": { applies: (b, n) => [...testNames(n)].some((t) => isVagueTestName(t)) },
+  "red.remove_code_before_test": { applies: (b, n) => untestedFunctions(n).length > 0 },
+  "red.prove_test_can_fail": { applies: (b, n) => !!passedFirstTest(b, n) },
+  "red.say_it_first": { applies: (b, n, live, o) => !!o?.novice && !redTest(b, n) },
+  "red.next_example": { applies: (b, n) => !redTest(b, n) && anyTestCallsCode(n) },
+
+  // Green
+  "green.create_function": {
+    applies: (b, n) => missingName(n),
+    navigator: "Check the name and parameters match the test's call.",
+  },
+  "green.add_include": { applies: (b, n) => missingName(n) },
+  "green.make_it_compile": {
+    applies: (b, n) => buildFailed(n) && !missingName(n),
+    navigator: "Read the first error aloud and find the line it points to.",
+  },
+  "green.fake_it": { applies: (b, n, live) => !!focusOf(live) && !focusPasses(n, live) },
+  "green.least_code": {
+    applies: (b, n, live) => !buildFailed(n) && !focusPasses(n, live),
+    navigator: "Watch for code the test doesn't need.",
+  },
+  "green.no_extra": { applies: (b, n, live, o) => !!o?.novice },
+  "green.remove_extra": { applies: () => false }, // the coach's call
+  "green.leave_tests": {
+    applies: (b, n, live, o) => testsChanged(b, n) || !!o?.novice,
+    navigator: "Check only production code changes (an #include is fine).",
+  },
+  "green.run_tests": { applies: (b, n) => !!n && (changedSinceRun(n) || !(n.tests || []).length) },
+  "green.all_green": { applies: () => true, navigator: "Check every test is green, not just the new one." },
+  "green.keep_old_tests_passing": {
+    applies: (b, n, live) => fresh(n) && !buildFailed(n) && failingTests(n).some((t) => t !== focusOf(live)),
+    navigator: "Find which change broke the older test.",
+  },
+
+  // Refactor
+  "refactor.remove_duplication": { applies: (b, n) => !!n && hasCode(n) },
+  "refactor.rename": { applies: (b, n) => !!n && hasCode(n) },
+  "refactor.extract_function": { applies: () => false },
+  "refactor.tidy_tests": { applies: () => false },
+  "refactor.rename_tests": { applies: (b, n) => [...testNames(n)].some((t) => isVagueTestName(t)) },
+  "refactor.small_steps": { applies: (b, n, live, o) => !!o?.novice },
+  "refactor.nothing_yet": { applies: (b, n, live, o) => !!o?.novice },
+  "refactor.undo": {
+    applies: (b, n) => buildFailed(n) || (fresh(n) && failingTests(n).length > 0),
+    navigator: "Suggest a smaller change to try next.",
+  },
+  "refactor.same_tests": {
+    applies: (b, n) => !!b && !!n && (testChanges(b, n).added.length + testChanges(b, n).removed.length > 0),
+    navigator: "Check the same tests still run.",
+  },
+  "refactor.run_tests": { applies: (b, n) => !!n && changedSinceRun(n) },
+  "refactor.still_green": { applies: () => true, navigator: "Point out one thing worth tidying, or agree there's nothing yet." },
+  "refactor.commit": { applies: (b, n) => !!n?.git?.repo },
+};
+
+for (const step of STEPS) Object.assign(step, FIT[step.id] || { applies: () => false });
+
+const MAX_PICKED = 5;
+const MIN_PICKED = 2;
+
+// Without the coach (or before it answers): the steps that fit the code now,
+// in catalogue order, required ones first, 2–5 of them. Same shape as the
+// coach's answer ([{id, detail}]), with no details.
+export function pickSteps(phase, before, now, live, { novice = false } = {}) {
+  const fits = STEPS.filter((s) => s.phase === phase && s.applies(before, now, live, { novice }));
+  const required = fits.filter((s) => s.required);
+  const optional = fits.filter((s) => !s.required);
+  // fill up with good practice: more of it for novices, at most one later on
+  const room = Math.max(MIN_PICKED - required.length, novice ? MAX_PICKED - required.length : 1);
+  return [...required.slice(0, MAX_PICKED), ...optional.slice(0, Math.max(0, Math.min(room, MAX_PICKED - required.length)))]
+    .map((s) => ({ id: s.id, detail: "" }));
+}
+
 // ---- When to ask the coach for next steps ---------------------------------
 export const NEXT_STEPS_GAP = 60; // seconds: at most one ask a minute per pair
 
@@ -361,13 +526,13 @@ export function codeKey(snapshot) {
 }
 
 // Whether to ask the coach for next steps now. `last` is the previous ask,
-// {step, run, code, at} or null. Ask on the first look at a step (once there
-// are results), then again only when a new run or build arrives AND the code
-// changed since the last look. Never more than once every NEXT_STEPS_GAP
-// seconds, across steps.
+// {step, run, code, at} or null. Ask on the first look at a step as soon as
+// there's code (tests or production) or results, then again only when a new
+// run or build arrives AND the code changed since the last look. Never more
+// than once every NEXT_STEPS_GAP seconds, across steps.
 export function nextStepsDue(last, stepNumber, snapshot, nowSec, gap = NEXT_STEPS_GAP) {
   const run = runMark(snapshot);
-  if (!run) return false;
+  if (!run && !hasCode(snapshot)) return false;
   if (last && nowSec - last.at < gap) return false;
   if (!last || last.step !== stepNumber) return true;
   return run > last.run && codeKey(snapshot) !== last.code;
@@ -393,7 +558,7 @@ export function groupSteps(phase, chosen, extra, before, now, live) {
     if (!step || step.phase !== phase) continue;
     let done = step.check ? step.check(before, now, live) : null;
     if (!step.required && done === false) done = null; // good practice never shows ✖
-    (step.required ? needed : practice).push({ id, text: step.text, detail, why: step.why, done });
+    (step.required ? needed : practice).push({ id, text: step.text, detail, why: step.why, navigator: step.navigator, done });
   }
   if (extra?.text) (extra.needed ? needed : practice).push({ id: "extra", text: extra.text, done: null, extra: true });
   const current = needed.findIndex((s) => s.done !== true);
