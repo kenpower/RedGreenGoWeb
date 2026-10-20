@@ -225,10 +225,26 @@ export class GameState {
     this.#save();
   }
 
-  // The coach's next steps for one step; ignored once the pair has moved on
+  // The coach's last Look for one step: its guidance (steps, extra) and its
+  // verdict, with the key of the code and results it saw (coach.lookKey) and
+  // whether a Done has used it yet. Ignored once the pair has moved on
   // (nextStepsFor checks the step number), so nothing needs clearing.
-  setNextSteps(stepNumber, answer) {
-    this.nextSteps = { stepNumber, steps: answer.steps || [], extra: answer.extra || "", extra_needed: !!answer.extra_needed };
+  setNextSteps(stepNumber, answer, { key = "", used = false } = {}) {
+    this.nextSteps = {
+      stepNumber,
+      steps: answer.steps || [],
+      extra: answer.extra || "",
+      extra_needed: !!answer.extra_needed,
+      verdict: answer.decision ? answer : null,
+      key,
+      used,
+    };
+    this.#save();
+  }
+
+  // A Done reused the cached Look's verdict: each Look is reused at most once.
+  markLookUsed() {
+    if (this.nextSteps) this.nextSteps.used = true;
     this.#save();
   }
 

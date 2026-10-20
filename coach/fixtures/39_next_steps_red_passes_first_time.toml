@@ -1,5 +1,5 @@
 description = "NEXT STEPS, Red: the user's case. fizzBuzz is already complete, and the new test for 1 passes straight away"
-mode = "next_steps"
+mode = "look"
 phase = "red"
 novice = true
 problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
@@ -27,6 +27,7 @@ inline std::string fizzBuzz(int n) {
 test_result = "All 1 tests passed"
 
 [expect]
+decision = ["redo"]  # the Red test passes: it has to fail first (or they keep it, which is the app's button)
 steps_include = ["red.new_test_passes_already", "red.pick_new_behaviour", "red.prove_test_can_fail"]
 steps_exclude = ["red.call_missing_function"]
 detail_mentions = ["fizzBuzz", "fizz.hpp"]

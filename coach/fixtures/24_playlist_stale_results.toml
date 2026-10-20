@@ -49,3 +49,4 @@ decision = ["redo"]
 driver_mentions = ["run"]
 driver_avoids = ["DifferentArtistNotEqual", "EXPECT", "assert"]
 hints = false
+min_steps = 1  # running the tests again is the only step

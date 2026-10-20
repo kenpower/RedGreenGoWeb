@@ -1,5 +1,5 @@
 description = "NEXT STEPS, Green: the build can't find fizzBuzz because the test file doesn't include the header"
-mode = "next_steps"
+mode = "look"
 phase = "green"
 novice = true
 problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
@@ -22,5 +22,6 @@ inline std::string fizzBuzz(int n) {
 test_result = "Build failed: test.cpp(5): error C3861: 'fizzBuzz': identifier not found"
 
 [expect]
+decision = ["redo"]  # the build fails: not green yet
 steps_first = ["green.add_include", "green.make_it_compile"]
 detail_mentions = ["fizz.hpp"]

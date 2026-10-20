@@ -10,6 +10,7 @@
 // Game owns the flow (snapshots, history, holding, overrides); this module
 // builds the request, talks to the proxy and keeps the praise streak.
 import { currentSnapshot, staleResults } from "./rules.js";
+import { runMark, codeKey } from "./content/steps.js";
 
 const COACH_URL = "https://compucore3.setu.ie/rgg-coach";
 const DEV_COACH_URL = "http://127.0.0.1:8100"; // coach/coach_server.py run locally
@@ -190,15 +191,19 @@ export function pairKey(players) {
 // or null at the start of a game.
 export function buildRequest({
   phase, problem, before, after, ruleFindings = [], history = [], gameId = "", players = [], expected = "", rescue = false,
-  cycle = 1,
+  cycle = 1, catalogue = null, novice = false, done = false,
 }) {
   // Stale results go first: until the pair runs the tests again, nothing
   // else the coach could say about the results can be trusted.
   const findings = staleResults(after) ? [STALE_FINDING, ...ruleFindings] : ruleFindings;
   const last = history[history.length - 1];
   const request = {
+    // one call for everything: the guidance (from the catalogue) and the verdict
+    mode: "look",
     phase,
     cycle: Math.max(1, Math.floor(Number(cycle) || 1)), // the coach's leniency depends on it
+    novice: !!novice,
+    done: !!done, // a Done click: the server counts this Look's verdict
     expected: String(expected || "").slice(0, 300),
     previous: last
       ? { phase: last.phase, decision: last.decision || "", note: (last.note || "").slice(0, 500) }
@@ -222,6 +227,7 @@ export function buildRequest({
   }
   // stuck on this step: the one request where the coach may show code
   if (rescue) request.rescue = true;
+  if (catalogue?.length) request.catalogue = catalogue;
   return request;
 }
 
@@ -254,25 +260,29 @@ export async function askCoach(step, fetchFn = fetch) {
 }
 
 // Whole numbers in the 0..10000 range coach_server accepts.
-// The coach's pick of what to do next on this step, from the step catalogue
-// (src/content/steps.js): {steps: [{id, detail}], extra, extra_needed}, or
-// null if it couldn't answer. Never holds, never decides; never throws.
-export async function askNextSteps(step, catalogue, { novice = false } = {}, fetchFn = fetch) {
+// A Done whose code and results haven't changed since the last Look: tell the
+// coach server so it counts that Look's verdict as this Done (it looks the
+// verdict up itself, so it can't be forged), without calling the model.
+// Resolves true when recorded; false (409: nothing to reuse, or any error)
+// means make a real Look with done: true instead. Never throws.
+export async function reuseLook({ phase, gameId, players }, fetchFn = fetch) {
   try {
-    const request = { ...buildRequest(step), mode: "next_steps", catalogue, novice };
-    delete request.history; // not used for next steps
     const response = await fetchFn(coachUrl() + "/coach", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Class-Code": getClassCode() },
-      body: JSON.stringify(request),
+      body: JSON.stringify({
+        mode: "look", done: true, reuse: true, phase,
+        game_id: String(gameId || "").slice(0, 64), pair: pairKey(players),
+      }),
     });
-    if (!response.ok) return null;
-    const answer = await response.json();
-    return Array.isArray(answer?.steps) ? answer : null;
+    return response.ok;
   } catch {
-    return null;
+    return false;
   }
 }
+
+// What identifies the code and results a Look saw: the same key means Done can reuse it.
+export const lookKey = (snapshot, stepNumber) => `${stepNumber}:${runMark(snapshot)}:${codeKey(snapshot)}`;
 
 const count = (n) => (Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 10000) : 0);
 

@@ -1,6 +1,7 @@
 description = "NEXT STEPS, Refactor: three near-identical branches in toRoman (cycle 4, details only where useful)"
-mode = "next_steps"
+mode = "look"
 phase = "refactor"
+cycle = 4
 problem = 'Write toRoman(int n) that converts a whole number from 1 to 3999 to Roman numerals.'
 tests = '''
 TEST(Roman, OneIsI) { EXPECT_EQ("I", toRoman(1)); }
@@ -18,5 +19,6 @@ std::string toRoman(int n) {
 test_result = "All 3 tests passed"
 
 [expect]
+decision = ["advance"]  # all green, same tests: Refactor may end here (changing nothing is allowed)
 steps_include = ["refactor.remove_duplication"]
 detail_mentions = ["toRoman"]

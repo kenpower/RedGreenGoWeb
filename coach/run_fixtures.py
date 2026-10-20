@@ -58,7 +58,10 @@ def catalogues():
 
 def score_next_steps(answer, expect, step):
     ids = [s["id"] for s in answer["steps"]]
-    checks = [("step_count", 2 <= len(ids) <= 4, len(ids))]
+    # a finished step skips what's done, and back to Red leaves this phase little to
+    # do, so either may leave just one useful step
+    fewest = expect.get("min_steps", 2 if answer.get("decision") == "redo" else 1)
+    checks = [("step_count", fewest <= len(ids) <= 4, len(ids))]
     if "steps_first" in expect:
         checks.append(("steps_first", bool(ids) and ids[0] in expect["steps_first"], ids[0] if ids else "none"))
     if "steps_include" in expect:
@@ -214,8 +217,12 @@ def main(prefixes):
         fx = tomllib.loads(f.read_text(encoding="utf-8"))
         expect = fx.pop("expect")
         description = fx.pop("description")
-        next_steps = fx.get("mode") == "next_steps"
-        if next_steps and "catalogue" not in fx:
+        # every fixture is a Look: the guidance from the phase's catalogue, and the verdict.
+        # The guidance fixtures (mode = "look") follow a fresh run; the rest are a Done.
+        fx.setdefault("done", fx.get("mode") != "look")
+        fx["mode"] = "look"
+        with_steps = fx["phase"] != "finish"
+        if with_steps and "catalogue" not in fx:
             catalogue = catalogue or catalogues()
             fx["catalogue"] = catalogue[fx["phase"]]
         validate(fx)  # fixtures must be valid server requests too
@@ -234,21 +241,8 @@ def main(prefixes):
         output_tokens += usage.output_tokens
         cache_written += usage.cache_creation_input_tokens or 0
         cache_read += usage.cache_read_input_tokens or 0
-        if next_steps:
-            checks = score_next_steps(verdict, expect, fx)
-            ok = all(c[1] for c in checks)
-            passed += ok
-            print(f"{'PASS' if ok else 'FAIL'} {f.stem}  ({description})")
-            for field, field_ok, got in checks:
-                print(f"   {'  ' if field_ok else '!!'} {field}: {got}   expected {expect.get(field, 'ok')}")
-            for s in verdict["steps"]:
-                print(f"      [{s['id']}] {s['detail']}")
-            if verdict["extra"]:
-                print(f"      extra ({'needed' if verdict['extra_needed'] else 'practice'}): {verdict['extra']}")
-            print()
-            results.append({"fixture": f.stem, "pass": ok, "checks": checks, "next_steps": verdict})
-            continue
-        checks = score(verdict, expect, fx)
+        # one answer, both halves scored: the verdict, and the guidance steps
+        checks = score(verdict, expect, fx) + (score_next_steps(verdict, expect, fx) if with_steps else [])
         ok = all(c[1] for c in checks)
         passed += ok
 
@@ -256,7 +250,8 @@ def main(prefixes):
         for field, field_ok, got in checks:
             if field_ok and field in ("actions", "no_code", "single_action", "hint_is_question", "hint_no_answer",
                                       "hint_kind_vague", "smell_complete", "smell_only_on_green",
-                                      "no_rescue_code"):
+                                      "no_rescue_code", "step_count", "detail_short", "detail_no_code",
+                                      "detail_every_step"):
                 continue  # only worth a line when they fail
             mark = "  " if field_ok else "!!"
             print(f"   {mark} {field}: {got}   expected {expect.get(field, 'ok')}")
@@ -274,6 +269,11 @@ def main(prefixes):
         if verdict["rescue_code"]:
             print(f"      rescue:    {verdict['rescue_why']}")
             print("\n".join("        | " + line for line in verdict["rescue_code"].splitlines()))
+        print(f"      on track:  {verdict['on_track']}")
+        for s in verdict["steps"]:
+            print(f"      [{s['id']}] {s['detail']}")
+        if verdict["extra"]:
+            print(f"      extra ({'needed' if verdict['extra_needed'] else 'practice'}): {verdict['extra']}")
         print()
         results.append({"fixture": f.stem, "pass": ok, "checks": checks, "verdict": verdict})
 

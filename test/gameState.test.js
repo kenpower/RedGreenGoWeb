@@ -538,6 +538,18 @@ test("a_kept_test_is_counted_and_sent_as_an_event", () => {
   expect(GameState.recoverSavedGame().skipGreen).toBe(true); // survives a reload before the swap
 });
 
+test("the_last_look_is_cached_per_step_with_its_verdict_and_reused_once", () => {
+  let g = new GameState();
+  g.start();
+  g.setNextSteps(1, { steps: [{ id: "red.run_tests", detail: "" }], extra: "", decision: "redo", note: "n" }, { key: "k1" });
+  const look = g.nextStepsFor(1);
+  expect(look).toMatchObject({ key: "k1", used: false, steps: [{ id: "red.run_tests", detail: "" }] });
+  expect(look.verdict.decision).toBe("redo");
+  g.markLookUsed();
+  expect(GameState.recoverSavedGame().nextStepsFor(1).used).toBe(true);
+  expect(g.nextStepsFor(2)).toBeNull(); // another step: nothing cached
+});
+
 test("keep_only_works_on_red", () => {
   let g = new GameState();
   g.start();

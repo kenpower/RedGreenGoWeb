@@ -1,5 +1,5 @@
 description = "NEXT STEPS, Red: an empty project with only VS's placeholder test: start with a test that calls a new function"
-mode = "next_steps"
+mode = "look"
 phase = "red"
 novice = true
 problem = "Build a Stack class for ints with push, pop, top, size and isEmpty."
@@ -13,5 +13,6 @@ code = ""
 test_result = "All 1 tests passed"
 
 [expect]
+decision = ["redo"]  # no real test yet
 steps_first = ["red.call_missing_function", "red.simplest_case"]
 detail_mentions = ["Stack", "isEmpty", "TestName"]

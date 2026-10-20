@@ -1,6 +1,8 @@
 import {
   askCoach,
   coachUrl,
+  reuseLook,
+  lookKey,
   classCodeFromReadme,
   linkedClassCode,
   checkClassCode,
@@ -191,6 +193,21 @@ describe("buildRequest", () => {
     expect(request.previous).toEqual({ phase: "green", decision: "redo", note: "Too much code." });
   });
 
+  test("every request is a Look, with the phase's catalogue, novice and done", () => {
+    const catalogue = [{ id: "red.run_tests", text: "Run all tests" }];
+    const look = buildRequest({ phase: "red", problem: "", before: null, after: snapshot(""), catalogue, novice: true });
+    expect(look).toMatchObject({ mode: "look", catalogue, novice: true, done: false });
+    const done = buildRequest({ phase: "red", problem: "", before: null, after: snapshot(""), done: true });
+    expect(done.done).toBe(true);
+    expect(done).not.toHaveProperty("catalogue"); // none given (e.g. Finish)
+  });
+
+  test("the baseline goes with every Look", () => {
+    const look = buildRequest({ phase: "green", problem: "", before: snapshot("v1"), after: snapshot("v2") });
+    expect(look.code_before).toEqual("// lib.cpp\nv1");
+    expect(look.tests_before).toBeDefined();
+  });
+
   test("sends the cycle, at least 1, as a whole number", () => {
     const at = (cycle) => buildRequest({ phase: "green", problem: "", before: null, after: snapshot(""), cycle }).cycle;
     expect(at(5)).toBe(5);
@@ -361,6 +378,34 @@ describe("askCoach", () => {
     resetCoach();
     reply({ ok: true, status: 200, json: async () => verdict });
     expect((await pending).stale).toBe(true);
+  });
+});
+
+describe("Done reusing the last Look", () => {
+  test("tells the server, which records its own stored verdict", async () => {
+    setClassCode("sd2");
+    let sent;
+    const ok = await reuseLook({ phase: "green", gameId: "g-1", players: ["Jane", "John"] }, async (url, options) => {
+      sent = { url, body: JSON.parse(options.body), code: options.headers["X-Class-Code"] };
+      return { ok: true, status: 200 };
+    });
+    expect(ok).toBe(true);
+    expect(sent.url).toEqual("http://127.0.0.1:8100/coach");
+    expect(sent.body).toEqual({ mode: "look", done: true, reuse: true, phase: "green", game_id: "g-1", pair: "jane__john" });
+    expect(sent.code).toEqual("SD2");
+  });
+
+  test("a 409 (nothing to reuse) or an error means: make a real Look", async () => {
+    expect(await reuseLook({ phase: "red", gameId: "g", players: [] }, async () => ({ ok: false, status: 409 }))).toBe(false);
+    expect(await reuseLook({ phase: "red", gameId: "g", players: [] }, async () => { throw new Error("x"); })).toBe(false);
+  });
+
+  test("the Look key changes with the code, the results or the step", () => {
+    const a = snapshot("v1");
+    expect(lookKey(a, 3)).toEqual(lookKey(snapshot("v1"), 3));
+    expect(lookKey(snapshot("v2"), 3)).not.toEqual(lookKey(a, 3));
+    expect(lookKey({ ...a, runTime: 99 }, 3)).not.toEqual(lookKey(a, 3));
+    expect(lookKey(a, 4)).not.toEqual(lookKey(a, 3));
   });
 });
 

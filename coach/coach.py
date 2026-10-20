@@ -19,6 +19,13 @@ A step is a dict:
     pair, game_id  who and which game, for coach_server's records (optional)
     cycle          which Red-Green-Refactor cycle, from 1 (optional; leniency depends on it)
     rescue         true when the pair is stuck and asked to see the code (optional)
+    mode           "look" (the default; "verdict"/"next_steps" are older names for it)
+    catalogue      [{id, text}] for this phase: the steps the guidance picks from (optional)
+    novice         true in the first cycles: a detail on every step (optional)
+    done           true when the pair clicked Done (coach_server counts these) (optional)
+
+Every answer is a Look: the guidance (steps, extra, extra_needed, on_track) and
+the verdict (decision, note, actions, hints, …) for the step as it is now.
 """
 import json
 from functools import lru_cache
@@ -64,28 +71,37 @@ SCHEMA = {
     "additionalProperties": False,
 }
 
-
-# mode "next_steps": no verdict, just which catalogue steps to do next (coach/next_steps.md)
+# Every request is a "look": one request, one answer with the verdict and the
+# guidance, served by two model calls (asked together, Haiku let the catalogue
+# sway the verdict). "verdict" and "next_steps" are the older names, still
+# accepted from cached clients; they get the same answer.
+MODES = {"look", "verdict", "next_steps"}
 MAX_CATALOGUE = 60
 MAX_NEXT_STEPS = 4
-NEXT_STEPS_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "steps": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {"id": {"type": "string"}, "detail": {"type": "string"}},
-                "required": ["id", "detail"],
-                "additionalProperties": False,
-            },
+
+
+def guidance_schema(catalogue):
+    """The guidance (coach/next_steps.md): never empty, and its ids come from this
+    phase's catalogue only (left free, it picks the next phase's steps after an
+    advance). The catalogue is fixed per phase, so there are few schemas."""
+    step = {
+        "type": "object",
+        "properties": {"id": {"type": "string", "enum": [c["id"] for c in catalogue]},
+                       "detail": {"type": "string"}},
+        "required": ["id", "detail"],
+        "additionalProperties": False,
+    }
+    return {
+        "type": "object",
+        "properties": {
+            "steps": {"type": "array", "minItems": 1, "items": step},
+            "extra": {"type": "string"},
+            "extra_needed": {"type": "boolean"},
+            "on_track": {"type": "boolean"},
         },
-        "extra": {"type": "string"},
-        "extra_needed": {"type": "boolean"},
-    },
-    "required": ["steps", "extra", "extra_needed"],
-    "additionalProperties": False,
-}
+        "required": ["steps", "extra", "extra_needed", "on_track"],
+        "additionalProperties": False,
+    }
 
 
 class BadStep(ValueError):
@@ -141,18 +157,17 @@ def validate(step):
         raise BadStep("rescue must be true or false")
     if step.get("rescue") and step["phase"] == "finish":
         raise BadStep("rescue is for a Red, Green or Refactor step")
-    if step.get("mode", "verdict") not in ("verdict", "next_steps"):
-        raise BadStep("mode must be verdict or next_steps")
-    if step.get("mode") == "next_steps":
-        if step["phase"] == "finish":
-            raise BadStep("next_steps is for a Red, Green or Refactor step")
-        catalogue = step.get("catalogue")
-        if (not isinstance(catalogue, list) or not 0 < len(catalogue) <= MAX_CATALOGUE
-                or not all(isinstance(c, dict) and isinstance(c.get("id"), str) and len(c["id"]) <= 64
-                           and isinstance(c.get("text"), str) and len(c["text"]) <= 300 for c in catalogue)):
-            raise BadStep("next_steps needs a catalogue of [{id, text}]")
-        if not isinstance(step.get("novice", False), bool):
-            raise BadStep("novice must be true or false")
+    if step.get("mode", "look") not in MODES:
+        raise BadStep("mode must be look")
+    catalogue = step.get("catalogue")
+    if catalogue is not None and (
+            not isinstance(catalogue, list) or not 0 < len(catalogue) <= MAX_CATALOGUE
+            or not all(isinstance(c, dict) and isinstance(c.get("id"), str) and len(c["id"]) <= 64
+                       and isinstance(c.get("text"), str) and len(c["text"]) <= 300 for c in catalogue)):
+        raise BadStep("catalogue must be a list of [{id, text}]")
+    for flag in ("novice", "done"):
+        if not isinstance(step.get(flag, False), bool):
+            raise BadStep(f"{flag} must be true or false")
 
 
 def _verdict_entry(h):
@@ -170,8 +185,10 @@ def build_user(step):
     parts = [
         f"Problem:\n{step.get('problem', '').strip() or '(not given)'}",
         f"Cycle {step.get('cycle', 1)}.",
-        f"Step just finished: {phase.upper()}" if phase != "finish"
-        else "The pair says they are FINISHED with the problem.",
+        (f"Step just finished: {phase.upper()}" if step.get("done")
+         else f"Step in progress: {phase.upper()} (a fresh test run or build just arrived; "
+              "judge it as if they had just finished the step)")
+        if phase != "finish" else "The pair says they are FINISHED with the problem.",
     ]
     if step.get("rescue"):
         parts.append("RESCUE: the pair has been held on this step three times and asked to be shown the code. "
@@ -196,6 +213,12 @@ def build_user(step):
     parts.append("Rule findings from the game's checks:\n" + (
         "\n".join(f"- {f}" for f in findings) if findings else "(none)"))
 
+    parts.extend(_code_blocks(step))
+    return "\n\n".join(parts)
+
+
+def _code_blocks(step):
+    parts = []
     for name, now_key, before_key in (("Tests", "tests", "tests_before"), ("Production code", "code", "code_before")):
         before = step.get(before_key)
         if before is None:
@@ -206,13 +229,14 @@ def build_user(step):
             parts.append(_block(f"{name} before this step", before))
             parts.append(_block(f"{name} now", step[now_key]))
     parts.append(f"Build and test result now: {step['test_result'].strip()}")
-    return "\n\n".join(parts)
+    return parts
 
 
-def build_next_steps_user(step):
+def build_guidance_user(step, verdict):
+    """The guidance call: the step plus the settled verdict, so the two agree."""
     parts = [
         f"Problem:\n{step.get('problem', '').strip() or '(not given)'}",
-        f"Phase: {step['phase'].upper()}",
+        f"Phase: {step['phase'].upper()}. Cycle {step.get('cycle', 1)}.",
     ]
     if step.get("novice"):
         parts.append("The pair is new to TDD: give a detail for every step.")
@@ -221,14 +245,16 @@ def build_next_steps_user(step):
     findings = step.get("rule_findings", [])
     parts.append("Rule findings from the game's checks:\n" + (
         "\n".join(f"- {f}" for f in findings) if findings else "(none)"))
-    parts.append(_block("Tests now", step["tests"]))
-    parts.append(_block("Production code now", step["code"]))
-    parts.append(f"Build and test result now: {step['test_result'].strip()}")
+    parts.extend(_code_blocks(step))
+    held = {"advance": "advances: the step is complete",
+            "redo": "holds the step (redo)", "back_to_red": "holds the step (back to Red)"}
+    parts.append(f"The coach's verdict on the step as it is now: it {held[verdict['decision']]}. "
+                 f"Its note: {verdict.get('note', '').strip()}")
     parts.append("Catalogue for this phase:\n" + "\n".join(f"[{c['id']}] {c['text']}" for c in step["catalogue"]))
     return "\n\n".join(parts)
 
 
-def _clean_next_steps(answer, step):
+def _clean_steps(answer, step):
     """Keep only catalogue ids, each once, at most MAX_NEXT_STEPS, in the coach's order."""
     known = {c["id"] for c in step["catalogue"]}
     seen, steps = set(), []
@@ -237,26 +263,46 @@ def _clean_next_steps(answer, step):
             seen.add(s["id"])
             steps.append({"id": s["id"], "detail": (s.get("detail") or "").strip()})
     return {"steps": steps[:MAX_NEXT_STEPS], "extra": (answer.get("extra") or "").strip(),
-            "extra_needed": bool(answer.get("extra_needed"))}
+            "extra_needed": bool(answer.get("extra_needed")), "on_track": bool(answer.get("on_track", True))}
 
 
-def ask_coach(client, step):
-    """Return (verdict, usage), or for mode "next_steps" ({steps, extra, extra_needed}, usage).
-    Raises anthropic.APIError, RuntimeError or json.JSONDecodeError."""
-    next_steps = step.get("mode") == "next_steps"
+NO_GUIDANCE = {"steps": [], "extra": "", "extra_needed": False, "on_track": True}
+
+
+class Usage:
+    """The token counts of both calls, added up (same fields as the API's usage)."""
+    FIELDS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
+
+    def __init__(self, *usages):
+        for field in self.FIELDS:
+            setattr(self, field, sum(getattr(u, field, 0) or 0 for u in usages))
+
+
+def _ask(client, system, schema, user, max_tokens):
     response = client.messages.create(
         model=MODEL,
-        max_tokens=4000,
+        max_tokens=max_tokens,
         # Each system prompt is the same for every request, so cache it; the
         # problem and the pair's code go in the user message.
-        system=[{"type": "text", "text": build_system("next_steps.md" if next_steps else "prompt.md"),
-                 "cache_control": {"type": "ephemeral"}}],
-        output_config={"effort": EFFORT, "format": {"type": "json_schema",
-                                                    "schema": NEXT_STEPS_SCHEMA if next_steps else SCHEMA}},
-        messages=[{"role": "user", "content": build_next_steps_user(step) if next_steps else build_user(step)}],
+        system=[{"type": "text", "text": build_system(system), "cache_control": {"type": "ephemeral"}}],
+        output_config={"effort": EFFORT, "format": {"type": "json_schema", "schema": schema}},
+        messages=[{"role": "user", "content": user}],
     )
     if response.stop_reason != "end_turn":
         raise RuntimeError(f"stopped early: {response.stop_reason}")
     text = next(b.text for b in response.content if b.type == "text")
-    answer = json.loads(text)
-    return (_clean_next_steps(answer, step) if next_steps else answer), response.usage
+    return json.loads(text), response.usage
+
+
+def ask_coach(client, step):
+    """Return (answer, usage): one Look, the verdict fields and the guidance (steps,
+    extra, extra_needed, on_track) together. The verdict comes first (coach/prompt.md),
+    then, with a catalogue, the guidance is asked with that verdict
+    (coach/next_steps.md); usage adds up both. Raises anthropic.APIError,
+    RuntimeError or json.JSONDecodeError."""
+    verdict, usage = _ask(client, "prompt.md", SCHEMA, build_user(step), 4000)
+    if not step.get("catalogue"):
+        return {**verdict, **NO_GUIDANCE}, usage
+    guidance, more = _ask(client, "next_steps.md", guidance_schema(step["catalogue"]),
+                          build_guidance_user(step, verdict), 3000)
+    return {**verdict, **_clean_steps(guidance, step)}, Usage(usage, more)

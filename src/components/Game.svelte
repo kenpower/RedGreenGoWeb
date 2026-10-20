@@ -13,7 +13,7 @@
   import { guideFor, unlockAction, GUIDE_CYCLES } from "../guide.js";
   import { rescueOffer } from "../gameState.js";
   import { catalogueFor, groupSteps, pickSteps, nextStepsDue, runMark, codeKey } from "../content/steps.js";
-  import { askNextSteps } from "../coach.js";
+  import { reuseLook, lookKey } from "../coach.js";
 
   const dispatch = createEventDispatcher();
 
@@ -84,29 +84,37 @@
   let nextStepsAnswer = gameState.nextStepsFor(gameState.stepNumber);
   $: if (snapshot && step && CHECKED_PHASES.includes(step.stateName) && isCoached($helper) && !waiting)
     lookForNextSteps(snapshot, step);
+  // A Look between Dones: guidance for the card, plus the verdict the coach
+  // would give at Done now, cached so an unchanged Done can reuse it.
   const lookForNextSteps = async (current, forStep) => {
     const now = Date.now() / 1000;
     if (!nextStepsDue(lastLook, forStep.stepNumber, current, now)) return;
     lastLook = { step: forStep.stepNumber, run: runMark(current), code: codeKey(current), at: now };
     const phase = forStep.stateName;
-    const answer = await askNextSteps(
-      {
-        phase,
-        problem: resolveProblem(gameState.problem, $helper.data),
-        before: gameState.before,
-        after: current,
-        ruleFindings: ruleMessages(checkRules(phase, gameState.before, current)),
-        expected: expectedFor(phase, liveStatus(phase, gameState.before, current)),
-        gameId: gameState.gameId,
-        players: gameState.players,
-        cycle: forStep.cycle,
-      },
-      catalogueFor(phase),
-      { novice: forStep.cycle <= GUIDE_CYCLES }
-    );
-    if (!answer || gameState.stepNumber !== forStep.stepNumber) return; // moved on meanwhile
-    gameState.setNextSteps(forStep.stepNumber, answer);
+    const { verdict: answer, stale } = await ask(phase, checkRules(phase, gameState.before, current));
+    if (stale || !answer || gameState.stepNumber !== forStep.stepNumber) return; // moved on meanwhile
+    gameState.setNextSteps(forStep.stepNumber, answer, { key: lookKey(current, forStep.stepNumber) });
     nextStepsAnswer = gameState.nextStepsFor(forStep.stepNumber);
+  };
+
+  // Done: if the code and results are what the last Look saw (and no Done has
+  // used it yet), its verdict is the verdict: the server records it without a
+  // model call. Otherwise one more Look, marked as a Done.
+  const doneLook = async (phase, stepFindings) => {
+    const key = lookKey(snapshot, gameState.stepNumber);
+    const cached = gameState.nextStepsFor(gameState.stepNumber);
+    if (cached?.verdict && cached.key === key && !cached.used) {
+      if (await reuseLook({ phase, gameId: gameState.gameId, players: gameState.players })) {
+        gameState.markLookUsed();
+        return { verdict: cached.verdict, error: "", stale: false };
+      }
+    }
+    const result = await ask(phase, stepFindings, { done: true });
+    if (result.verdict && !result.stale && phase !== "finish") {
+      gameState.setNextSteps(gameState.stepNumber, result.verdict, { key, used: true });
+      nextStepsAnswer = gameState.nextStepsFor(gameState.stepNumber);
+    }
+    return result;
   };
   $: chosen = step && nextStepsAnswer?.stepNumber === step.stepNumber ? nextStepsAnswer : null;
   // Without a coach answer (coach off, or not answered yet): the steps that
@@ -345,6 +353,9 @@
       gameId: gameState.gameId,
       players: gameState.players,
       cycle: gameState.iteration + 1,
+      // every call is a Look: the guidance comes from this phase's catalogue
+      catalogue: phase === "finish" ? null : catalogueFor(phase),
+      novice: (step?.cycle || 1) <= GUIDE_CYCLES,
     });
 
   // Only one test may fail in Red. When the rules are enforced or the coach
@@ -417,7 +428,7 @@
 
     waiting = true;
     askedWith = JSON.stringify(snapshot);
-    const { verdict: v, error, stale } = await ask(phase, stepFindings);
+    const { verdict: v, error, stale } = await doneLook(phase, stepFindings);
     waiting = false;
     if (stale) return;
     // the coach erroring never blocks: fall back to the rules
@@ -456,7 +467,7 @@
     }
     finishState = "asking";
     waiting = true;
-    const { verdict: v, error, stale } = await ask("finish", []);
+    const { verdict: v, error, stale } = await ask("finish", [], { done: true });
     waiting = false;
     if (stale) return;
     if (!v) {

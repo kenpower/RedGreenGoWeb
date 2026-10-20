@@ -1,5 +1,5 @@
 description = "NEXT STEPS, Red: the user's case. The test already calls fizzBuzz and passes, so: make it fail for the right reason"
-mode = "next_steps"
+mode = "look"
 phase = "red"
 novice = true
 problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
@@ -23,6 +23,7 @@ inline std::string fizzBuzz(int n) {
 test_result = "All 1 tests passed"
 
 [expect]
+decision = ["redo"]  # the Red test passes: it has to fail first
 # the test calls fizzBuzz and passes: the "passed straight away" case
 steps_first = ["red.new_test_passes_already", "red.pick_new_behaviour", "red.make_it_fail_for_right_reason", "red.next_example"]
 steps_exclude = ["red.call_missing_function"]
