@@ -18,11 +18,11 @@ For Visual Studio's untouched placeholder test, start with red.call_missing_func
 
 In Refactor, three or more branches that do nearly the same thing (for example one hard-coded case per test) are duplication worth removing: pick refactor.remove_duplication first, not refactor.nothing_yet, and name the function in its detail. This holds even when the verdict advances: a Refactor may always end, so an advance doesn't mean nothing is left to tidy.
 
-For each step give a `detail`: one or two short sentences, at most 25 words (count them), specific to this code. Don't repeat the step's own text or explain TDD; just say what to do here. Name the real files, functions, tests and literal values, and say where to change things. Example for making a test fail for the right reason: fizzBuzz in fizz.hpp already returns '1', so this test passes. Test 3 instead, expecting 'Fizz'.
+For each step give a `detail`: one short sentence, at most 20 words (count them), specific to this code. Don't repeat the step's own text or explain TDD; just say what to do here. Name the real files, functions, tests and literal values, and say where to change things. Example for making a test fail for the right reason: fizzBuzz in fizz.hpp already returns '1', so this test passes. Test 3 instead, expecting 'Fizz'.
 - Put literal values in single quotes ('1', 'Fizz'), never double quotes.
 - If the request says the pair is new to TDD, give a detail for every step. Otherwise give one only where it adds something to the step's text, else "".
 - No code statements, no operators (==, !=, ->), no calls with brackets and no GoogleTest macro names (nothing starting EXPECT_ or ASSERT_): say "fizzBuzz with 3", not "fizzBuzz(3)", "the equality check", not "a == b", and "the placeholder assertion", not the macro.
-- Count the words: a detail over 25 words is cut. One sentence is usually enough. Identifiers and short literal values in a sentence are fine.
+- Count the words: at most 20. A detail with any code in it is thrown away, so describe code in words. Identifiers and short literal values in a sentence are fine.
 
 `extra`: one more step in plain words (at most 20 words, no code) ONLY if nothing in the catalogue fits something important; otherwise "". `extra_needed`: true if that extra step is needed to move on, false if it's good practice.
 

@@ -28,6 +28,7 @@ Every answer is a Look: the guidance (steps, extra, extra_needed, on_track) and
 the verdict (decision, note, actions, hints, …) for the step as it is now.
 """
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -78,6 +79,10 @@ SCHEMA = {
 MODES = {"look", "verdict", "next_steps"}
 MAX_CATALOGUE = 60
 MAX_NEXT_STEPS = 4
+# Code in a guidance detail: braces, operators, a call with brackets, a GoogleTest
+# macro. Such a detail is blanked (the step's own text still stands); run_fixtures
+# checks with the same pattern.
+DETAIL_CODE_LIKE = re.compile(r"[{}]|==|!=|->|<<|\)\s*;|\b[A-Za-z_]\w*\([^)]*\)|\b(?:EXPECT|ASSERT)_[A-Z]+\b")
 
 
 def guidance_schema(catalogue):
@@ -255,14 +260,19 @@ def build_guidance_user(step, verdict):
 
 
 def _clean_steps(answer, step):
-    """Keep only catalogue ids, each once, at most MAX_NEXT_STEPS, in the coach's order."""
+    """Keep only catalogue ids, each once, at most MAX_NEXT_STEPS, in the coach's order,
+    and blank any detail (or extra) that has code in it."""
+    def no_code(text):
+        text = (text or "").strip()
+        return "" if DETAIL_CODE_LIKE.search(text) else text
+
     known = {c["id"] for c in step["catalogue"]}
     seen, steps = set(), []
     for s in answer.get("steps", []):
         if s.get("id") in known and s["id"] not in seen:
             seen.add(s["id"])
-            steps.append({"id": s["id"], "detail": (s.get("detail") or "").strip()})
-    return {"steps": steps[:MAX_NEXT_STEPS], "extra": (answer.get("extra") or "").strip(),
+            steps.append({"id": s["id"], "detail": no_code(s.get("detail"))})
+    return {"steps": steps[:MAX_NEXT_STEPS], "extra": no_code(answer.get("extra")),
             "extra_needed": bool(answer.get("extra_needed")), "on_track": bool(answer.get("on_track", True))}
 
 

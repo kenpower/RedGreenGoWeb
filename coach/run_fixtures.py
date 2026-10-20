@@ -21,7 +21,7 @@ from pathlib import Path
 
 import anthropic
 
-from coach import EFFORT, MODEL, ask_coach, validate
+from coach import DETAIL_CODE_LIKE, EFFORT, MODEL, ask_coach, validate
 
 HERE = Path(__file__).parent
 ROOT = HERE.parent
@@ -43,8 +43,8 @@ MAX_ACTION_WORDS = 24  # the "new function, say X, ...: the compile error counts
 
 
 # Next-steps details may name identifiers and short literals ("add #include
-# "fizz.hpp"", "test 3, expecting Fizz"), but not code: braces, operators, calls.
-DETAIL_CODE_LIKE = re.compile(r"[{}]|==|!=|->|<<|\)\s*;|\b[A-Za-z_]\w*\([^)]*\)")
+# "fizz.hpp"", "test 3, expecting Fizz"), but not code (DETAIL_CODE_LIKE, from coach.py,
+# which blanks such details).
 MAX_DETAIL_WORDS = 25
 
 
@@ -209,7 +209,8 @@ def main(prefixes):
     if prefixes:
         files = [f for f in files if any(f.stem.startswith(p) for p in prefixes)]
 
-    client = anthropic.Anthropic()
+    # a stalled request otherwise waits out the SDK's 10-minute default, retried
+    client = anthropic.Anthropic(timeout=90)
     results, passed, input_tokens, output_tokens, cache_written, cache_read = [], 0, 0, 0, 0, 0
     catalogue = None
 
