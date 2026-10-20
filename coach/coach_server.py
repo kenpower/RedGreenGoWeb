@@ -12,7 +12,10 @@ Run behind nginx (see deploy/), listening on localhost only:
   python coach_server.py classes                     list codes and today's use
   python coach_server.py usage [--days 7]            tokens per class per day
   python coach_server.py progress [CODE] [--days N] [--csv]   one row per pair, for grading
-  python coach_server.py clear-progress CODE [--yes]
+  python coach_server.py clear-progress CODE [--yes] also deletes the class's events
+  python coach_server.py teacher-link CODE [--rotate]          the secret link to the live class view
+  python coach_server.py grades CODE [--csv]         the rubric grades given in the teacher view
+  python coach_server.py clear-grades CODE [--yes]
 
 Needs ANTHROPIC_API_KEY in the environment. RGG_COACH_PORT and RGG_COACH_DB
 override the port and the SQLite file.
@@ -20,25 +23,37 @@ override the port and the SQLite file.
 Endpoints:
   POST /coach     body: a step (see coach.py); returns the coach's verdict.
                   With pair and game_id, the verdict is also counted in that game's progress.
-  POST /progress  body: the browser's own progress counts for one game (see validate_progress);
-                  needs an active class code but doesn't use up its allowance
+  POST /progress  body: the browser's own progress counts and new events for one game (see
+                  validate_progress); needs an active class code but doesn't use up its allowance
   GET  /health    "ok"
+
+Teacher endpoints need X-Class-Code and X-Teacher-Key (from teacher-link):
+  GET  /teacher/progress             games updated in the last 12 hours
+  GET  /teacher/pair?key=PAIR_KEY    one pair's games, summary counts and event timeline
+  GET  /teacher/rubric               PUT {"criteria": [{id, name, description?}]} replaces it
+  GET  /teacher/grades[?pair_key=K]  PUT {"pair_key", "grades": [{criterion, score, comment}]} upserts
 """
 
 import argparse
 import datetime
+import hmac
 import json
 import os
+import re
+import secrets
 import sqlite3
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 import anthropic
 
 from coach import MODEL, BadStep, ask_coach, validate
 
 ALLOWED_ORIGINS = {"http://localhost:8080", "https://kenpower.github.io"}
+APP_URL = "https://kenpower.github.io/RedGreenGoWeb/"
 PORT = int(os.environ.get("RGG_COACH_PORT", 8100))
 DB_PATH = Path(os.environ.get("RGG_COACH_DB", Path(__file__).parent / "coach.sqlite3"))
 DEFAULT_DAILY_LIMIT = 600  # requests per class per day; a pair does ~30 steps per problem
@@ -47,12 +62,48 @@ DEFAULT_DAILY_LIMIT = 600  # requests per class per day; a pair does ~30 steps p
 # uses ~2-3k, so 600 steps fit; padded requests run out well before that.
 DEFAULT_DAILY_TOKENS = 2_000_000
 MAX_BODY_BYTES = 100_000  # 4 fields of MAX_TEXT plus JSON escaping
-MAX_PROGRESS_BYTES = 4_000
+MAX_PROGRESS_BYTES = 40_000  # 10 events of 500 characters, even if every one is escaped
+MAX_TEACHER_BYTES = 40_000
 
 PROGRESS_PHASES = {"red", "swap", "green", "refactor", "finished"}
 PROGRESS_COUNTS = ("steps", "cycles", "overrides", "back_to_red")
+# Added with the learning features; optional so an old cached client still works.
+PROGRESS_EXTRA_COUNTS = ("overrides_in_row", "predictions_right", "predictions_total", "intents_given",
+                         "hints_l2", "hints_l3", "smells_shown", "smells_revealed")
+PROGRESS_ADDED_COLUMNS = {
+    "held": "INTEGER NOT NULL DEFAULT 0",
+    "held_since": "REAL",
+    "last_note": "TEXT NOT NULL DEFAULT ''",
+    **{c: "INTEGER NOT NULL DEFAULT 0" for c in PROGRESS_EXTRA_COUNTS},
+}
 MAX_COUNT = 10_000
 COACH_DECISIONS = ("advance", "redo", "back_to_red")
+
+EVENT_KINDS = {"advance", "hold", "release", "override", "back_to_red", "intent", "prediction",
+               "hint", "smell", "commit", "finish"}
+EVENT_PHASES = PROGRESS_PHASES | {"finish", ""}
+MAX_EVENTS_PER_CALL = 10
+MAX_EVENTS_PER_GAME = 3_000
+MAX_PAIR_EVENTS = 10_000
+EARLIEST_TIME = 1_600_000_000  # 2020; anything before is a broken clock
+
+TEACHER_WINDOW = datetime.timedelta(hours=12)
+DEFAULT_RUBRIC = [
+    {"id": "tdd", "name": "TDD discipline",
+     "description": "One failing test at a time; only enough code to pass it; refactor on green."},
+    {"id": "tests", "name": "Test quality",
+     "description": "Each test checks one behaviour, is named for it, and fails for the right reason."},
+    {"id": "refactoring", "name": "Refactoring",
+     "description": "Spots duplication and unclear names, and tidies them without changing behaviour."},
+    {"id": "collaboration", "name": "Collaboration",
+     "description": "Swaps roles, says the next test before typing it, and talks through the design."},
+    {"id": "commits", "name": "Small commits",
+     "description": "Commits after each cycle, with messages that say what changed."},
+]
+CRITERION_ID = re.compile(r"[a-z0-9_-]{1,40}")
+MAX_CRITERIA = 12
+MAX_GRADES_PER_PUT = 20
+MAX_COMMENT = 1_000
 
 client = None  # created by serve(), so the admin commands don't need the API key
 
@@ -78,6 +129,7 @@ def db():
         CREATE INDEX IF NOT EXISTS usage_code_day ON usage (code, day);
         -- One row per game. steps..finished are reported by the browser; the coach_*
         -- counts are written here from the coach's own verdicts, so they can be trusted.
+        -- Later columns (held, last_note, predictions_...) are added below.
         CREATE TABLE IF NOT EXISTS progress (
             game_id TEXT PRIMARY KEY,
             code TEXT NOT NULL,
@@ -99,12 +151,45 @@ def db():
             coach_agreed_finish INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS progress_code ON progress (code, updated);
+        -- The browser's timeline of each game (t is the browser's clock), for the teacher view.
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY,
+            game_id TEXT NOT NULL,
+            code TEXT NOT NULL,
+            t REAL NOT NULL,
+            kind TEXT NOT NULL,
+            phase TEXT NOT NULL,
+            cycle INTEGER NOT NULL,
+            detail TEXT NOT NULL
+        );
+        -- The browser resends events until a call succeeds; this drops the repeats.
+        CREATE UNIQUE INDEX IF NOT EXISTS events_once ON events (game_id, t, kind, cycle, detail);
+        CREATE INDEX IF NOT EXISTS events_code ON events (code, game_id);
+        CREATE TABLE IF NOT EXISTS rubric (
+            code TEXT PRIMARY KEY,
+            criteria TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS grades (
+            code TEXT NOT NULL,
+            pair_key TEXT NOT NULL,
+            criterion TEXT NOT NULL,
+            score INTEGER,
+            comment TEXT NOT NULL DEFAULT '',
+            updated INTEGER NOT NULL,
+            PRIMARY KEY (code, pair_key, criterion)
+        );
         """
     )
     columns = {r["name"] for r in con.execute("PRAGMA table_info(classes)")}
     if "daily_tokens" not in columns:  # databases created before the token budget
         con.execute(f"ALTER TABLE classes ADD COLUMN daily_tokens INTEGER NOT NULL DEFAULT {DEFAULT_DAILY_TOKENS}")
-        con.commit()
+    if "teacher_key" not in columns:  # databases created before the teacher view
+        con.execute("ALTER TABLE classes ADD COLUMN teacher_key TEXT")
+    columns = {r["name"] for r in con.execute("PRAGMA table_info(progress)")}
+    for column, kind in {**PROGRESS_ADDED_COLUMNS, "ip": "TEXT NOT NULL DEFAULT ''"}.items():
+        if column not in columns:
+            con.execute(f"ALTER TABLE progress ADD COLUMN {column} {kind}")
+    con.commit()
     return con
 
 
@@ -121,6 +206,11 @@ def today():
 
 def now():
     return datetime.datetime.now().isoformat(timespec="seconds")
+
+
+def epoch(stamp):
+    """A stored now() string as epoch seconds."""
+    return int(datetime.datetime.fromisoformat(stamp).timestamp())
 
 
 def class_active(con, code):
@@ -177,70 +267,250 @@ class BadProgress(ValueError):
     pass
 
 
+def check_string(body, field, longest):
+    if not isinstance(body.get(field), str) or len(body[field]) > longest:
+        raise BadProgress(f"{field} must be a string of at most {longest} characters")
+
+
+def check_count(body, field):
+    value = body.get(field)
+    if type(value) is not int or not 0 <= value <= MAX_COUNT:  # type(): a bool is not a count
+        raise BadProgress(f"{field} must be a whole number from 0 to {MAX_COUNT}")
+
+
+def check_time(value, field):
+    if type(value) not in (int, float) or not EARLIEST_TIME <= value <= time.time() + 86_400:
+        raise BadProgress(f"{field} must be a time in epoch seconds")
+
+
 def validate_progress(body):
+    """Raise BadProgress unless body is a valid progress report. Fills in the
+    fields an older client leaves out."""
     if not isinstance(body, dict):
         raise BadProgress("body must be an object")
     for field, longest in (("game_id", 64), ("pair", 200), ("problem", 100)):
-        if not isinstance(body.get(field), str) or len(body[field]) > longest:
-            raise BadProgress(f"{field} must be a string of at most {longest} characters")
+        check_string(body, field, longest)
     if not body["game_id"]:
         raise BadProgress("game_id is required")
     for field in PROGRESS_COUNTS:
-        value = body.get(field)
-        if type(value) is not int or not 0 <= value <= MAX_COUNT:  # type(): a bool is not a count
-            raise BadProgress(f"{field} must be a whole number from 0 to {MAX_COUNT}")
+        check_count(body, field)
     if body.get("phase") not in PROGRESS_PHASES:
         raise BadProgress(f"phase must be one of {', '.join(sorted(PROGRESS_PHASES))}")
     if not isinstance(body.get("finished"), bool):
         raise BadProgress("finished must be true or false")
 
+    for field in PROGRESS_EXTRA_COUNTS:
+        body.setdefault(field, 0)
+        check_count(body, field)
+    if not isinstance(body.setdefault("held", False), bool):
+        raise BadProgress("held must be true or false")
+    if body.setdefault("held_since", None) is not None:
+        check_time(body["held_since"], "held_since")
+    body.setdefault("last_note", "")
+    check_string(body, "last_note", 300)
 
-def record_progress(con, code, body):
+    events = body.setdefault("events", [])
+    if not isinstance(events, list) or len(events) > MAX_EVENTS_PER_CALL:
+        raise BadProgress(f"events must be a list of at most {MAX_EVENTS_PER_CALL}")
+    for event in events:
+        if not isinstance(event, dict):
+            raise BadProgress("each event must be an object")
+        check_time(event.get("t"), "event t")
+        if event.get("kind") not in EVENT_KINDS:
+            raise BadProgress(f"event kind must be one of {', '.join(sorted(EVENT_KINDS))}")
+        if event.get("phase") not in EVENT_PHASES:
+            raise BadProgress(f"event phase must be one of {', '.join(sorted(EVENT_PHASES))}")
+        check_count(event, "cycle")
+        check_string(event, "detail", 500)
+
+
+def record_progress(con, code, body, ip):
+    """ip is where the latest report came from, so the teacher can match a tile to a lab PC."""
     stamp = now()
-    fields = ("pair", "problem", *PROGRESS_COUNTS, "phase", "finished")
-    values = [body[f] for f in fields[:-1]] + [int(body["finished"])]
+    fields = ("pair", "problem", *PROGRESS_COUNTS, "phase", "finished", *PROGRESS_ADDED_COLUMNS)
     con.execute(
-        f"INSERT INTO progress (game_id, code, started, updated, {', '.join(fields)}) "
-        f"VALUES (?, ?, ?, ?, {', '.join('?' * len(fields))}) "
-        "ON CONFLICT(game_id) DO UPDATE SET updated = excluded.updated, "
+        f"INSERT INTO progress (game_id, code, started, updated, ip, {', '.join(fields)}) "
+        f"VALUES (?, ?, ?, ?, ?, {', '.join('?' * len(fields))}) "
+        "ON CONFLICT(game_id) DO UPDATE SET updated = excluded.updated, ip = excluded.ip, "
         + ", ".join(f"{f} = excluded.{f}" for f in fields)
         + " WHERE progress.code = excluded.code",
-        (body["game_id"], code, stamp, stamp, *values),
+        (body["game_id"], code, stamp, stamp, ip, *(body[f] for f in fields)),
     )
+    owner = con.execute("SELECT code FROM progress WHERE game_id = ?", (body["game_id"],)).fetchone()
+    stored = con.execute("SELECT COUNT(*) FROM events WHERE game_id = ?", (body["game_id"],)).fetchone()[0]
+    # Same rule as the progress row: no events into another class's game. The cap
+    # stops one game filling the disk.
+    if owner["code"] == code and stored < MAX_EVENTS_PER_GAME:
+        con.executemany(
+            "INSERT OR IGNORE INTO events (game_id, code, t, kind, phase, cycle, detail) VALUES (?,?,?,?,?,?,?)",
+            [(body["game_id"], code, e["t"], e["kind"], e["phase"], e["cycle"], e["detail"]) for e in body["events"]],
+        )
     con.commit()
+
+
+def pair_key(pair):
+    """jane__john and john__jane are the same pair."""
+    return "__".join(sorted(pair.split("__")))
+
+
+SUMMED = ("steps", "cycles", "coach_asks", "coach_advance", "overrides", "back_to_red", "finished",
+          *PROGRESS_EXTRA_COUNTS)
+
+
+def summarize(rows):
+    """Add up a pair's games."""
+    s = dict.fromkeys(SUMMED, 0)
+    s.update(games=len(rows), holds=0, coach_agreed=0)
+    for r in rows:
+        for f in SUMMED:
+            s[f] += r[f]
+        s["holds"] += r["coach_redo"] + r["coach_back_to_red"]
+        s["coach_agreed"] += r["coach_agreed_finish"]
+    s["first_time_pct"] = round(100 * s["coach_advance"] / s["coach_asks"]) if s["coach_asks"] else None
+    return s
+
+
+def game_json(r):
+    """One progress row for the teacher view."""
+    game = {f: r[f] for f in ("game_id", "pair", "problem", "phase", "held_since", "last_note", "ip", *SUMMED)}
+    game.update(
+        pair_key=pair_key(r["pair"]),
+        started=epoch(r["started"]),
+        updated=epoch(r["updated"]),
+        held=bool(r["held"]),
+        finished=bool(r["finished"]),
+        coach_holds=r["coach_redo"] + r["coach_back_to_red"],
+    )
+    return game
+
+
+def get_rubric(con, code):
+    row = con.execute("SELECT criteria FROM rubric WHERE code = ?", (code,)).fetchone()
+    return json.loads(row["criteria"]) if row else DEFAULT_RUBRIC
+
+
+class BadRequest(ValueError):
+    pass
+
+
+def validate_rubric(body):
+    criteria = body.get("criteria") if isinstance(body, dict) else None
+    if not isinstance(criteria, list) or not 1 <= len(criteria) <= MAX_CRITERIA:
+        raise BadRequest(f"criteria must be a list of 1 to {MAX_CRITERIA}")
+    cleaned, ids = [], set()
+    for c in criteria:
+        if not isinstance(c, dict):
+            raise BadRequest("each criterion must be an object")
+        if not isinstance(c.get("id"), str) or not CRITERION_ID.fullmatch(c["id"]) or c["id"] in ids:
+            raise BadRequest("each criterion needs a unique id of a-z, 0-9, _ or -, at most 40 characters")
+        if not isinstance(c.get("name"), str) or not 0 < len(c["name"]) <= 80:
+            raise BadRequest("each criterion needs a name of at most 80 characters")
+        description = c.get("description", "")
+        if not isinstance(description, str) or len(description) > 500:
+            raise BadRequest("a description must be a string of at most 500 characters")
+        ids.add(c["id"])
+        cleaned.append({"id": c["id"], "name": c["name"], "description": description})
+    return cleaned
+
+
+def validate_grades(body, rubric_ids):
+    if not isinstance(body, dict):
+        raise BadRequest("body must be an object")
+    if not isinstance(body.get("pair_key"), str) or not 0 < len(body["pair_key"]) <= 200:
+        raise BadRequest("pair_key must be a string of at most 200 characters")
+    grades = body.get("grades")
+    if not isinstance(grades, list) or not 1 <= len(grades) <= MAX_GRADES_PER_PUT:
+        raise BadRequest(f"grades must be a list of 1 to {MAX_GRADES_PER_PUT}")
+    for g in grades:
+        if not isinstance(g, dict):
+            raise BadRequest("each grade must be an object")
+        if g.get("criterion") not in rubric_ids:
+            raise BadRequest("each grade's criterion must be the id of a criterion in the class rubric")
+        if g.get("score") is not None and (type(g["score"]) is not int or not 0 <= g["score"] <= 4):
+            raise BadRequest("score must be a whole number from 0 to 4, or null")
+        if not isinstance(g.setdefault("comment", ""), str) or len(g["comment"]) > MAX_COMMENT:
+            raise BadRequest(f"comment must be a string of at most {MAX_COMMENT} characters")
+
+
+def grades_json(con, code, key=None):
+    rows = con.execute(
+        "SELECT pair_key, criterion, score, comment, updated FROM grades WHERE code = ?"
+        + (" AND pair_key = ?" if key is not None else "") + " ORDER BY pair_key, criterion",
+        (code, key) if key is not None else (code,),
+    ).fetchall()
+    return {"grades": [dict(r) for r in rows]}
 
 
 class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_cors_headers()
-        self.send_header("Access-Control-Allow-Methods", "POST")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Class-Code")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Class-Code, X-Teacher-Key")
         self.send_header("Access-Control-Max-Age", "86400")
         self.end_headers()
 
     def do_GET(self):
         if self.path == "/health":
-            self.send_json(200, {"status": "ok"})
-        else:
-            self.send_json(404, {"error": "not found"})
+            return self.send_json(200, {"status": "ok"})
+        self.dispatch({
+            "/teacher/progress": (None, self.teacher_progress),
+            "/teacher/pair": (None, self.teacher_pair),
+            "/teacher/rubric": (None, self.teacher_rubric),
+            "/teacher/grades": (None, self.teacher_grades),
+        }, teacher=True)
 
     def do_POST(self):
-        routes = {"/coach": (MAX_BODY_BYTES, self.coach), "/progress": (MAX_PROGRESS_BYTES, self.progress)}
-        if self.path not in routes:
+        self.dispatch({"/coach": (MAX_BODY_BYTES, self.coach), "/progress": (MAX_PROGRESS_BYTES, self.progress)})
+
+    def do_PUT(self):
+        self.dispatch({
+            "/teacher/rubric": (MAX_TEACHER_BYTES, self.put_rubric),
+            "/teacher/grades": (MAX_TEACHER_BYTES, self.put_grades),
+        }, teacher=True)
+
+    def dispatch(self, routes, teacher=False):
+        """Check the route, origin and body size, then call the handler with the
+        parsed body (or the query, for a GET) and the class code. Teacher handlers
+        also get a database connection, and are only called with the right key."""
+        url = urlsplit(self.path)
+        if url.path not in routes:
             return self.send_json(404, {"error": "not found"})
         if self.headers.get("Origin") not in ALLOWED_ORIGINS:
             return self.send_json(403, {"error": "origin not allowed"})
 
-        max_bytes, handle = routes[self.path]
-        length = int(self.headers.get("Content-Length") or 0)
-        if not 0 < length <= max_bytes:
-            return self.send_json(413, {"error": "request too large"})
+        max_bytes, handle = routes[url.path]
+        if max_bytes:
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if not 0 < length <= max_bytes:
+                return self.send_json(413, {"error": "request too large"})
+            try:
+                data = json.loads(self.rfile.read(length))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self.send_json(400, {"error": "body must be JSON"})
+        else:
+            data = {k: v[0] for k, v in parse_qs(url.query).items()}
+        code = (self.headers.get("X-Class-Code") or "").strip().upper()
+        if not teacher:
+            return handle(data, code)
+
+        con = db()
         try:
-            body = json.loads(self.rfile.read(length))
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            return self.send_json(400, {"error": "body must be JSON"})
-        handle(body, (self.headers.get("X-Class-Code") or "").strip().upper())
+            row = con.execute("SELECT teacher_key FROM classes WHERE code = ?", (code,)).fetchone()
+            if not row:
+                return self.send_json(404, {"error": "unknown class code"})
+            given = (self.headers.get("X-Teacher-Key") or "").strip().encode()
+            if not row["teacher_key"] or not hmac.compare_digest(row["teacher_key"].encode(), given):
+                return self.send_json(403, {"error": "wrong teacher key"})
+            try:
+                handle(con, code, data)
+            except BadRequest as e:
+                self.send_json(400, {"error": str(e)})
+        finally:
+            con.close()
 
     def progress(self, body, code):
         try:
@@ -251,7 +521,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not class_active(con, code):
                 return self.send_json(403, {"error": "unknown class code"})
-            record_progress(con, code, body)
+            record_progress(con, code, body, self.client_ip())
             self.send_json(200, {"status": "ok"})
         finally:
             con.close()
@@ -280,6 +550,68 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             con.close()
 
+    def teacher_progress(self, con, code, _query):
+        since = (datetime.datetime.now() - TEACHER_WINDOW).isoformat(timespec="seconds")
+        name = con.execute("SELECT name FROM classes WHERE code = ?", (code,)).fetchone()["name"]
+        rows = con.execute(
+            "SELECT * FROM progress WHERE code = ? AND updated >= ? ORDER BY updated DESC", (code, since)
+        ).fetchall()
+        self.send_json(200, {"class": code, "name": name, "now": int(time.time()),
+                             "games": [game_json(r) for r in rows]})
+
+    def teacher_pair(self, con, code, query):
+        key = query.get("key", "")
+        rows = [r for r in con.execute("SELECT * FROM progress WHERE code = ? ORDER BY updated", (code,))
+                if pair_key(r["pair"]) == key]
+        if not rows:
+            return self.send_json(404, {"error": "no games for that pair"})
+        game_ids = [r["game_id"] for r in rows]
+        events = con.execute(
+            "SELECT game_id, t, kind, phase, cycle, detail FROM events "
+            f"WHERE code = ? AND game_id IN ({', '.join('?' * len(game_ids))}) ORDER BY t, id LIMIT ?",
+            (code, *game_ids, MAX_PAIR_EVENTS),
+        ).fetchall()
+        self.send_json(200, {
+            "pair_key": key,
+            "pair": rows[-1]["pair"],
+            "summary": summarize(rows),
+            "games": [game_json(r) for r in reversed(rows)],
+            "events": [dict(e) for e in events],
+        })
+
+    def teacher_rubric(self, con, code, _query):
+        self.send_json(200, {"criteria": get_rubric(con, code)})
+
+    def put_rubric(self, con, code, body):
+        criteria = validate_rubric(body)
+        with con:
+            con.execute(
+                "INSERT INTO rubric (code, criteria) VALUES (?, ?) "
+                "ON CONFLICT(code) DO UPDATE SET criteria = excluded.criteria",
+                (code, json.dumps(criteria)),
+            )
+        self.send_json(200, {"criteria": criteria})
+
+    def teacher_grades(self, con, code, query):
+        self.send_json(200, grades_json(con, code, query.get("pair_key")))
+
+    def put_grades(self, con, code, body):
+        validate_grades(body, {c["id"] for c in get_rubric(con, code)})
+        key, stamp = body["pair_key"], int(time.time())
+        with con:
+            for g in body["grades"]:
+                if g.get("score") is None and not g["comment"]:
+                    con.execute("DELETE FROM grades WHERE code = ? AND pair_key = ? AND criterion = ?",
+                                (code, key, g["criterion"]))
+                    continue
+                con.execute(
+                    "INSERT INTO grades (code, pair_key, criterion, score, comment, updated) VALUES (?,?,?,?,?,?) "
+                    "ON CONFLICT(code, pair_key, criterion) DO UPDATE SET score = excluded.score, "
+                    "comment = excluded.comment, updated = excluded.updated",
+                    (code, key, g["criterion"], g.get("score"), g["comment"], stamp),
+                )
+        self.send_json(200, grades_json(con, code, key))
+
     def send_json(self, status, data):
         body = json.dumps(data).encode()
         self.send_response(status)
@@ -288,6 +620,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def client_ip(self):
+        """nginx puts the real address in X-Real-IP; without nginx (local runs) it's the socket's."""
+        return (self.headers.get("X-Real-IP") or self.client_address[0]).strip()[:45]
 
     def send_cors_headers(self):
         origin = self.headers.get("Origin")
@@ -350,9 +686,11 @@ def show_usage(args):
         print(f"{r['day']}  {r['code']:<12} {r['n']:>4} {r['i']:>7} {r['w']:>8} {r['r']:>8} {r['o']:>8}")
 
 
-def pair_key(pair):
-    """jane__john and john__jane are the same pair."""
-    return "__".join(sorted(pair.split("__")))
+def write_csv(rows, columns):
+    import csv
+    writer = csv.DictWriter(sys.stdout, fieldnames=columns, extrasaction="ignore", lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(rows)
 
 
 def show_progress(args):
@@ -370,30 +708,21 @@ def show_progress(args):
         params,
     ).fetchall()
 
-    pairs = {}
-    for r in rows:  # oldest first, so the latest spelling of the pair wins
-        p = pairs.setdefault((r["code"], pair_key(r["pair"])), {
-            "games": 0, "steps": 0, "cycles": 0, "coach_asks": 0, "coach_advance": 0, "holds": 0,
-            "overrides": 0, "finished": 0, "coach_agreed": 0,
-        })
-        p["class"], p["pair"], p["last_active"] = r["code"], r["pair"] or "(no names)", r["updated"]
-        p["games"] += 1
-        for f in ("steps", "cycles", "coach_asks", "coach_advance", "overrides", "finished"):
-            p[f] += r[f]
-        p["holds"] += r["coach_redo"] + r["coach_back_to_red"]
-        p["coach_agreed"] += r["coach_agreed_finish"]
-    for p in pairs.values():
-        p["first_time_pct"] = round(100 * p["coach_advance"] / p["coach_asks"]) if p["coach_asks"] else ""
+    games = {}
+    for r in rows:
+        games.setdefault((r["code"], pair_key(r["pair"])), []).append(r)
+    pairs = []
+    for (code, _), group in games.items():
+        p = summarize(group)
+        # oldest first, so the latest spelling of the pair wins
+        p.update({"class": code, "pair": group[-1]["pair"] or "(no names)", "last_active": group[-1]["updated"]})
+        pairs.append(p)
 
     columns = ["class", "pair", "games", "last_active", "steps", "cycles", "coach_asks", "first_time_pct",
                "holds", "overrides", "finished", "coach_agreed"]
-    ordered = sorted(pairs.values(), key=lambda p: (p["class"], p["pair"]))
+    ordered = sorted(pairs, key=lambda p: (p["class"], p["pair"]))
     if args.csv:
-        import csv
-        writer = csv.DictWriter(sys.stdout, fieldnames=columns, extrasaction="ignore", lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(ordered)
-        return
+        return write_csv(ordered, columns)
     print(f"{'class':<10} {'pair':<28} {'games':>5}  {'last active':<19} {'steps':>5} {'cycles':>6} "
           f"{'asks':>5} {'1st ok':>6} {'holds':>5} {'overr':>5}  finished (coach agreed)")
     for p in ordered:
@@ -405,21 +734,88 @@ def show_progress(args):
         print("(no progress recorded)")
 
 
+def confirm(question, code, yes):
+    """Ask before deleting; the admin types the class code to agree."""
+    if yes:
+        return True
+    if input(f"{question} Type the class code to confirm: ").strip().upper() == code:
+        return True
+    print("cancelled")
+    return False
+
+
 def clear_progress(args):
     code = args.code.upper()
     con = db()
     games = con.execute("SELECT COUNT(*) FROM progress WHERE code = ?", (code,)).fetchone()[0]
-    if not games:
+    events = con.execute("SELECT COUNT(*) FROM events WHERE code = ?", (code,)).fetchone()[0]
+    if not games and not events:
         print(f"no progress recorded for {code}")
         return
-    if not args.yes:
-        answer = input(f"Delete {games} game(s) of progress for {code}? Type the class code to confirm: ")
-        if answer.strip().upper() != code:
-            print("cancelled")
-            return
+    if not confirm(f"Delete {games} game(s) of progress and {events} event(s) for {code}?", code, args.yes):
+        return
     with con:
         con.execute("DELETE FROM progress WHERE code = ?", (code,))
-    print(f"deleted {games} game(s) of progress for {code}")
+        con.execute("DELETE FROM events WHERE code = ?", (code,))
+    print(f"deleted {games} game(s) of progress and {events} event(s) for {code} (grades are kept)")
+
+
+def teacher_link(args):
+    code = args.code.upper()
+    with db() as con:
+        row = con.execute("SELECT teacher_key FROM classes WHERE code = ?", (code,)).fetchone()
+        if not row:
+            sys.exit(f"no such class: {code}")
+        key = row["teacher_key"]
+        if not key or args.rotate:
+            key = secrets.token_urlsafe(24)
+            con.execute("UPDATE classes SET teacher_key = ? WHERE code = ?", (key, code))
+    print(APP_URL + "?" + urlencode({"teacher": code, "key": key}))
+
+
+def show_grades(args):
+    """One row per graded pair: a score per rubric criterion, then the comments."""
+    code = args.code.upper()
+    con = db()
+    criteria = get_rubric(con, code)
+    names = {pair_key(r["pair"]): r["pair"]
+             for r in con.execute("SELECT pair FROM progress WHERE code = ? ORDER BY updated", (code,))}
+    pairs = {}
+    for g in con.execute("SELECT * FROM grades WHERE code = ?", (code,)):
+        p = pairs.setdefault(g["pair_key"], {"pair": names.get(g["pair_key"], g["pair_key"])})
+        p[g["criterion"]] = "" if g["score"] is None else g["score"]
+        p[g["criterion"] + " comment"] = g["comment"]
+    for p in pairs.values():
+        p["total"] = sum(p.get(c["id"]) or 0 for c in criteria)
+    ordered = sorted(pairs.values(), key=lambda p: p["pair"])
+
+    if args.csv:
+        rows = [{"pair": p["pair"], "total": p["total"],
+                 **{c["name"]: p.get(c["id"], "") for c in criteria},
+                 **{c["name"] + " comment": p.get(c["id"] + " comment", "") for c in criteria}}
+                for p in ordered]
+        return write_csv(rows, ["pair", *(c["name"] for c in criteria), "total",
+                                *(c["name"] + " comment" for c in criteria)])
+    print(f"{'pair':<28} " + " ".join(f"{c['id'][:12]:>12}" for c in criteria) + f" {'total':>6}")
+    for p in ordered:
+        print(f"{p['pair']:<28} " + " ".join(f"{p.get(c['id'], '-')!s:>12}" for c in criteria)
+              + f" {p['total']:>6}")
+    if not ordered:
+        print(f"(no grades for {code})")
+
+
+def clear_grades(args):
+    code = args.code.upper()
+    con = db()
+    count = con.execute("SELECT COUNT(*) FROM grades WHERE code = ?", (code,)).fetchone()[0]
+    if not count:
+        print(f"no grades recorded for {code}")
+        return
+    if not confirm(f"Delete {count} grade(s) for {code}?", code, args.yes):
+        return
+    with con:
+        con.execute("DELETE FROM grades WHERE code = ?", (code,))
+    print(f"deleted {count} grade(s) for {code}")
 
 
 def main(argv):
@@ -444,10 +840,22 @@ def main(argv):
     p.add_argument("--days", type=int, help="only games active in the last N days")
     p.add_argument("--csv", action="store_true", help="CSV for a spreadsheet")
     p.set_defaults(func=show_progress)
-    p = sub.add_parser("clear-progress", help="delete a class's progress records")
+    p = sub.add_parser("clear-progress", help="delete a class's progress records and events")
     p.add_argument("code")
     p.add_argument("--yes", action="store_true", help="don't ask for confirmation")
     p.set_defaults(func=clear_progress)
+    p = sub.add_parser("teacher-link", help="print the secret link to the live class view")
+    p.add_argument("code")
+    p.add_argument("--rotate", action="store_true", help="make a new key; the old link stops working")
+    p.set_defaults(func=teacher_link)
+    p = sub.add_parser("grades", help="rubric grades from the teacher view")
+    p.add_argument("code")
+    p.add_argument("--csv", action="store_true", help="CSV for a spreadsheet")
+    p.set_defaults(func=show_grades)
+    p = sub.add_parser("clear-grades", help="delete a class's rubric grades")
+    p.add_argument("code")
+    p.add_argument("--yes", action="store_true", help="don't ask for confirmation")
+    p.set_defaults(func=clear_grades)
     args = parser.parse_args(argv)
     args.func(args)
 

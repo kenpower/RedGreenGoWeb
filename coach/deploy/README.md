@@ -6,7 +6,16 @@ From the repo root, in Git Bash:
 cp .env.deploy.example .env.deploy   # then fill in ANTHROPIC_API_KEY
 ./deploy.sh --copy-key               # once: install your SSH key so ssh stops asking for a password
 ./deploy.sh                          # first deploy and every later one
+./deploy.sh --yes --pwd              # no "Deploy?" question; type the sudo password once, hidden
 ```
+
+To deploy without being asked anything, put `SUDO_PASSWORD=...` in `.env.deploy` (git-ignored)
+and run `./deploy.sh --yes`. `--pwd` asks for the password locally instead, and overrides the
+file. Either way the password goes to the server on ssh's stdin and sudo reads it with
+`sudo -S`. It never appears on a command line, in the uploaded bundle, in a file on the server
+or in the output. Without either, sudo asks for it on the server, as before. If sudo on the
+server doesn't keep the password between commands, the install stops and says so; deploy
+without the password then.
 
 `deploy.sh` packs the committed `coach/` (git archive HEAD),
 uploads them and runs `remote_install.sh` on the server, which:
@@ -67,6 +76,47 @@ The **server** counts come from the coach's own verdicts and can be trusted. The
 counts are whatever the game sends to `POST /progress`. They are fine for spotting who is
 working and who is stuck, but a student who knows the class code could send made-up numbers.
 Only games played with a class code are recorded.
+
+`clear-progress` also deletes the class's event timelines. It keeps the grades.
+
+## Teacher view (live class view, timelines, rubric grades)
+
+```bash
+ssh -t ken@compucore3.setu.ie rgg-coach-admin teacher-link SD2-2026            # prints the secret link
+ssh -t ken@compucore3.setu.ie rgg-coach-admin teacher-link SD2-2026 --rotate   # new key; the old link stops working
+```
+
+The link (`https://kenpower.github.io/RedGreenGoWeb/?teacher=CODE&key=KEY`) opens the live
+class view: one tile per pair, refreshed every 15 seconds, with stuck pairs flagged. Click a
+pair for its timeline and the rubric. Anyone with the link can see the class and change grades,
+so keep it to yourself. Use `--rotate` if it leaks. It works even for a disabled class.
+
+Each class starts with the default rubric (TDD discipline, Test quality, Refactoring,
+Collaboration, Small commits), scored 0-4 with a comment. You can change it in the teacher view.
+
+```bash
+ssh -t ken@compucore3.setu.ie rgg-coach-admin grades SD2-2026        # one row per pair
+ssh -t ken@compucore3.setu.ie 'rgg-coach-admin grades SD2-2026 --csv > sd2-grades.csv' && scp ken@compucore3.setu.ie:sd2-grades.csv .
+ssh -t ken@compucore3.setu.ie rgg-coach-admin clear-grades SD2-2026  # asks first; --yes skips that
+```
+
+The teacher endpoints (`/teacher/...`) have their own nginx rate limit of 60 requests a minute
+per IP. Students' requests from the same classroom IP don't use it up.
+
+### Privacy: tell the students
+
+With the teacher view, the server stores more than counts. For each game played with a class
+code it keeps:
+
+- the pair's names as typed on the start screen
+- the coach's notes and the rule findings shown to them
+- what they said the next test would check, and their predictions
+- the names of their tests when they finish, and their git commit messages
+- the time of each step
+- the IP address each game last reported from (shown on the pair's tile, to find the PC)
+
+It stores **no code**. Students must be told this before they use a class code. Delete it
+with `clear-progress` (and grades with `clear-grades`) when the module is over.
 
 ## Rollback
 

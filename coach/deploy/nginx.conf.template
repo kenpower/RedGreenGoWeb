@@ -5,10 +5,21 @@ location __URL_PATH__/ {
     proxy_pass http://127.0.0.1:__PORT__/;   # trailing slash strips the __URL_PATH__ prefix
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Real-IP $remote_addr;   # replaces any the client sent; shown in the teacher view
     proxy_read_timeout 90s;
     client_max_body_size 256k;
 
     # Per-IP limit on top of the per-class daily allowance; the zone is defined
     # in conf.d/__APP_NAME__-ratelimit.conf
     limit_req zone=__APP_NAME__ burst=10 nodelay;
+}
+
+# The teacher view polls every 15 s and saves grades as they're typed. Its own
+# zone, so a classroom behind one IP can't use up the teacher's requests (or the reverse).
+location __URL_PATH__/teacher/ {
+    proxy_pass http://127.0.0.1:__PORT__/teacher/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    client_max_body_size 64k;
+    limit_req zone=__APP_NAME__-teacher burst=30 nodelay;
 }
