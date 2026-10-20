@@ -10,11 +10,20 @@ next to the test .exe on every run, and the build writes <Project>.log; the help
 finds both under the solution folder.
 
 Run from the folder that holds your solution:
-  python rgg_server.py                  opens the game (after the first test run, if there are tests)
+  python rgg_server.py                  opens the game at http://127.0.0.1:8000/ (after the first test run, if there are tests)
+  python rgg_server.py --class CODE     the same, with your class code filled in
   python rgg_server.py --dev            opens the dev build on http://localhost:8080
+  python rgg_server.py --remote         opens the game on GitHub Pages instead (Chrome may block it from the helper)
   python rgg_server.py --help           all options
 
+The game is served from the helper itself, so the page and the helper share an origin:
+Chrome's Local Network Access blocks a public site (github.io) from reaching 127.0.0.1,
+even with the permission allowed. The page is a few lines of HTML; the game's code and
+styles still load from GitHub Pages, so the helper never needs updating for a new release.
+
 Endpoints (127.0.0.1:8000):
+  GET  /          the game page
+  GET  /rgg_server.py   this file, for the game's download link
   GET  /events    Server-Sent Events stream; one message per change
   GET  /results   the same data once, re-read from disk
   POST /reset     new game: forget the previous game's results, then re-read what is on disk
@@ -31,12 +40,43 @@ import time
 import webbrowser
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlencode
 
-GAME_URL = "https://kenpower.github.io/RedGreenGoWeb/?helper=1"  # ?helper=1 turns on the app's connection
-DEV_GAME_URL = "http://localhost:8080/?helper=1"
-ALLOWED_ORIGINS = {"http://localhost:8080", "https://kenpower.github.io"}
-ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
 PORT = 8000
+PUBLISHED_URL = "https://kenpower.github.io/RedGreenGoWeb/"
+GAME_URL = f"http://127.0.0.1:{PORT}/?helper=1"  # ?helper=1 turns on the app's connection
+DEV_GAME_URL = "http://localhost:8080/?helper=1"
+REMOTE_GAME_URL = PUBLISHED_URL + "?helper=1"
+ALLOWED_ORIGINS = {"http://localhost:8080", "https://kenpower.github.io",
+                   f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}"}
+ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
+
+# public/index.html, with a <base> so its relative paths (the bundle, styles, icons,
+# build/rgg_server.py) load from GitHub Pages.
+GAME_PAGE = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+\t<base href="{PUBLISHED_URL}">
+\t<meta charset='utf-8'>
+\t<meta name='viewport' content='width=device-width,initial-scale=1'>
+\t<meta name="color-scheme" content="dark">
+
+\t<title>Red Green Go!</title>
+
+\t<link rel='icon' type='image/png' href='favicon.png'>
+\t<link rel="preconnect" href="https://fonts.googleapis.com">
+\t<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+\t<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@300;400;500;700&display=swap'>
+\t<link rel='stylesheet' href='global.css'>
+\t<link rel='stylesheet' href='build/bundle.css'>
+
+\t<script defer src='build/bundle.js'></script>
+</head>
+
+<body>
+</body>
+</html>
+"""
 
 POLL_SECONDS = 0.5
 SETTLE_SECONDS = 0.3  # ignore files modified more recently than this (still being written)
@@ -428,10 +468,19 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        path = self.path.split("?")[0]
+        if path in ("/", "/index.html"):
+            # A top-level navigation sends no Origin; the Host check still applies.
+            if self.allowed():
+                self.send_body(GAME_PAGE.encode("utf-8"), "text/html; charset=utf-8")
+            return
         if not self.allowed():
             return
-        path = self.path.split("?")[0]
-        if path == "/events":
+        if path == "/rgg_server.py":
+            with open(__file__, "rb") as f:
+                self.send_body(f.read(), "text/x-python; charset=utf-8",
+                               {"Content-Disposition": 'attachment; filename="rgg_server.py"'})
+        elif path == "/events":
             self.stream_events()
         elif path == "/results":
             reload_from_disk(clear=False)
@@ -482,12 +531,16 @@ class Handler(BaseHTTPRequestHandler):
                 sse_clients -= 1
 
     def send_json(self, data):
-        body = json.dumps(data).encode("utf-8")
+        self.send_body(json.dumps(data).encode("utf-8"), "application/json")
+
+    def send_body(self, body, content_type, headers=None):
         self.send_response(200)
         self.send_cors_headers()
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", content_type)
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -539,7 +592,10 @@ def main():
                         help="glob for GoogleTest XML files, if auto-detection fails (repeatable)")
     parser.add_argument("--build-log", action="append", default=[],
                         help="glob for MSBuild .log files, if auto-detection fails (repeatable)")
+    parser.add_argument("--class", dest="class_code", metavar="CODE", help="your class code, for the coach")
     parser.add_argument("--dev", action="store_true", help=f"open {DEV_GAME_URL} instead of {GAME_URL}")
+    parser.add_argument("--remote", action="store_true",
+                        help=f"open {REMOTE_GAME_URL} instead (Chrome may block it from reaching the helper)")
     parser.add_argument("--no-browser", action="store_true", help="don't open the game")
     parser.add_argument("--beep", action="store_true", help="beep when new test results arrive")
     args = parser.parse_args()
@@ -572,13 +628,15 @@ def main():
         print(f"  Git: {git['error'] or 'not a git repository'}")
     if not (args.results or find_result_files(project_dir)):
         print("  No test results yet - run your tests in Visual Studio's Test Explorer.")
-    print(f"Serving http://127.0.0.1:{PORT}  (Ctrl+C to stop)", flush=True)
+    print(f"Open http://127.0.0.1:{PORT}/ to play  (Ctrl+C to stop)", flush=True)
 
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     threading.Thread(target=watch, args=(args.beep,), daemon=True).start()
     if not args.no_browser:
-        threading.Thread(target=open_game_unless_connected,
-                         args=(DEV_GAME_URL if args.dev else GAME_URL,), daemon=True).start()
+        url = DEV_GAME_URL if args.dev else REMOTE_GAME_URL if args.remote else GAME_URL
+        if args.class_code:
+            url += "&" + urlencode({"class": args.class_code})
+        threading.Thread(target=open_game_unless_connected, args=(url,), daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
