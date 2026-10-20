@@ -3,9 +3,15 @@
 # Deploys the coach proxy (coach/) to compucore3.
 # The web app itself is still published to GitHub Pages with `npm run publish`.
 #
-# Usage: ./deploy.sh [--yes] [--copy-key]
+# Usage: ./deploy.sh [--yes] [--pwd] [--copy-key]
+#   --yes       don't ask "Deploy?"
+#   --pwd       ask for the sudo password here (hidden) before connecting
+#   --copy-key  install your SSH key on the server, then stop
 #
 # Settings and secrets come from .env.deploy (copy .env.deploy.example).
+# With SUDO_PASSWORD in .env.deploy, or --pwd, the password goes to the server
+# on ssh's stdin (never a command line or a file), so `./deploy.sh --yes` with
+# SUDO_PASSWORD set asks nothing.
 # The same command does the first deploy and every later one: it creates the
 # service user, venv, systemd unit and nginx config if they are missing, and
 # replaces the code, API key and config files every time. The class-code
@@ -13,8 +19,9 @@
 #
 # Only committed files are deployed (git archive HEAD).
 #
-# Opens two SSH connections (upload, install) and asks for the sudo password
-# once. Run with --copy-key first to stop SSH asking for a password.
+# Opens two SSH connections (upload, install). Without a sudo password from
+# .env.deploy or --pwd, sudo asks for it once on the server. Run with
+# --copy-key first to stop SSH asking for a password.
 
 set -e
 
@@ -37,13 +44,15 @@ pause_on_error() {
 trap pause_on_error EXIT
 
 ASSUME_YES=false
+ASK_PWD=false
 COPY_KEY=false
 for arg in "$@"; do
     case "$arg" in
         --yes|-y) ASSUME_YES=true ;;
+        --pwd) ASK_PWD=true ;;
         --copy-key) COPY_KEY=true ;;
         -h|--help)
-            sed -n '3,17p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '3,24p' "$0" | sed 's/^# \{0,1\}//'
             exit 0 ;;
         *) echo "Unknown option: $arg (see --help)"; exit 1 ;;
     esac
@@ -142,6 +151,13 @@ if [ "$ASSUME_YES" != "true" ]; then
     fi
 fi
 
+# Never exported, so it isn't in any child process's environment.
+SUDO_PASSWORD=${SUDO_PASSWORD:-}
+if [ "$ASK_PWD" == "true" ]; then
+    read -r -s -p "sudo password for ${REMOTE}: " SUDO_PASSWORD
+    echo
+fi
+
 # Step 1: Stage the bundle. It holds the API key, so it lives in a private temp
 # dir that pause_on_error removes however the script exits.
 echo "[1/3] Building deploy bundle..."
@@ -188,11 +204,19 @@ echo "[2/3] Uploading bundle to ${REMOTE}..."
 ssh "${SSH_OPTS[@]}" "$REMOTE" "umask 077 && cat > ~/${BUNDLE_NAME}.tar.gz" < "$STAGE/bundle.tar.gz"
 
 # Step 3: Unpack and install in a single session so sudo asks only once.
-echo "[3/3] Installing on ${DEPLOY_HOST} (sudo may ask for your password)..."
-ssh -t "${SSH_OPTS[@]}" "$REMOTE" "set -e; umask 077; cd ~ && \
+INSTALL_CMD="set -e; umask 077; cd ~ && \
     trap 'rm -rf ~/${BUNDLE_NAME} ~/${BUNDLE_NAME}.tar.gz' EXIT && \
     tar -xzf ${BUNDLE_NAME}.tar.gz && \
     bash ${BUNDLE_NAME}/install.sh ~/${BUNDLE_NAME}"
+if [ -n "$SUDO_PASSWORD" ]; then
+    # printf is a bash builtin, so the password is in no process's argv. No -t:
+    # a terminal would echo what arrives on stdin.
+    echo "[3/3] Installing on ${DEPLOY_HOST}..."
+    printf '%s\n' "$SUDO_PASSWORD" | ssh "${SSH_OPTS[@]}" "$REMOTE" "$INSTALL_CMD --sudo-password-on-stdin"
+else
+    echo "[3/3] Installing on ${DEPLOY_HOST} (sudo may ask for your password)..."
+    ssh -t "${SSH_OPTS[@]}" "$REMOTE" "$INSTALL_CMD"
+fi
 
 echo ""
 echo "============================================"

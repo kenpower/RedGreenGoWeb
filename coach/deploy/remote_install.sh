@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runs on the server, from deploy.sh: bash install.sh <unpacked bundle dir>
+# Runs on the server, from deploy.sh: bash install.sh <unpacked bundle dir> [--sudo-password-on-stdin]
 # Safe to run on a fresh machine and on every later deploy.
 
 set -euo pipefail
@@ -11,7 +11,22 @@ STATE_DIR=/var/lib/${APP_NAME}
 NGINX_SITE=/etc/nginx/sites-enabled/${APP_NAME}.conf
 NGINX_ZONE=/etc/nginx/conf.d/${APP_NAME}-ratelimit.conf
 
-sudo -v
+if [ "${2:-}" == "--sudo-password-on-stdin" ]; then
+    # sudo reads the first line of stdin itself; the password is never in a
+    # variable, argv or file here. The cached timestamp covers the sudo calls below.
+    if ! sudo -S -p '' -v; then
+        echo "ERROR: sudo did not accept the password from .env.deploy / --pwd."
+        exit 1
+    fi
+    exec </dev/null  # nothing below reads what's left of stdin
+    if ! sudo -n true 2>/dev/null; then
+        echo "ERROR: sudo accepted the password but doesn't remember it between commands here."
+        echo "       Deploy without SUDO_PASSWORD/--pwd to type it on the server instead."
+        exit 1
+    fi
+else
+    sudo -v
+fi
 
 # First deploy only: service user, python venv support, install dir
 if ! id "$APP_NAME" >/dev/null 2>&1; then
