@@ -1,5 +1,35 @@
 import { get } from "svelte/store";
-import { helper, refreshHelper, HELPER_URL, diagnose, networkPermission, checkReachability } from "../src/helper.js";
+import {
+  helper, refreshHelper, HELPER_URL, HELPER_PAGE, diagnose, networkPermission, checkReachability, onGithubPages,
+  startHelper, helperEnabled, helperDownloadUrl,
+} from "../src/helper.js";
+
+describe("which page this is", () => {
+  test("GitHub Pages, the helper's own page, the dev server", () => {
+    expect(onGithubPages({ hostname: "kenpower.github.io" })).toBe(true);
+    expect(onGithubPages({ hostname: "127.0.0.1" })).toBe(false);
+    expect(onGithubPages({ hostname: "localhost" })).toBe(false);
+    expect(HELPER_PAGE).toEqual("http://127.0.0.1:8000/");
+  });
+
+  test("on the helper's own page the helper is turned on by itself", () => {
+    delete store.RGG_HELPER_ENABLED;
+    global.EventSource = undefined; // don't really connect
+    startHelper({ origin: HELPER_URL, search: "" });
+    expect(helperEnabled()).toBe(true);
+  });
+
+  test("the helper download comes from the helper on its own page", () => {
+    expect(helperDownloadUrl({ origin: HELPER_URL })).toEqual("http://127.0.0.1:8000/rgg_server.py");
+    expect(helperDownloadUrl({ origin: "https://kenpower.github.io" })).toEqual("build/rgg_server.py");
+  });
+
+  test("on GitHub Pages it waits to be asked", () => {
+    delete store.RGG_HELPER_ENABLED;
+    startHelper({ origin: "https://kenpower.github.io", search: "" });
+    expect(helperEnabled()).toBe(false);
+  });
+});
 
 const store = {};
 global.window = {

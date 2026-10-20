@@ -99,6 +99,9 @@ export class GameState {
       this.stuckAttempts = r.stuckAttempts || 0;
       this.rescues = r.rescues || 0;
       this.pendingEvents = r.pendingEvents || [];
+      this.nextSteps = r.nextSteps || null;
+      this.passedFirst = r.passedFirst || 0;
+      this.skipGreen = r.skipGreen || false;
     } else {
       this.players = ["John", "Jane"];
       this.driver = 0;
@@ -120,6 +123,9 @@ export class GameState {
       this.stuckAttempts = 0; // Done/Ask again that ended held, on this step (see noteHeld)
       this.rescues = 0; // times the pair asked to be shown the code
       this.pendingEvents = []; // events for the coach server not yet acknowledged
+      this.nextSteps = null; // the coach's last next-steps answer: {stepNumber, steps, extra, extra_needed}
+      this.passedFirst = 0; // Red tests kept although they passed straight away
+      this.skipGreen = false; // this cycle's Red test passed first time and was kept: no Green
     }
     this.#save();
   }
@@ -163,6 +169,12 @@ export class GameState {
     if (this.finished) return;
 
     this.state = states[this.state.next];
+    // a Red test kept although it passed first time has nothing to make pass:
+    // after the Swap, straight to Refactor
+    if (this.state.id == "green" && this.skipGreen) {
+      this.state = states.find((s) => s.id == "refactor");
+      this.skipGreen = false;
+    }
     this.stepNumber++;
     this.stuckAttempts = 0; // moving on: no longer stuck
     const cycle = this.iterations[this.iteration];
@@ -211,6 +223,25 @@ export class GameState {
   noteHeld() {
     this.stuckAttempts++;
     this.#save();
+  }
+
+  // The coach's next steps for one step; ignored once the pair has moved on
+  // (nextStepsFor checks the step number), so nothing needs clearing.
+  setNextSteps(stepNumber, answer) {
+    this.nextSteps = { stepNumber, steps: answer.steps || [], extra: answer.extra || "", extra_needed: !!answer.extra_needed };
+    this.#save();
+  }
+
+  nextStepsFor = (stepNumber) => (this.nextSteps?.stepNumber === stepNumber ? this.nextSteps : null);
+
+  // "Keep it: the code already does this": this Red's test passed straight
+  // away and the pair keeps it. Recorded for the teacher; the cycle then skips
+  // Green (see nextStep). Call before moving on from Red.
+  keepPassingTest(name) {
+    if (this.state.id != "red") return;
+    this.passedFirst++;
+    this.skipGreen = true;
+    this.addEvent("passed_first_time", name);
   }
 
   // The pair asked to be shown the code for this step.
@@ -292,6 +323,7 @@ export class GameState {
     back_to_red: this.backToRedCount(),
     finished: this.finished,
     rescues: this.rescues,
+    passed_first: this.passedFirst,
     events: this.pendingEvents.slice(0, 10), // acknowledged with ackEvents once sent
   });
 

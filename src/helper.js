@@ -16,10 +16,25 @@ const RETRY_MS = 5000;
 // data: latest message from the helper, kept while offline so the UI doesn't flicker
 export const helper = writable({ status: "off", data: null });
 
+// The helper also serves the game itself here, which Chrome doesn't block
+// (the page and the helper are the same origin).
+export const HELPER_PAGE = HELPER_URL + "/";
+
+// This page is the GitHub Pages copy of the game, which Chrome may stop from
+// reaching the helper; the helper's own page doesn't have that problem.
+export const onGithubPages = (location = globalThis.window?.location) => !!location?.hostname?.endsWith("github.io");
+const onHelperPage = (location = globalThis.window?.location) => location?.origin === HELPER_URL;
+
+// Where to download rgg_server.py: from the helper itself on its own page
+// (same origin, so the download works despite the page's <base href> to
+// GitHub Pages), else the copy next to the bundle.
+export const helperDownloadUrl = (location = globalThis.window?.location) =>
+  onHelperPage(location) ? HELPER_URL + "/rgg_server.py" : "build/rgg_server.py";
+
 // What to tell the pair when the browser blocks the helper.
-export const BLOCKED_HELP =
-  "Chrome blocked this page from reaching the helper on your computer. Click the icon left of the address bar → " +
-  "Site settings → Local network access → Allow, then reload.";
+export const BLOCKED_HELP = `Chrome blocked this page from reaching the helper on your computer. Open ${HELPER_PAGE} (the helper prints it) instead of the GitHub page.`;
+// ...and when it just can't be reached (it may be blocked, or not running)
+export const OFFLINE_HELP = `Running it but still not connecting? Open ${HELPER_PAGE} (the helper prints it) instead of the GitHub page.`;
 
 let source = null;
 let retryTimer = null;
@@ -104,7 +119,8 @@ function connect() {
 
 // Call once on startup: connects if this browser opted in, or the URL has ?helper=1.
 export function startHelper(location = window.location) {
-  if (new URLSearchParams(location.search).has("helper")) {
+  // the helper's own page, or a ?helper=1 link: the visitor runs the helper
+  if (onHelperPage(location) || new URLSearchParams(location.search).has("helper")) {
     storage()?.setItem(ENABLED_KEY, "true");
   }
   if (helperEnabled()) connect();

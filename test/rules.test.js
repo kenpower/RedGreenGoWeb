@@ -3,6 +3,8 @@ import {
   liveStatus,
   changedSinceRun,
   pickRedTest,
+  passedFirstTest,
+  calledFunction,
   callsCode,
   isVagueTestName,
   untestedFunctions,
@@ -502,7 +504,7 @@ describe("liveStatus", () => {
 
     test("a new test that passes", () => {
       const now = snap({ source: ["A.one", "A.two"], results: { "A.one": "passed", "A.two": "passed" } });
-      expect(lines(liveStatus("red", base, now))).toEqual([["New test A.two passes: make it fail for the right reason", false]]);
+      expect(lines(liveStatus("red", base, now))).toEqual([["New test A.two passes: it needs to fail first", false]]);
     });
 
     test("two new tests", () => {
@@ -647,7 +649,7 @@ describe("edited tests and the VS template", () => {
     const before = snap({ source: ["Calc.Sum"], results: { "Calc.Sum": "passed" } });
     const now = snap({ testFile: "TEST(Calc, Sum) {\n  EXPECT_EQ(1, f()); // checked\n  EXPECT_TRUE(f() > 0);\n}\n", results: { "Calc.Sum": "passed" } });
     expect(rules(checkRules("red", before, now))).toEqual(["new_test_passes"]);
-    expect(liveStatus("red", before, now).lines).toEqual([{ text: "Calc.Sum passes: make it fail for the right reason", ok: false }]);
+    expect(liveStatus("red", before, now).lines).toEqual([{ text: "Calc.Sum passes: it needs to fail first", ok: false }]);
   });
 
   test("an unchanged test that now fails doesn't count as the Red test", () => {
@@ -784,6 +786,44 @@ describe("tests unchanged in Green: the TEST blocks, not the whole file", () => 
     expect(checkRules("refactor", greenEnd, now).find((f) => f.rule === "tests_added_or_removed").message).toEqual(
       "You added a test (Calc.Empty): Refactor keeps the same tests."
     );
+  });
+});
+
+describe("a Red test that passes straight away", () => {
+  const base = snap({ testFile: "TEST(TestCaseName, TestName) {\n  EXPECT_EQ(1, 1);\n}\n", results: { "TestCaseName.TestName": "passed" } });
+  const now = (status, extra = {}) =>
+    snap({
+      testFile: 'TEST(TestCaseName, TestName) {\n  EXPECT_TRUE(fizzBuzz(1) == "1");\n}\n',
+      results: { "TestCaseName.TestName": status },
+      ...extra,
+    });
+
+  test("the user's case: complete fizzBuzz, the new test passes", () => {
+    expect(passedFirstTest(base, now("passed"))).toEqual("TestCaseName.TestName");
+    expect(liveStatus("red", base, now("passed")).lines[0]).toEqual({
+      text: "New test TestCaseName.TestName passes: it needs to fail first",
+      ok: false,
+    });
+    expect(liveStatus("red", base, now("passed")).goalMet).toBe(false); // Done stays locked
+  });
+
+  test("not when it fails, the build fails, or the results are stale", () => {
+    expect(passedFirstTest(base, now("failed"))).toBeNull();
+    expect(passedFirstTest(base, now("passed", { build: failedBuild(20) }))).toBeNull();
+    const stale = now("passed");
+    stale.files[0].mtime = 50;
+    expect(passedFirstTest(base, stale)).toBeNull();
+  });
+
+  test("not for a test that calls no code (that's a different problem)", () => {
+    const literal = snap({ testFile: "TEST(TestCaseName, TestName) {\n  EXPECT_TRUE(true);\n}\n", results: { "TestCaseName.TestName": "passed" } });
+    expect(passedFirstTest(base, literal)).toBeNull();
+  });
+
+  test("the function the test calls", () => {
+    expect(calledFunction('TEST(A, b) { EXPECT_TRUE(fizzBuzz(1) == "1"); }')).toEqual("fizzBuzz");
+    expect(calledFunction("TEST(A, b) { Stack s; EXPECT_TRUE(s.isEmpty()); }")).toEqual("isEmpty");
+    expect(calledFunction("TEST(A, b) { EXPECT_TRUE(true); }")).toBeNull();
   });
 });
 

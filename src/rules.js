@@ -199,6 +199,24 @@ export function pickRedTest(before, now) {
   return { problem: { rule: "no_new_test", message: "Write one new test before moving on." } };
 }
 
+// This Red's test passed straight away: a new (or changed) test that calls the
+// pair's code, ran with fresh results and a good build, and passes. Either the
+// code already does it, or the test doesn't check what they think. Its name, or null.
+export function passedFirstTest(before, now) {
+  if (!before || !now || buildFailed(now) || changedSinceRun(now)) return null;
+  const pick = pickRedTest(before, now);
+  if (pick.problem) return null;
+  if (!callsCode(testBodies(now)[pick.name] || "")) return null;
+  return results(now)[pick.name] === "passed" ? pick.name : null;
+}
+
+// The function a test body calls first (not a gtest macro), e.g. "fizzBuzz", or null.
+export function calledFunction(body) {
+  const inner = (body || "").slice((body || "").indexOf("{") + 1).replace(LITERALS, " ");
+  for (const m of inner.matchAll(/\b([A-Za-z_]\w*)\s*\(/g)) if (!/^(?:EXPECT|ASSERT)_/.test(m[1])) return m[1];
+  return null;
+}
+
 const noCodeMessage = (name) =>
   `${name} fails, but it doesn't call any of your code. Make it call the function you're about to write.`;
 
@@ -422,7 +440,7 @@ function liveRed(before, now) {
   } else if (ran[name] === "failed") {
     lines.push({ text: pick.how === "edited" ? `${name} now fails ✓${rename}` : `New test ${name}: failing ✓${rename}`, ok: true });
   } else {
-    lines.push({ text: `${label} passes: make it fail for the right reason`, ok: false });
+    lines.push({ text: `${label} passes: it needs to fail first`, ok: false });
   }
   if (!callsCode(testBodies(now)[name] || "")) lines.push({ text: noCodeMessage(name), ok: false });
   const was = results(before);

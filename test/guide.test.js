@@ -79,7 +79,7 @@ describe("red", () => {
     const now = snap({ tests: [ONE, TWO], results: { "A.one": "passed", "A.two": "passed" } });
     const items = guide("red", 1, base, now);
     expect(ticks(items)).toEqual([true, true, false, null]);
-    expect(items[2].reason).toEqual("It passes: make it fail for the right reason");
+    expect(items[2].reason).toEqual("It passed straight away: it needs to fail first");
     expect(current(items)).toBe(2);
   });
 

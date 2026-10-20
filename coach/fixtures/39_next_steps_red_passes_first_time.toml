@@ -1,0 +1,32 @@
+description = "NEXT STEPS, Red: the user's case. fizzBuzz is already complete, and the new test for 1 passes straight away"
+mode = "next_steps"
+phase = "red"
+novice = true
+problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
+expected = "Red: one new test, TestCaseName.TestName, that fails for the right reason."
+rule_findings = ["TestCaseName.TestName already passes. A new test should fail first."]
+tests = '''
+// test.cpp
+#include "pch.h"
+#include "fizz.hpp"
+
+TEST(TestCaseName, TestName) {
+  EXPECT_TRUE(fizzBuzz(1) == "1");
+}
+'''
+code = '''
+// fizz.hpp
+#include <string>
+inline std::string fizzBuzz(int n) {
+  if (n % 15 == 0) return "FizzBuzz";
+  if (n % 3 == 0) return "Fizz";
+  if (n % 5 == 0) return "Buzz";
+  return std::to_string(n);
+}
+'''
+test_result = "All 1 tests passed"
+
+[expect]
+steps_include = ["red.new_test_passes_already", "red.pick_new_behaviour", "red.prove_test_can_fail"]
+steps_exclude = ["red.call_missing_function"]
+detail_mentions = ["fizzBuzz", "fizz.hpp"]

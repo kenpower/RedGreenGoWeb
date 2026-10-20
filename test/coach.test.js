@@ -1,5 +1,6 @@
 import {
   askCoach,
+  coachUrl,
   buildRequest,
   pairKey,
   sendProgress,
@@ -33,7 +34,8 @@ class MemoryStorage {
 }
 
 beforeEach(() => {
-  global.window = { localStorage: new MemoryStorage(), location: { hostname: "localhost", search: "" } };
+  // the dev server, so requests go to the local dev coach
+  global.window = { localStorage: new MemoryStorage(), location: { hostname: "localhost", port: "8080", search: "" } };
 });
 
 afterAll(() => {
@@ -306,6 +308,25 @@ describe("askCoach", () => {
   });
 });
 
+describe("coachUrl", () => {
+  const REAL = "https://compucore3.setu.ie/rgg-coach";
+  const DEV = "http://127.0.0.1:8100";
+
+  test("the dev server (port 8080) uses the local dev coach", () => {
+    expect(coachUrl({ hostname: "localhost", port: "8080" })).toEqual(DEV);
+    expect(coachUrl({ hostname: "127.0.0.1", port: "8080" })).toEqual(DEV);
+  });
+
+  test("the game page the helper serves (port 8000) uses the real coach", () => {
+    expect(coachUrl({ hostname: "127.0.0.1", port: "8000" })).toEqual(REAL);
+    expect(coachUrl({ hostname: "localhost", port: "8000" })).toEqual(REAL);
+  });
+
+  test("GitHub Pages uses the real coach", () => {
+    expect(coachUrl({ hostname: "kenpower.github.io", port: "" })).toEqual(REAL);
+  });
+});
+
 describe("expectedFor", () => {
   test("names the focus test when the game knows it", () => {
     expect(expectedFor("red", { focusTest: "A.two" })).toMatch(/^Red: one new test, A\.two, that fails/);
@@ -377,6 +398,7 @@ describe("sendProgress", () => {
       back_to_red: 0,
       finished: false,
       rescues: 0,
+      passed_first: 0,
       events: [],
     });
   });

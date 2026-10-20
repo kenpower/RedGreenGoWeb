@@ -1,5 +1,7 @@
 <script>
-  import { helper, enableHelper, disableHelper, BLOCKED_HELP } from "../helper.js";
+  import {
+    helper, enableHelper, disableHelper, BLOCKED_HELP, OFFLINE_HELP, HELPER_PAGE, onGithubPages, helperDownloadUrl,
+  } from "../helper.js";
   import { testNames } from "../rules.js";
 
   let open = false;
@@ -63,8 +65,7 @@
       ? `${passed} passed, ${failed} failed — click for details`
       : "No test results yet — click for details";
 
-  // Copied next to the bundle by rollup.config.js
-  const HELPER_URL = "build/rgg_server.py";
+  const HELPER_URL = helperDownloadUrl();
 
   const icon = (status) => (status === "passed" ? "✔" : status === "failed" ? "✖" : "–");
 </script>
@@ -109,6 +110,9 @@
       {:else if $helper.status === "blocked"}
         <p class="blockedText"><strong>The browser blocked the helper.</strong></p>
         <p>{BLOCKED_HELP}</p>
+        {#if onGithubPages()}
+          <p class="playViaHelper">Play via your helper: <a href={HELPER_PAGE}>{HELPER_PAGE}</a></p>
+        {/if}
         <p class="muted">Retrying automatically…</p>
         <button class="link" on:click={disableHelper}>Stop connecting</button>
       {:else if $helper.status !== "connected"}
@@ -122,11 +126,11 @@
             If the browser asks to access apps on this device, click
             <strong>Allow</strong>.
           </li>
-          <li>
-            Running it but still not connecting? Chrome may be blocking it: click the
-            icon left of the address bar → Site settings → Local network access → Allow, then reload.
-          </li>
+          <li>{OFFLINE_HELP}</li>
         </ol>
+        {#if onGithubPages() && $helper.status === "offline"}
+          <p class="playViaHelper">Play via your helper: <a href={HELPER_PAGE}>{HELPER_PAGE}</a></p>
+        {/if}
         <p class="muted">Retrying automatically…</p>
         <button class="link" on:click={disableHelper}>Stop connecting</button>
       {:else}
@@ -218,6 +222,17 @@
 
   .badge.offline {
     color: var(--text-muted);
+  }
+
+  .playViaHelper {
+    padding: 0.3em 0.6em;
+    border: 1px solid var(--star);
+    color: var(--text-bright);
+  }
+
+  .playViaHelper a {
+    color: var(--star);
+    overflow-wrap: anywhere;
   }
 
   .badge.blocked,

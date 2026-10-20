@@ -506,6 +506,47 @@ test("progress_sends_at_most_ten_events_at_a_time", () => {
   expect(g.progress().events.map((e) => e.detail)).toEqual(["10", "11"]);
 });
 
+test("keeping_a_test_that_passed_first_time_skips_green_but_keeps_the_swap", () => {
+  let g = new GameState();
+  g.start();
+  const driver = g.driver;
+  g.keepPassingTest("FizzBuzz.OneIsOne");
+  g.nextStep(); // Red done
+  expect(g.state.id).toBe("swap");
+  expect(g.driver).not.toBe(driver); // roles swap as usual
+  g.nextStep(); // Swap done
+  expect(g.state.id).toBe("refactor"); // no Green: nothing to make pass
+  expect(g.iterations[0].phase).toBe(TDDPhase.REFACTOR);
+  expect(g.iteration).toBe(0); // the same cycle
+  g.nextStep(); // Refactor done
+  expect(g.state.id).toBe("red");
+  expect(g.iteration).toBe(1);
+  expect(g.completedCycles()).toBe(1);
+  // the next cycle has its Green again
+  g.nextStep();
+  g.nextStep();
+  expect(g.state.id).toBe("green");
+});
+
+test("a_kept_test_is_counted_and_sent_as_an_event", () => {
+  let g = new GameState();
+  g.start();
+  g.keepPassingTest("FizzBuzz.OneIsOne");
+  const p = g.progress();
+  expect(p.passed_first).toBe(1);
+  expect(p.events.at(-1)).toMatchObject({ kind: "passed_first_time", phase: "red", detail: "FizzBuzz.OneIsOne" });
+  expect(GameState.recoverSavedGame().skipGreen).toBe(true); // survives a reload before the swap
+});
+
+test("keep_only_works_on_red", () => {
+  let g = new GameState();
+  g.start();
+  steps(g, 2); // green
+  g.keepPassingTest("X.y");
+  expect(g.passedFirst).toBe(0);
+  expect(g.skipGreen).toBe(false);
+});
+
 test("the_red_baseline_is_taken_once_per_red_even_if_the_start_turns_clean_again", () => {
   let g = new GameState();
   g.start();
@@ -598,6 +639,7 @@ test("progress_summarises_the_game", () => {
     back_to_red: 0,
     finished: false,
     rescues: 0,
+    passed_first: 0,
     events: [],
   });
 

@@ -71,6 +71,13 @@
   // has answered, rescue is {why, code}.
   export let rescueOffer = "";
   export let rescue = null;
+  // The coach's next steps for this code, grouped (content/steps.groupSteps):
+  // {needed: [...], practice: [...]} items like the guide's plus `detail`; or null.
+  export let nextSteps = null;
+  // This Red's test passed straight away: {test, fn, picking} or null. The
+  // pair picks a new behaviour (stay in Red) or keeps it (Green is skipped).
+  export let passedFirst = null;
+  const short = (name) => (name || "").split(".").pop();
 
   const DONE_HINT = {
     red: "Click Done when exactly one test is failing (red)",
@@ -81,11 +88,13 @@
   // the live Done: what's still missing while locked, the label once met
   $: liveDone = isCycleStep && (liveLines.length > 0 || helperMissing);
   // With the guide, point at its current item; without, give the first unmet line.
-  $: currentItem = guide.find((g) => g.current);
+  $: currentItem = (nextSteps?.needed || guide).find((g) => g.current);
   $: lockReason = helperMissing
     ? "Waiting for the helper"
-    : guide.length && currentItem?.short
-      ? `see "${currentItem.short}" above`
+    : nextSteps?.needed.length && currentItem
+      ? `see "${currentItem.text}" above`
+      : guide.length && currentItem?.short
+        ? `see "${currentItem.short}" above`
       : liveLines.find((l) => l.ok !== true)?.text || "";
   $: doneLabel = liveDone ? (goalMet && !doneLocked ? DONE_MET[step.stateName] : "Done") : step.buttonText;
   const BOX = { true: "[✓]", false: "[✖]", null: "[ ]" };
@@ -247,6 +256,34 @@
       </div>
     {/if}
 
+    {#if passedFirst && !start && !held}
+      <div class="questionBox">
+        <p class="marker">Your new test {short(passedFirst.test)} passed straight away.</p>
+        <p>Your code already does this, or the test doesn't check what you think.</p>
+        {#if passedFirst.picking}
+          <p>
+            Change {short(passedFirst.test)} to check a behaviour your code doesn't do yet, then run the tests and see
+            it fail.
+          </p>
+        {:else}
+          <p class="choiceLabel">Needed to move on, choose one:</p>
+          <div class="choices">
+            <button disabled={busy || helperMissing} on:click={() => interact("pickNew")}
+              >Pick a behaviour the code doesn't do yet</button
+            >
+            <button disabled={busy || helperMissing} on:click={() => interact("keepPassing")}
+              >Keep it: the code already does this</button
+            >
+          </div>
+        {/if}
+        <p class="choiceLabel">Good practice:</p>
+        <p class="practiceLine">
+          Temporarily break {passedFirst.fn || "the function"} so it returns something wrong, run the tests, see
+          {short(passedFirst.test)} fail, then undo it.
+        </p>
+      </div>
+    {/if}
+
     {#if entryProblem && !start && !held}
       <div class="warnBox">
         <p class="marker">Heads up</p>
@@ -298,7 +335,32 @@
           {/if}
         </dl>
 
-        {#if !start && guide.length}
+        {#if !start && nextSteps && (nextSteps.needed.length || nextSteps.practice.length)}
+          {#each [["Needed to move on", nextSteps.needed, true], ["Good practice", nextSteps.practice, false]] as [heading, items, needed]}
+            {#if items.length}
+              <h3 class="todoHeading">{heading}</h3>
+              <ul class="guide" class:practice={!needed}>
+                {#each items as item}
+                  <li
+                    class:current={item.current}
+                    class:ticked={item.done === true}
+                    class:wrong={item.done === false}
+                    class:pulse={pulse && item.current}
+                  >
+                    <span class="box" aria-label={item.done === true ? "done" : item.done === false ? "problem" : "not done yet"}
+                      >{item.extra ? "   " : BOX[item.done]}</span
+                    >
+                    <span class="itemText">
+                      {item.text}
+                      {#if item.detail}<span class="detail">{item.detail}</span>{/if}
+                      {#if item.why}<span class="why">{item.why}</span>{/if}
+                    </span>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          {/each}
+        {:else if !start && guide.length}
           <h3 class="todoHeading">Step by step</h3>
           <ul class="guide">
             {#each guide as item}
@@ -571,6 +633,19 @@
     color: var(--testing-red);
   }
 
+  /* the coach's instruction for this code, under the catalogue text */
+  .detail {
+    display: block;
+    padding-left: 0;
+    color: var(--text-color);
+    text-shadow: none;
+  }
+
+  .guide.practice li.current {
+    border-left-color: transparent;
+    background: none;
+  }
+
   .pulse {
     animation: pulse 0.4s ease-in-out 3;
   }
@@ -733,6 +808,26 @@
   .override,
   .quiet {
     color: var(--text-muted);
+  }
+
+  .choiceLabel {
+    margin-top: 0.5em !important;
+    color: var(--text-bright);
+  }
+
+  .choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3em 1em;
+  }
+
+  .choices button {
+    margin: 0;
+  }
+
+  .practiceLine {
+    padding-left: 0.6em;
+    border-left: 2px solid var(--amber);
   }
 
   .rescueRow {

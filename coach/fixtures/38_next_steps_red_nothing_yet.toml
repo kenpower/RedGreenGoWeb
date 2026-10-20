@@ -1,0 +1,17 @@
+description = "NEXT STEPS, Red: an empty project with only VS's placeholder test: start with a test that calls a new function"
+mode = "next_steps"
+phase = "red"
+novice = true
+problem = "Build a Stack class for ints with push, pop, top, size and isEmpty."
+tests = '''
+TEST(TestCaseName, TestName) {
+  EXPECT_EQ(1, 1);
+  EXPECT_TRUE(true);
+}
+'''
+code = ""
+test_result = "All 1 tests passed"
+
+[expect]
+steps_first = ["red.call_missing_function", "red.simplest_case"]
+detail_mentions = ["Stack", "isEmpty", "TestName"]

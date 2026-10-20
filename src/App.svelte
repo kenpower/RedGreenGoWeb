@@ -5,7 +5,10 @@
   import { GameState } from "./gameState";
   import { fly } from "svelte/transition";
   import HelperStatus from "./components/HelperStatus.svelte";
-  import { helper, startHelper, resetHelper, enableHelper, BLOCKED_HELP } from "./helper.js";
+  import {
+    helper, startHelper, resetHelper, enableHelper, BLOCKED_HELP, OFFLINE_HELP, HELPER_PAGE, onGithubPages,
+    helperDownloadUrl,
+  } from "./helper.js";
   import { testNames } from "./rules.js";
   import { startCoach, resetCoach, getClassCode, setClassCode } from "./coach.js";
 
@@ -34,8 +37,7 @@
     !($helper.data.run > 0 || $helper.data.tests?.length);
   // The game checks every step against the pair's code, so it needs the helper.
   $: helperConnected = $helper.status === "connected";
-  // Copied next to the bundle by rollup.config.js
-  const HELPER_URL = "build/rgg_server.py";
+  const HELPER_URL = helperDownloadUrl();
 
   const startGame = () => {
     if (thirdPlayer) gameState.players[2] = thirdPlayer;
@@ -193,11 +195,12 @@
               <span>Looking for the helper…</span>
             {/if}
           </p>
+          {#if onGithubPages() && ["offline", "blocked"].includes($helper.status)}
+            <!-- Chrome may block this page from the helper; the helper's own copy of the game isn't -->
+            <p class="playViaHelper">Play via your helper: <a href={HELPER_PAGE}>{HELPER_PAGE}</a></p>
+          {/if}
           {#if $helper.status === "offline"}
-            <p class="hint">
-              Running it but still not connecting? Chrome may be blocking this page: click the icon left of
-              the address bar → Site settings → Local network access → Allow, then reload.
-            </p>
+            <p class="hint">{OFFLINE_HELP}</p>
           {/if}
         {/if}
       </div>
@@ -319,6 +322,20 @@
 
   .blockedHint {
     color: var(--testing-red);
+  }
+
+  .playViaHelper {
+    margin: 0.8em 0;
+    padding: 0.4em 0.8em;
+    border: 1px solid var(--star);
+    color: var(--text-bright);
+    font-size: 1.05em;
+  }
+
+  .playViaHelper a {
+    color: var(--star);
+    text-shadow: 0 0 5px var(--star);
+    overflow-wrap: anywhere;
   }
 
   #red {

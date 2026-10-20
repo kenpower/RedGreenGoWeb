@@ -14,6 +14,7 @@ Needs ANTHROPIC_API_KEY. Results are also saved to coach/results/.
 import datetime
 import json
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -23,6 +24,7 @@ import anthropic
 from coach import EFFORT, MODEL, ask_coach, validate
 
 HERE = Path(__file__).parent
+ROOT = HERE.parent
 # Shapes of real code, not prose: braces, operators, a call, a GoogleTest macro,
 # a statement ending in ';'. A bare name in a sentence ("a new function, say
 # fizzBuzz", std::invalid_argument) is fine; fizzBuzz(1) or EXPECT_EQ is not.
@@ -38,6 +40,44 @@ SECOND_TASK = re.compile(
     re.IGNORECASE)
 MAX_RESCUE_LINES = 15
 MAX_ACTION_WORDS = 24  # the "new function, say X, ...: the compile error counts as Red" move needs a few more
+
+
+# Next-steps details may name identifiers and short literals ("add #include
+# "fizz.hpp"", "test 3, expecting Fizz"), but not code: braces, operators, calls.
+DETAIL_CODE_LIKE = re.compile(r"[{}]|==|!=|->|<<|\)\s*;|\b[A-Za-z_]\w*\([^)]*\)")
+MAX_DETAIL_WORDS = 25
+
+
+def catalogues():
+    """The step catalogue per phase, straight from src/content/steps.js."""
+    script = ("import('./src/content/steps.js').then(m => console.log(JSON.stringify("
+              "Object.fromEntries(['red', 'green', 'refactor'].map(p => [p, m.catalogueFor(p)])))))")
+    out = subprocess.run(["node", "-e", script], cwd=ROOT, capture_output=True, text=True, check=True)
+    return json.loads(out.stdout)
+
+
+def score_next_steps(answer, expect, step):
+    ids = [s["id"] for s in answer["steps"]]
+    checks = [("step_count", 2 <= len(ids) <= 4, len(ids))]
+    if "steps_first" in expect:
+        checks.append(("steps_first", bool(ids) and ids[0] in expect["steps_first"], ids[0] if ids else "none"))
+    if "steps_include" in expect:
+        checks.append(("steps_include", any(i in ids for i in expect["steps_include"]), ", ".join(ids)))
+    if "steps_exclude" in expect:
+        found = [i for i in expect["steps_exclude"] if i in ids]
+        checks.append(("steps_exclude", not found, ", ".join(found) or "none"))
+    details = [s["detail"] for s in answer["steps"]]
+    text = " ".join(details)
+    for key in ("detail_mentions", "detail_suggests"):
+        if key in expect:
+            checks.append((key, any(w in text for w in expect[key]), text[:80] or '""'))
+    if step.get("novice"):
+        checks.append(("detail_every_step", all(d.strip() for d in details), f"{sum(bool(d) for d in details)}/{len(details)}"))
+    too_long = [d for d in details if len(d.split()) > MAX_DETAIL_WORDS]
+    checks.append(("detail_short", not too_long, too_long[0][:60] if too_long else "ok"))
+    coded = [d for d in details + [answer["extra"]] if DETAIL_CODE_LIKE.search(d)]
+    checks.append(("detail_no_code", not coded, coded[0][:60] if coded else "none"))
+    return checks
 
 
 def single_action(text):
@@ -168,11 +208,16 @@ def main(prefixes):
 
     client = anthropic.Anthropic()
     results, passed, input_tokens, output_tokens, cache_written, cache_read = [], 0, 0, 0, 0, 0
+    catalogue = None
 
     for f in files:
         fx = tomllib.loads(f.read_text(encoding="utf-8"))
         expect = fx.pop("expect")
         description = fx.pop("description")
+        next_steps = fx.get("mode") == "next_steps"
+        if next_steps and "catalogue" not in fx:
+            catalogue = catalogue or catalogues()
+            fx["catalogue"] = catalogue[fx["phase"]]
         validate(fx)  # fixtures must be valid server requests too
         try:
             verdict, usage = ask_coach(client, fx)
@@ -189,6 +234,20 @@ def main(prefixes):
         output_tokens += usage.output_tokens
         cache_written += usage.cache_creation_input_tokens or 0
         cache_read += usage.cache_read_input_tokens or 0
+        if next_steps:
+            checks = score_next_steps(verdict, expect, fx)
+            ok = all(c[1] for c in checks)
+            passed += ok
+            print(f"{'PASS' if ok else 'FAIL'} {f.stem}  ({description})")
+            for field, field_ok, got in checks:
+                print(f"   {'  ' if field_ok else '!!'} {field}: {got}   expected {expect.get(field, 'ok')}")
+            for s in verdict["steps"]:
+                print(f"      [{s['id']}] {s['detail']}")
+            if verdict["extra"]:
+                print(f"      extra ({'needed' if verdict['extra_needed'] else 'practice'}): {verdict['extra']}")
+            print()
+            results.append({"fixture": f.stem, "pass": ok, "checks": checks, "next_steps": verdict})
+            continue
         checks = score(verdict, expect, fx)
         ok = all(c[1] for c in checks)
         passed += ok

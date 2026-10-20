@@ -64,13 +64,36 @@ SCHEMA = {
 }
 
 
+# mode "next_steps": no verdict, just which catalogue steps to do next (coach/next_steps.md)
+MAX_CATALOGUE = 60
+MAX_NEXT_STEPS = 4
+NEXT_STEPS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "steps": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"id": {"type": "string"}, "detail": {"type": "string"}},
+                "required": ["id", "detail"],
+                "additionalProperties": False,
+            },
+        },
+        "extra": {"type": "string"},
+        "extra_needed": {"type": "boolean"},
+    },
+    "required": ["steps", "extra", "extra_needed"],
+    "additionalProperties": False,
+}
+
+
 class BadStep(ValueError):
     """The step is malformed; the message is safe to show the caller."""
 
 
 @lru_cache
-def build_system():
-    return (HERE / "prompt.md").read_text(encoding="utf-8")
+def build_system(name="prompt.md"):
+    return (HERE / name).read_text(encoding="utf-8")
 
 
 def _short_strings(value, count, length):
@@ -114,6 +137,18 @@ def validate(step):
         raise BadStep("rescue must be true or false")
     if step.get("rescue") and step["phase"] == "finish":
         raise BadStep("rescue is for a Red, Green or Refactor step")
+    if step.get("mode", "verdict") not in ("verdict", "next_steps"):
+        raise BadStep("mode must be verdict or next_steps")
+    if step.get("mode") == "next_steps":
+        if step["phase"] == "finish":
+            raise BadStep("next_steps is for a Red, Green or Refactor step")
+        catalogue = step.get("catalogue")
+        if (not isinstance(catalogue, list) or not 0 < len(catalogue) <= MAX_CATALOGUE
+                or not all(isinstance(c, dict) and isinstance(c.get("id"), str) and len(c["id"]) <= 64
+                           and isinstance(c.get("text"), str) and len(c["text"]) <= 300 for c in catalogue)):
+            raise BadStep("next_steps needs a catalogue of [{id, text}]")
+        if not isinstance(step.get("novice", False), bool):
+            raise BadStep("novice must be true or false")
 
 
 def _verdict_entry(h):
@@ -169,18 +204,54 @@ def build_user(step):
     return "\n\n".join(parts)
 
 
+def build_next_steps_user(step):
+    parts = [
+        f"Problem:\n{step.get('problem', '').strip() or '(not given)'}",
+        f"Phase: {step['phase'].upper()}",
+    ]
+    if step.get("novice"):
+        parts.append("The pair is new to TDD: give a detail for every step.")
+    if step.get("expected", "").strip():
+        parts.append(f"What the game requires of this step: {step['expected'].strip()}")
+    findings = step.get("rule_findings", [])
+    parts.append("Rule findings from the game's checks:\n" + (
+        "\n".join(f"- {f}" for f in findings) if findings else "(none)"))
+    parts.append(_block("Tests now", step["tests"]))
+    parts.append(_block("Production code now", step["code"]))
+    parts.append(f"Build and test result now: {step['test_result'].strip()}")
+    parts.append("Catalogue for this phase:\n" + "\n".join(f"[{c['id']}] {c['text']}" for c in step["catalogue"]))
+    return "\n\n".join(parts)
+
+
+def _clean_next_steps(answer, step):
+    """Keep only catalogue ids, each once, at most MAX_NEXT_STEPS, in the coach's order."""
+    known = {c["id"] for c in step["catalogue"]}
+    seen, steps = set(), []
+    for s in answer.get("steps", []):
+        if s.get("id") in known and s["id"] not in seen:
+            seen.add(s["id"])
+            steps.append({"id": s["id"], "detail": (s.get("detail") or "").strip()})
+    return {"steps": steps[:MAX_NEXT_STEPS], "extra": (answer.get("extra") or "").strip(),
+            "extra_needed": bool(answer.get("extra_needed"))}
+
+
 def ask_coach(client, step):
-    """Return (verdict, usage). Raises anthropic.APIError, RuntimeError or json.JSONDecodeError."""
+    """Return (verdict, usage), or for mode "next_steps" ({steps, extra, extra_needed}, usage).
+    Raises anthropic.APIError, RuntimeError or json.JSONDecodeError."""
+    next_steps = step.get("mode") == "next_steps"
     response = client.messages.create(
         model=MODEL,
         max_tokens=4000,
-        # The system prompt is the same for every request, so cache it; the
+        # Each system prompt is the same for every request, so cache it; the
         # problem and the pair's code go in the user message.
-        system=[{"type": "text", "text": build_system(), "cache_control": {"type": "ephemeral"}}],
-        output_config={"effort": EFFORT, "format": {"type": "json_schema", "schema": SCHEMA}},
-        messages=[{"role": "user", "content": build_user(step)}],
+        system=[{"type": "text", "text": build_system("next_steps.md" if next_steps else "prompt.md"),
+                 "cache_control": {"type": "ephemeral"}}],
+        output_config={"effort": EFFORT, "format": {"type": "json_schema",
+                                                    "schema": NEXT_STEPS_SCHEMA if next_steps else SCHEMA}},
+        messages=[{"role": "user", "content": build_next_steps_user(step) if next_steps else build_user(step)}],
     )
     if response.stop_reason != "end_turn":
         raise RuntimeError(f"stopped early: {response.stop_reason}")
     text = next(b.text for b in response.content if b.type == "text")
-    return json.loads(text), response.usage
+    answer = json.loads(text)
+    return (_clean_next_steps(answer, step) if next_steps else answer), response.usage

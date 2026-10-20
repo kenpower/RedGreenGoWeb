@@ -64,7 +64,7 @@ function redGuide(before, now, live) {
     why: "The failing test proves it really checks something.",
   };
   if (!ran) fails.done = null;
-  else if (passes) Object.assign(fails, { done: false, reason: "It passes: make it fail for the right reason" });
+  else if (passes) Object.assign(fails, { done: false, reason: "It passed straight away: it needs to fail first" });
   else if (failingLine) Object.assign(fails, { done: false, reason: failingLine.text });
   else fails.done = true;
 

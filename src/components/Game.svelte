@@ -3,14 +3,17 @@
   import CycleLine from "./CycleLine.svelte";
   import { fade, fly } from "svelte/transition";
   import { createEventDispatcher, tick } from "svelte";
-  import { helper, refreshHelper, BLOCKED_HELP } from "../helper.js";
+  import { helper, refreshHelper, BLOCKED_HELP, HELPER_PAGE, onGithubPages } from "../helper.js";
   import { isCoached, askCoach, resolveProblem, toneOf, shouldShow, sendProgress, expectedFor } from "../coach.js";
   import {
     checkRules, snapshotOf, startState, failingTests, uncommittedFiles, noRepo, liveStatus, codeFirstAdvice,
+    passedFirstTest, calledFunction, testBodies,
   } from "../rules.js";
   import { hintFor } from "../content/hints.js";
   import { guideFor, unlockAction, GUIDE_CYCLES } from "../guide.js";
   import { rescueOffer } from "../gameState.js";
+  import { catalogueFor, groupSteps, nextStepsDue, runMark, codeKey } from "../content/steps.js";
+  import { askNextSteps } from "../coach.js";
 
   const dispatch = createEventDispatcher();
 
@@ -60,8 +63,61 @@
   $: live = step && snapshot ? liveStatus(step.stateName, gameState.before, snapshot) : null;
   $: liveLines = live ? (live.backToRed && !gated ? [{ text: live.backToRed, ok: false }, ...live.lines] : live.lines) : [];
   $: doneLocked = (!!live && gated && !live.goalMet) || helperMissing;
+  // This Red's test passed straight away (fresh results, good build): either
+  // pick a behaviour the code doesn't do yet (stay in Red), or keep it and
+  // skip Green. Stale results never get here: running again comes first.
+  let pickingNew = false; // chose "Pick a behaviour the code doesn't do yet"
+  $: passedName = step?.stateName === "red" && startChecked && snapshot ? passedFirstTest(gameState.before, snapshot) : null;
+  $: if (!passedName) pickingNew = false;
+  $: passedFirst = passedName
+    ? { test: passedName, fn: calledFunction(testBodies(snapshot)[passedName]), picking: pickingNew }
+    : null;
+
   // cycles 1–2: numbered steps, ticked live; [] from cycle 3
   $: guide = step ? guideFor(step.stateName, step.cycle, gameState.before, snapshot, live, { locked: doneLocked }) : [];
+
+  // Next steps fitted to the code: with the coach on, it picks from the step
+  // catalogue when new results arrive and the code changed (at most once a
+  // minute). Until it answers, or without the coach, the guide or live lines
+  // above apply. It never holds or unlocks anything: Done stays with `live`.
+  let lastLook = null; // {step, run, code, at}
+  let nextStepsAnswer = gameState.nextStepsFor(gameState.stepNumber);
+  $: if (snapshot && step && CHECKED_PHASES.includes(step.stateName) && isCoached($helper) && !waiting)
+    lookForNextSteps(snapshot, step);
+  const lookForNextSteps = async (current, forStep) => {
+    const now = Date.now() / 1000;
+    if (!nextStepsDue(lastLook, forStep.stepNumber, current, now)) return;
+    lastLook = { step: forStep.stepNumber, run: runMark(current), code: codeKey(current), at: now };
+    const phase = forStep.stateName;
+    const answer = await askNextSteps(
+      {
+        phase,
+        problem: resolveProblem(gameState.problem, $helper.data),
+        before: gameState.before,
+        after: current,
+        ruleFindings: ruleMessages(checkRules(phase, gameState.before, current)),
+        expected: expectedFor(phase, liveStatus(phase, gameState.before, current)),
+        gameId: gameState.gameId,
+        players: gameState.players,
+      },
+      catalogueFor(phase),
+      { novice: forStep.cycle <= GUIDE_CYCLES }
+    );
+    if (!answer || gameState.stepNumber !== forStep.stepNumber) return; // moved on meanwhile
+    gameState.setNextSteps(forStep.stepNumber, answer);
+    nextStepsAnswer = gameState.nextStepsFor(forStep.stepNumber);
+  };
+  $: chosen = step && nextStepsAnswer?.stepNumber === step.stepNumber ? nextStepsAnswer : null;
+  $: nextSteps = chosen
+    ? groupSteps(
+        step.stateName,
+        chosen.steps,
+        chosen.extra ? { text: chosen.extra, needed: chosen.extra_needed } : null,
+        gameState.before,
+        snapshot,
+        live
+      )
+    : null;
   // Advice lines, never a hold: vague test names, and in the first Red, code
   // written before any test calls it. Also passed to the coach, marked as advice.
   $: liveAdvice = live
@@ -86,7 +142,13 @@
         : ""
     : "";
   $: if (refused && live?.goalMet && !shownStartState) refused = false;
-  $: shownFeedback = helperMissing ? ($helper.status === "blocked" ? BLOCKED_HELP : HELPER_MISSING) : notYet || feedback;
+  $: helperMissingText =
+    $helper.status === "blocked"
+      ? BLOCKED_HELP
+      : onGithubPages()
+        ? `${HELPER_MISSING}, or open ${HELPER_PAGE}`
+        : HELPER_MISSING;
+  $: shownFeedback = helperMissing ? helperMissingText : notYet || feedback;
   $: shownWho = helperMissing || notYet ? "" : feedbackWho;
   $: shownTone = helperMissing || notYet ? "red" : tone;
 
@@ -407,6 +469,14 @@
       case "rescue":
         if (offer === "show") return askRescue();
         return; // no coach: the button only says to ask the teacher
+      case "pickNew":
+        pickingNew = true; // stay in Red; the card says what to do
+        return;
+      case "keepPassing":
+        if (!passedName) return;
+        // nothing to make pass: Swap as usual, then straight to Refactor
+        gameState.keepPassingTest(passedName);
+        return advance({ feedback: `Kept ${passedName}: your code already does this, so there's no Green this cycle.`, tone: "green" });
       case "override":
         gameState.override();
         return advance();
@@ -462,6 +532,8 @@
         {guide}
         rescueOffer={offer}
         {rescue}
+        {nextSteps}
+        {passedFirst}
         on:interact={onInteract}
       />
     </div>

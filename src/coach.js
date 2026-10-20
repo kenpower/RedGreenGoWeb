@@ -45,8 +45,11 @@ function save(key, value) {
   }
 }
 
-function coachUrl(location = window.location) {
-  return ["localhost", "127.0.0.1"].includes(location.hostname) ? DEV_COACH_URL : COACH_URL;
+// The local dev coach only on the dev server (npm run dev, port 8080). The
+// game page the helper serves (127.0.0.1:8000) is a real game: real coach.
+export function coachUrl(location = window.location) {
+  const local = ["localhost", "127.0.0.1"].includes(location?.hostname);
+  return local && String(location.port) === "8080" ? DEV_COACH_URL : COACH_URL;
 }
 
 export function getClassCode() {
@@ -214,6 +217,26 @@ export async function askCoach(step, fetchFn = fetch) {
 }
 
 // Whole numbers in the 0..10000 range coach_server accepts.
+// The coach's pick of what to do next on this step, from the step catalogue
+// (src/content/steps.js): {steps: [{id, detail}], extra, extra_needed}, or
+// null if it couldn't answer. Never holds, never decides; never throws.
+export async function askNextSteps(step, catalogue, { novice = false } = {}, fetchFn = fetch) {
+  try {
+    const request = { ...buildRequest(step), mode: "next_steps", catalogue, novice };
+    delete request.history; // not used for next steps
+    const response = await fetchFn(coachUrl() + "/coach", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Class-Code": getClassCode() },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) return null;
+    const answer = await response.json();
+    return Array.isArray(answer?.steps) ? answer : null;
+  } catch {
+    return null;
+  }
+}
+
 const count = (n) => (Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 10000) : 0);
 
 // Records the pair's progress on the coach server for the teacher's grading
@@ -239,6 +262,7 @@ export async function sendProgress(summary, fetchFn = fetch) {
         back_to_red: count(summary.back_to_red),
         finished: !!summary.finished,
         rescues: count(summary.rescues),
+        passed_first: count(summary.passed_first),
         events: (summary.events || []).slice(0, 10).map((e) => ({
           t: Math.floor(Number(e.t) || 0),
           kind: String(e.kind || ""),
