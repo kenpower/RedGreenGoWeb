@@ -3,6 +3,9 @@ import {
   buildRequest,
   pairKey,
   sendProgress,
+  staleResults,
+  currentSnapshot,
+  STALE_FINDING,
   isCoached,
   resolveProblem,
   resetCoach,
@@ -75,6 +78,71 @@ describe("summariseResult", () => {
 
   test("no snapshot yet", () => {
     expect(summariseResult(null)).toEqual("No test results yet");
+  });
+});
+
+describe("stale results", () => {
+  // Source with two tests, one commented out; results as given.
+  const withResults = (tests, extra = {}) => ({
+    runTime: 100,
+    build: { status: "succeeded", time: 90, errors: [] },
+    tests,
+    files: [
+      {
+        path: "test.cpp",
+        kind: "test",
+        content: "TEST(Song, Equal) {}\nTEST(Song, DifferentArtistNotEqual) {}\n//TEST(Playlist, ParseNormalSplit) {}",
+        ...extra,
+      },
+    ],
+  });
+  const both = [
+    { name: "Song.Equal", status: "passed" },
+    { name: "Song.DifferentArtistNotEqual", status: "failed" },
+  ];
+
+  test("results that match the source are fresh", () => {
+    expect(staleResults(withResults(both))).toBe(false);
+  });
+
+  test("a result for a test no longer in the source (commented out) is stale", () => {
+    expect(staleResults(withResults([...both, { name: "Playlist.ParseNormalSplit", status: "failed" }]))).toBe(true);
+  });
+
+  test("a test in the source that hasn't run is stale", () => {
+    expect(staleResults(withResults([both[0]]))).toBe(true);
+  });
+
+  test("a source file saved after the last run is stale", () => {
+    expect(staleResults(withResults(both, { mtime: 150 }))).toBe(true);
+    expect(staleResults(withResults(both, { mtime: 50 }))).toBe(false);
+  });
+
+  test("a failed build is fresh information, never stale", () => {
+    const snap = { ...withResults([both[0]], { mtime: 150 }), build: { status: "failed", time: 200, errors: ["e"] } };
+    expect(staleResults(snap)).toBe(false);
+  });
+
+  test("nothing to go on is not stale", () => {
+    expect(staleResults(null)).toBe(false);
+    expect(staleResults({ runTime: 1, tests: [], files: [] })).toBe(false);
+  });
+
+  test("results for tests no longer in the source are dropped", () => {
+    const snap = withResults([...both, { name: "Playlist.ParseNormalSplit", status: "failed" }]);
+    expect(currentSnapshot(snap).tests.map((t) => t.name)).toEqual(["Song.Equal", "Song.DifferentArtistNotEqual"]);
+  });
+
+  test("the request leads with the stale finding and summarises only current results", () => {
+    const after = withResults([...both, { name: "Playlist.ParseNormalSplit", status: "failed" }]);
+    const request = buildRequest({ phase: "red", problem: "", before: null, after, ruleFindings: ["other"] });
+    expect(request.rule_findings).toEqual([STALE_FINDING, "other"]);
+    expect(request.test_result).toEqual("1 failed: Song.DifferentArtistNotEqual; 1 passed");
+  });
+
+  test("fresh results add no finding", () => {
+    const request = buildRequest({ phase: "red", problem: "", before: null, after: withResults(both) });
+    expect(request.rule_findings).toEqual([]);
   });
 });
 

@@ -1,5 +1,6 @@
 <script>
   import { helper, enableHelper, disableHelper } from "../helper.js";
+  import { testNames } from "../rules.js";
 
   let open = false;
   let helperEl;
@@ -16,33 +17,46 @@
   };
 
   $: data = $helper.data;
-  $: tests = data?.tests || [];
+  // The helper remembers every test it has ever seen, so a deleted, renamed or
+  // commented-out test keeps its last result. Count only tests still in the
+  // source, as the game's start check does; if no names parse (e.g. TYPED_TEST),
+  // count them all.
+  $: allTests = data?.tests || [];
+  $: sourceNames = testNames(data);
+  $: inSource = (t) => !sourceNames.size || sourceNames.has(t.name);
+  $: tests = allTests.filter(inSource);
+  $: removedTests = allTests.filter((t) => !inSource(t));
   $: latestRun = data?.run || 0;
   $: failed = tests.filter((t) => t.status === "failed").length;
   $: passed = tests.filter((t) => t.status === "passed").length;
   $: buildFailed = data?.build?.status === "failed";
+  // {repo: true, branch, headMessage, dirtySource, ...} | {repo: false} | null
+  $: git = data?.git;
+  // first line, trimmed; the full text is in the tooltip
+  const shortError = (error) => {
+    const line = String(error).split("\n")[0].trim();
+    return line.length > 80 ? line.slice(0, 77) + "…" : line;
+  };
 
-  $: badge =
+  // Words for every state except a connected helper, which shows the build
+  // or the test counts instead.
+  $: label =
     $helper.status === "off"
       ? "Connect code"
       : $helper.status === "connecting"
       ? "Connecting…"
       : $helper.status === "offline"
       ? "Helper offline"
-      : buildFailed
-      ? "Build failed"
-      : tests.length
-      ? `${passed} ✔ ${failed} ✖`
-      : "Connected";
+      : "";
 
-  $: dotClass =
+  $: tooltip =
     $helper.status !== "connected"
-      ? "grey"
-      : buildFailed || failed
-      ? "red"
+      ? "Connection to your code"
+      : buildFailed
+      ? "Build failed — click for details"
       : tests.length
-      ? "green"
-      : "grey";
+      ? `${passed} passed, ${failed} failed — click for details`
+      : "No test results yet — click for details";
 
   // Copied next to the bundle by rollup.config.js
   const HELPER_URL = "build/rgg_server.py";
@@ -53,8 +67,20 @@
 <svelte:window on:click={closeIfOutside} on:keydown={closeOnEscape} />
 
 <div class="helper" bind:this={helperEl}>
-  <button class="badge" on:click={() => (open = !open)} title="Connection to your code">
-    <span class="dot {dotClass}" />{badge}
+  <button
+    class="badge"
+    class:offline={$helper.status === "offline"}
+    on:click={() => (open = !open)}
+    title={tooltip}
+  >
+    {#if label}
+      {label}
+    {:else if buildFailed}
+      <span class="fail">Build failed</span>
+    {:else}
+      Tests: <span class="pass">✔ {passed}</span>{#if failed}
+        <span class="fail">✖ {failed}</span>{/if}
+    {/if}
   </button>
 
   {#if open}
@@ -94,7 +120,11 @@
         {#if tests.length}
           <ul class="tests">
             {#each tests as test}
-              <li class={test.status} class:stale={test.run < latestRun}>
+              <li
+                class={test.status}
+                class:stale={test.run < latestRun}
+                title={test.run < latestRun ? "From an earlier test run" : ""}
+              >
                 <span class="icon">{icon(test.status)}</span>{test.name}
                 {#if test.message}<pre>{test.message}</pre>{/if}
               </li>
@@ -102,6 +132,33 @@
           </ul>
         {:else if !buildFailed}
           <p>Connected. Run your tests in Visual Studio and they'll appear here.</p>
+        {/if}
+
+        {#if removedTests.length}
+          <p class="muted removedHeading">No longer in your code (not counted)</p>
+          <ul class="tests removed">
+            {#each removedTests as test}
+              <li><span class="icon">{icon(test.status)}</span>{test.name}</li>
+            {/each}
+          </ul>
+        {/if}
+
+        {#if git?.repo}
+          <p class="git">
+            <span class="branch">{git.branch || "detached HEAD"}</span> ·
+            {#if git.dirtySource?.length}
+              <span class="dirty">{git.dirtySource.length} uncommitted</span>
+            {:else}
+              all committed
+            {/if}
+          </p>
+          {#if git.headMessage}
+            <p class="muted">Last commit: {git.headMessage}</p>
+          {/if}
+        {:else if git?.error}
+          <p class="muted git" title={git.error}>git unavailable: {shortError(git.error)}</p>
+        {:else if git}
+          <p class="muted">Not in a git repository</p>
         {/if}
 
         <p class="muted">
@@ -119,34 +176,22 @@
   }
 
   .badge {
-    display: flex;
-    align-items: center;
-    gap: 0.4em;
     margin: 0;
     padding: 0;
     white-space: nowrap;
     cursor: pointer;
   }
 
-  .dot {
-    width: 0.6em;
-    height: 0.6em;
-    border-radius: 50%;
-    box-shadow: 0 0 5px currentColor;
+  .badge.offline {
+    color: var(--text-muted);
   }
 
-  .dot.grey {
-    background: var(--color-tone-3);
-  }
-
-  .dot.red {
-    background: var(--testing-red);
-    color: var(--testing-red);
-  }
-
-  .dot.green {
-    background: var(--coding-green);
+  .badge .pass {
     color: var(--coding-green);
+  }
+
+  .badge .fail {
+    color: var(--testing-red);
   }
 
   .panel {
@@ -201,6 +246,17 @@
     opacity: 0.55;
   }
 
+  .removedHeading {
+    margin-bottom: 0;
+  }
+
+  /* listed so the counts make sense, but greyed out and without colours */
+  .tests.removed li,
+  .tests.removed .icon {
+    color: var(--text-muted);
+    text-decoration: line-through;
+  }
+
   .tests pre,
   .errors li {
     margin: 0.2em 0 0.2em 1.3em;
@@ -212,6 +268,18 @@
   .errors li {
     margin-left: 0;
     color: var(--testing-red);
+  }
+
+  .git {
+    overflow-wrap: anywhere;
+  }
+
+  .branch {
+    color: var(--text-bright);
+  }
+
+  .dirty {
+    color: var(--amber);
   }
 
   .download {

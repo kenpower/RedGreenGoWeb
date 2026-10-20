@@ -1,14 +1,24 @@
-import { checkRules, testNames, buildFailed, snapshotOf, startState, failingTests } from "../src/rules.js";
+import {
+  checkRules,
+  testNames,
+  buildFailed,
+  snapshotOf,
+  startState,
+  failingTests,
+  uncommittedFiles,
+  noRepo,
+} from "../src/rules.js";
 
 // Builds a helper snapshot: test source from the names, results as given.
 const testSource = (names) =>
   '#include "pch.h"\n' + names.map((n) => n.split(".")).map(([s, t]) => `TEST(${s}, ${t}) {\n  EXPECT_EQ(1, 1);\n}\n`).join("\n");
 
-function snap({ source = [], results = {}, build = null, runTime = 10, code = "int f() { return 1; }", testFile } = {}) {
+function snap({ source = [], results = {}, build = null, runTime = 10, code = "int f() { return 1; }", testFile, git } = {}) {
   return {
     tests: Object.entries(results).map(([name, status]) => ({ name, status, message: "" })),
     build,
     runTime,
+    git,
     files: [
       { path: "test.cpp", kind: "test", content: testFile ?? testSource(source) },
       { path: "f.cpp", kind: "production", content: code },
@@ -101,8 +111,62 @@ describe("red", () => {
   test("a test that passed before now fails", () => {
     const after = snap({ source: ["F.a", "F.b"], results: { "F.a": "failed", "F.b": "failed" } });
     const findings = checkRules("red", before, after);
-    expect(rules(findings)).toEqual(["broke_tests"]);
+    expect(rules(findings)).toEqual(["broke_tests", "one_failing"]);
     expect(findings[0].message).toContain("F.a");
+  });
+
+  describe("only one failing test", () => {
+    const oldFailing = snap({ source: ["F.a", "F.old"], results: { "F.a": "passed", "F.old": "failed" } });
+
+    test("two failing tests", () => {
+      const after = snap({
+        source: ["F.a", "F.b", "F.c"],
+        results: { "F.a": "failed", "F.b": "passed", "F.c": "failed" },
+      });
+      const findings = checkRules("red", null, after);
+      expect(rules(findings)).toEqual(["one_failing"]);
+      expect(findings[0].message).toBe(
+        "2 tests fail: F.a, F.c. Only one test may fail in Red. Fix or comment out the others, then run the tests again."
+      );
+    });
+
+    test("an old failing test plus the new one", () => {
+      const after = snap({
+        source: ["F.a", "F.old", "F.new"],
+        results: { "F.a": "passed", "F.old": "failed", "F.new": "failed" },
+      });
+      const findings = checkRules("red", oldFailing, after);
+      expect(rules(findings)).toEqual(["one_failing"]);
+      expect(findings[0].message).toContain("2 tests fail: F.old, F.new.");
+    });
+
+    test("a compile-error Red with an old failure doesn't count as the one red", () => {
+      const after = snap({
+        source: ["F.a", "F.old", "F.new"],
+        results: { "F.a": "passed", "F.old": "failed" },
+        build: failedBuild(),
+      });
+      const findings = checkRules("red", oldFailing, after);
+      expect(rules(findings)).toEqual(["one_failing"]);
+      expect(findings[0].message).toContain("2 tests fail: F.old, F.new.");
+    });
+
+    test("a compile-error Red with no old failure is fine", () => {
+      const after = snap({ source: ["F.a", "F.new"], results: { "F.a": "passed" }, build: failedBuild() });
+      expect(checkRules("red", before, after)).toEqual([]);
+    });
+
+    test("a commented-out failing test is ignored", () => {
+      const after = snap({
+        testFile: testSource(["F.a", "F.new"]) + "\n// TEST(F, old) {}",
+        results: { "F.a": "passed", "F.old": "failed", "F.new": "failed" },
+      });
+      expect(checkRules("red", oldFailing, after)).toEqual([]);
+    });
+
+    test("with no baseline, a compile error alone is fine", () => {
+      expect(checkRules("red", null, snap({ source: ["F.a"], build: failedBuild() }))).toEqual([]);
+    });
   });
 
   test("a renamed test counts as one new test", () => {
@@ -263,15 +327,82 @@ describe("startState", () => {
     const s = snap({ testFile: "TYPED_TEST(F, a) {}", results: { "F/0.a": "failed" } });
     expect(startState(s)).toBe("one_failing");
   });
+
+  describe("uncommitted work", () => {
+    const repo = (dirtySource = []) => ({
+      repo: true,
+      branch: "main",
+      head: "abc123",
+      headTime: 1,
+      headMessage: "Green: 1",
+      dirty: dirtySource.length > 0,
+      dirtySource,
+    });
+    const passing = { source: ["F.a"], results: { "F.a": "passed" } };
+
+    test("changed source files hold the Red", () => {
+      const s = snap({ ...passing, git: repo(["src/f.cpp", "test/test.cpp"]) });
+      expect(startState(s)).toBe("uncommitted");
+      expect(uncommittedFiles(s)).toEqual(["src/f.cpp", "test/test.cpp"]);
+    });
+
+    test("everything committed", () => {
+      expect(startState(snap({ ...passing, git: repo() }))).toBe("clean");
+    });
+
+    test("comes after a failed build", () => {
+      const s = snap({ ...passing, build: failedBuild(), git: repo(["f.cpp"]) });
+      expect(startState(s)).toBe("build_failed");
+    });
+
+    test("comes before failing tests", () => {
+      const s = snap({ source: ["F.a", "F.b"], results: { "F.a": "failed", "F.b": "failed" }, git: repo(["f.cpp"]) });
+      expect(startState(s)).toBe("uncommitted");
+    });
+
+    test("comes before unknown results", () => {
+      expect(startState(snap({ source: ["F.a"], git: repo(["f.cpp"]) }))).toBe("uncommitted");
+    });
+
+    test("not required: falls through to the other checks", () => {
+      const options = { requireCommit: false };
+      expect(startState(snap({ ...passing, git: repo(["f.cpp"]) }), options)).toBe("clean");
+      const failing = snap({ source: ["F.a"], results: { "F.a": "failed" }, git: repo(["f.cpp"]) });
+      expect(startState(failing, options)).toBe("one_failing");
+    });
+
+    test("not a git repo: no hold, and noRepo says so", () => {
+      const s = snap({ ...passing, git: { repo: false, dirtySource: ["f.cpp"] } });
+      expect(startState(s)).toBe("clean");
+      expect(uncommittedFiles(s)).toEqual([]);
+      expect(noRepo(s)).toBe(true);
+    });
+
+    test("no git data from an older helper: no hold, and noRepo says so", () => {
+      const s = snap(passing);
+      expect(startState(s)).toBe("clean");
+      expect(noRepo(s)).toBe(true);
+    });
+
+    test("noRepo is false in a repo, and without a helper", () => {
+      expect(noRepo(snap({ ...passing, git: repo() }))).toBe(false);
+      expect(noRepo(null)).toBe(false);
+    });
+
+    test("a repo without a dirtySource list counts as committed", () => {
+      expect(startState(snap({ ...passing, git: { repo: true } }))).toBe("clean");
+    });
+  });
 });
 
 describe("snapshotOf", () => {
-  test("keeps tests, build, runTime and files", () => {
-    const data = { version: 3, run: 2, runTime: 9, tests: [{ name: "A.b" }], build: null, files: [], readme: "x" };
-    expect(snapshotOf(data)).toEqual({ tests: [{ name: "A.b" }], build: null, runTime: 9, files: [] });
+  test("keeps tests, build, runTime, files and git", () => {
+    const git = { repo: true, dirtySource: [] };
+    const data = { version: 3, run: 2, runTime: 9, tests: [{ name: "A.b" }], build: null, files: [], git, readme: "x" };
+    expect(snapshotOf(data)).toEqual({ tests: [{ name: "A.b" }], build: null, runTime: 9, files: [], git });
   });
   test("fills in missing fields", () => {
-    expect(snapshotOf({})).toEqual({ tests: [], build: null, runTime: null, files: [] });
+    expect(snapshotOf({})).toEqual({ tests: [], build: null, runTime: null, files: [], git: null });
   });
   test("no data", () => {
     expect(snapshotOf(null)).toBeNull();

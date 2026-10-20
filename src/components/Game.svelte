@@ -2,10 +2,10 @@
   import Step from "./Step.svelte";
   import Iteration from "./Iteration.svelte";
   import { fade, fly } from "svelte/transition";
-  import { createEventDispatcher } from "svelte";
-  import { helper } from "../helper.js";
+  import { createEventDispatcher, tick } from "svelte";
+  import { helper, refreshHelper } from "../helper.js";
   import { isCoached, askCoach, resolveProblem, toneOf, shouldShow, sendProgress } from "../coach.js";
-  import { checkRules, snapshotOf, startState, failingTests } from "../rules.js";
+  import { checkRules, snapshotOf, startState, failingTests, uncommittedFiles, noRepo } from "../rules.js";
   import { hintFor } from "../content/hints.js";
 
   const dispatch = createEventDispatcher();
@@ -37,15 +37,24 @@
   // helper's data arrives: tests already failing, a broken build, or no
   // results yet hold the Red until sorted. A clean start becomes the
   // baseline for the Red's rule check. Without the helper, Red is as normal.
+  // Uncommitted work holds the Red too, when the rules are enforced or the
+  // coach is on; otherwise it's a warning captured as the Red starts (the new
+  // test itself makes the source dirty, so a live list would always warn).
   let freshStart = false; // the pair said the one failing test isn't their Red test
+  let commitWarning = []; // uncommitted files when this Red started, not enforced
   $: startChecked = gameState.startChecked;
-  $: startGate = step?.stateName === "red" && !startChecked && snapshot ? startState(snapshot) : "";
+  $: requireCommit = gameState.enforceRules || isCoached($helper);
+  $: startGate =
+    step?.stateName === "red" && !startChecked && snapshot ? startState(snapshot, { requireCommit }) : "";
   $: if (startGate === "clean") clearStart();
   $: shownStartState = startGate === "clean" ? "" : startGate;
   $: failing = shownStartState ? failingTests(snapshot) : [];
   $: buildErrors = shownStartState === "build_failed" ? snapshot.build?.errors || [] : [];
+  $: uncommitted = shownStartState === "uncommitted" ? uncommittedFiles(snapshot) : commitWarning;
+  $: repoMissing = step?.stateName === "red" && noRepo(snapshot);
 
   const clearStart = () => {
+    commitWarning = requireCommit ? [] : uncommittedFiles(snapshot);
     gameState.setBaseline(snapshot);
     gameState.markStartChecked();
     startChecked = true;
@@ -85,6 +94,8 @@
     }
     gameState = gameState;
     freshStart = false;
+    commitWarning = [];
+    hardHold = false;
     held = false;
     verdict = null;
     findings = [];
@@ -152,11 +163,49 @@
       players: gameState.players,
     });
 
+  // Only one test may fail in Red. When the rules are enforced or the coach
+  // is on, the app holds this itself (no coach call) and re-checks live;
+  // once it clears, Done carries on by itself. The override still works,
+  // and like any override it moves on without asking the coach.
+  let hardHold = false;
+  const isHardHold = (phase, stepFindings) =>
+    phase === "red" &&
+    (gameState.enforceRules || isCoached($helper)) &&
+    stepFindings.some((f) => f.rule === "one_failing");
+
+  $: if (hardHold && snapshot) recheckHardHold(snapshot);
+  const recheckHardHold = (current) => {
+    if (waiting) return;
+    const stepFindings = checkRules("red", gameState.before, current);
+    if (isHardHold("red", stepFindings)) {
+      findings = stepFindings;
+      return;
+    }
+    hardHold = false;
+    held = false;
+    done();
+  };
+
+  // Re-reads the code from disk before judging a step, so saves since the
+  // last test run or build count (and stale results can be spotted). If the
+  // helper can't be reached, the data already in the store is used.
+  const refreshSnapshot = async () => {
+    if ($helper.status !== "connected") return;
+    waiting = true;
+    if (await refreshHelper()) await tick(); // let `snapshot` pick up the new data
+    waiting = false;
+  };
+
   const done = async () => {
     const phase = gameState.state.id;
     if (!CHECKED_PHASES.includes(phase)) return advance();
 
+    await refreshSnapshot();
     const stepFindings = checkRules(phase, gameState.before, snapshot);
+    if (isHardHold(phase, stepFindings)) {
+      hardHold = true;
+      return hold(null, stepFindings);
+    }
     if (!isCoached($helper)) return decideByRules(stepFindings);
 
     waiting = true;
@@ -254,6 +303,8 @@
         failingTests={failing}
         {buildErrors}
         {freshStart}
+        uncommittedFiles={uncommitted}
+        noRepo={repoMissing}
         on:interact={onInteract}
       />
     </div>

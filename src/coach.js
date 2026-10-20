@@ -9,6 +9,7 @@
 //
 // Game owns the flow (snapshots, history, holding, overrides); this module
 // builds the request, talks to the proxy and keeps the praise streak.
+import { testNames, buildFailed } from "./rules.js";
 
 const COACH_URL = "https://compucore3.setu.ie/rgg-coach";
 const DEV_COACH_URL = "http://127.0.0.1:8100"; // coach/coach_server.py run locally
@@ -86,6 +87,34 @@ export function isCoached(helperState) {
 const joinFiles = (files) => files.map((f) => `// ${f.path}\n${f.content}`).join("\n\n");
 const filesOfKind = (snapshot, kind) => joinFiles((snapshot?.files || []).filter((f) => f.kind === kind));
 
+export const STALE_FINDING = "Test results are out of date; run the tests again.";
+
+// The snapshot with only results for tests still in the source, so a deleted,
+// renamed or commented-out test's old result doesn't reach the coach. When no
+// names can be read from the source (a macro we don't parse), all results stay.
+export function currentSnapshot(snapshot) {
+  if (!snapshot) return snapshot;
+  const names = testNames(snapshot);
+  if (!names.size) return snapshot;
+  return { ...snapshot, tests: (snapshot.tests || []).filter((t) => names.has(t.name)) };
+}
+
+// The last test run doesn't describe the code now, so the coach shouldn't
+// judge it: a source file changed after the run (when the helper sends file
+// times), or, with a successful build, the run had tests that are no longer in
+// the source or is missing tests that are. A failed build is fresh information
+// in itself (its errors describe the code now), so it never counts as stale.
+export function staleResults(snapshot) {
+  if (!snapshot || buildFailed(snapshot)) return false;
+  const runTime = snapshot.runTime || 0;
+  const changed = (snapshot.files || []).some((f) => typeof f.mtime === "number" && f.mtime > runTime);
+  if (changed && runTime) return true;
+  const names = testNames(snapshot);
+  if (!names.size) return false;
+  const ran = new Set((snapshot.tests || []).map((t) => t.name));
+  return [...ran].some((n) => !names.has(n)) || [...names].some((n) => !ran.has(n));
+}
+
 // One line describing the latest build and test run, as the coach expects.
 export function summariseResult(snapshot) {
   const build = snapshot?.build;
@@ -114,6 +143,9 @@ export function pairKey(players) {
 // The POST /coach body. `before` is the snapshot at the last accepted step,
 // or null at the start of a game.
 export function buildRequest({ phase, problem, before, after, ruleFindings = [], history = [], gameId = "", players = [] }) {
+  // Stale results go first: until the pair runs the tests again, nothing
+  // else the coach could say about the results can be trusted.
+  const findings = staleResults(after) ? [STALE_FINDING, ...ruleFindings] : ruleFindings;
   const request = {
     phase,
     pair: pairKey(players),
@@ -121,8 +153,8 @@ export function buildRequest({ phase, problem, before, after, ruleFindings = [],
     problem: problem || "",
     tests: filesOfKind(after, "test"),
     code: filesOfKind(after, "production"),
-    test_result: summariseResult(after),
-    rule_findings: ruleFindings.slice(0, 20).map((f) => String(f).slice(0, 500)),
+    test_result: summariseResult(currentSnapshot(after)),
+    rule_findings: findings.slice(0, 20).map((f) => String(f).slice(0, 500)),
     history: history.slice(-5).map((h) => ({
       phase: h.phase,
       decision: h.decision || "",

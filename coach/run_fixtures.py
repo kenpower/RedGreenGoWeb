@@ -27,6 +27,16 @@ HERE = Path(__file__).parent
 # Names like std::invalid_argument or add("4") in a sentence are fine.
 CODE_LIKE = re.compile(r"[{}]|==|!=|->|<<|#include|\)\s*;|\breturn\s+[^\s.,;]+\s*;")
 SHOWN = ("note", "driver_action", "navigator_action", "next_test")
+# A second instruction joined on: "... and make ...", "...; then run ...".
+SECOND_TASK = re.compile(
+    r";|\b(and|then)\s+(then\s+)?(make|write|add|run|fix|change|check|uncomment|comment|remove|rename|delete|"
+    r"create|commit|build|keep|put|move|replace|extract|split|undo|revert|go|start|update|set)\b",
+    re.IGNORECASE)
+MAX_ACTION_WORDS = 20
+
+
+def single_action(text):
+    return len(text.split()) <= MAX_ACTION_WORDS and not SECOND_TASK.search(text)
 
 
 def score(verdict, expect, phase):
@@ -44,6 +54,15 @@ def score(verdict, expect, phase):
     if "max_problems" in expect:
         count = len(verdict["rule_problems"])
         checks.append(("max_problems", count <= expect["max_problems"], count))
+    # The driver's one action must mention one of these, and none of the avoided words.
+    driver = verdict["driver_action"].lower()
+    if "driver_mentions" in expect:
+        hit = any(w.lower() in driver for w in expect["driver_mentions"])
+        checks.append(("driver_mentions", hit, verdict["driver_action"]))
+    if "driver_avoids" in expect:
+        found = [w for w in expect["driver_avoids"] if w.lower() in driver]
+        checks.append(("driver_avoids", not found, ", ".join(found) or "none"))
+    checks.append(("single_action", single_action(verdict["driver_action"]), verdict["driver_action"] or '""'))
 
     # A held pair must be told what to do; nothing the pair sees may contain code.
     if verdict["decision"] != "advance" or phase != "finish":
@@ -88,7 +107,7 @@ def main(prefixes):
 
         print(f"{'PASS' if ok else 'FAIL'} {f.stem}  ({description})")
         for field, field_ok, got in checks:
-            if field_ok and field in ("actions", "no_code"):
+            if field_ok and field in ("actions", "no_code", "single_action"):
                 continue  # only worth a line when they fail
             mark = "  " if field_ok else "!!"
             print(f"   {mark} {field}: {got}   expected {expect.get(field, 'ok')}")

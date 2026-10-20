@@ -55,11 +55,25 @@ function allPass(after, findings) {
     findings.push({ rule: "not_run", message: `Run the tests again: ${notRun.join(", ")} hasn't run yet.` });
 }
 
+// Red allows exactly one failing test. `failing` are the tests that fail
+// (among those still in the source), counting a new test that doesn't
+// compile yet.
+function oneFailing(failing, findings) {
+  if (failing.length <= 1) return;
+  findings.push({
+    rule: "one_failing",
+    message:
+      `${failing.length} tests fail: ${failing.join(", ")}. Only one test may fail in Red. ` +
+      "Fix or comment out the others, then run the tests again.",
+  });
+}
+
 function checkRed(before, after, findings) {
   if (!before) {
     // no baseline (the helper connected mid-game): only check that something is red
     const red = buildFailed(after) || (after.tests || []).some((t) => t.status === "failed");
     if (!red) findings.push({ rule: "nothing_fails", message: "No test fails. Write a test that fails first." });
+    oneFailing(failingTests(after), findings);
     return;
   }
   const old = testNames(before);
@@ -72,10 +86,15 @@ function checkRed(before, after, findings) {
     findings.push({ rule: "several_new_tests", message: `Only one new test at a time: ${added.join(", ")} are all new.` });
     return;
   }
-  if (buildFailed(after)) return; // a compile error counts as red
+  const name = added[0];
+  if (buildFailed(after)) {
+    // a compile error counts as the one red, unless an older test was
+    // already failing in the last run
+    oneFailing([...failingTests(after).filter((t) => t !== name), name], findings);
+    return;
+  }
 
   const now = results(after);
-  const name = added[0];
   if (!(name in now)) {
     findings.push({ rule: "not_run", message: `Run the tests: ${name} hasn't run yet.` });
     return;
@@ -87,6 +106,7 @@ function checkRed(before, after, findings) {
   const broken = Object.keys(was).filter((t) => t !== name && was[t] === "passed" && now[t] === "failed");
   if (broken.length)
     findings.push({ rule: "broke_tests", message: `Tests that passed before now fail: ${broken.join(", ")}.` });
+  oneFailing(failingTests(after), findings);
 }
 
 function checkGreen(before, after, findings) {
@@ -129,15 +149,26 @@ export function failingTests(snapshot) {
     .map((t) => t.name);
 }
 
+// Source files changed since the last commit; [] outside a git repo.
+export function uncommittedFiles(snapshot) {
+  const git = snapshot?.git;
+  return git?.repo ? git.dirtySource || [] : [];
+}
+
+// No git repo (or a helper too old to say), so commits can't be checked.
+export const noRepo = (snapshot) => !!snapshot && !snapshot.git?.repo;
+
 // Where the code is before a Red step:
 // "unknown"      tests in the source but no results for them yet
 // "build_failed" the latest build failed
+// "uncommitted"  source changed since the last commit (only with requireCommit)
 // "one_failing"  exactly one test fails (maybe the pair's Red test already)
 // "many_failing" more than one test fails
 // "clean"        no tests, or all pass; also when there's no helper data
-export function startState(snapshot) {
+export function startState(snapshot, { requireCommit = true } = {}) {
   if (!snapshot) return "clean";
   if (buildFailed(snapshot)) return "build_failed";
+  if (requireCommit && uncommittedFiles(snapshot).length) return "uncommitted";
   const hasTests = testNames(snapshot).size > 0 || (snapshot.tests || []).length > 0;
   if (!hasTests) return "clean";
   if (!currentResults(snapshot).length) return "unknown";
@@ -148,6 +179,6 @@ export function startState(snapshot) {
 // Keeps only what the rules and the coach need from the helper's data.
 export function snapshotOf(data) {
   if (!data) return null;
-  const { tests = [], build = null, runTime = null, files = [] } = data;
-  return { tests, build, runTime, files };
+  const { tests = [], build = null, runTime = null, files = [], git = null } = data;
+  return { tests, build, runTime, files, git };
 }

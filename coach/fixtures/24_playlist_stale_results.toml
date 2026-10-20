@@ -1,0 +1,50 @@
+description = "Results are out of date (the app says so): the only step is to run the tests again"
+phase = "red"
+problem = 'Playlist: parse lines like "Title - Artist" into Song objects. Two songs are equal when both the title and the artist match.'
+rule_findings = ["Test results are out of date; run the tests again."]
+tests_before = '''
+TEST(Song, SameTitleAndArtistAreEqual) {
+  Song a{"Hey Jude", "The Beatles"};
+  Song b{"Hey Jude", "The Beatles"};
+  EXPECT_TRUE(a == b);
+}
+'''
+code_before = '''
+struct Song {
+  std::string title;
+  std::string artist;
+};
+
+bool operator==(const Song& a, const Song& b) {
+  return a.title == b.title && a.artist == b.artist;
+}
+'''
+tests = '''
+TEST(Song, SameTitleAndArtistAreEqual) {
+  Song a{"Hey Jude", "The Beatles"};
+  Song b{"Hey Jude", "The Beatles"};
+  EXPECT_TRUE(a == b);
+}
+
+TEST(Song, DifferentArtistNotEqual) {
+  Song a{"Hallelujah", "Leonard Cohen"};
+  Song b{"Hallelujah", "Jeff Buckley"};
+  EXPECT_TRUE(a == b);
+}
+'''
+code = '''
+struct Song {
+  std::string title;
+  std::string artist;
+};
+
+bool operator==(const Song& a, const Song& b) {
+  return a.title == b.title && a.artist == b.artist;
+}
+'''
+test_result = "All 1 tests passed"
+
+[expect]
+decision = ["redo"]
+driver_mentions = ["run"]
+driver_avoids = ["DifferentArtistNotEqual", "EXPECT", "assert"]

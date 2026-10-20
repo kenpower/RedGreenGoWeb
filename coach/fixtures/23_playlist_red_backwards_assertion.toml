@@ -1,0 +1,67 @@
+description = "Real game: an existing test fails because its assertion is backwards; the new test is commented out. One step only: make that test pass"
+phase = "red"
+problem = 'Playlist: parse lines like "Title - Artist" into Song objects. Two songs are equal when both the title and the artist match.'
+tests_before = '''
+TEST(Song, SameTitleAndArtistAreEqual) {
+  Song a{"Hey Jude", "The Beatles"};
+  Song b{"Hey Jude", "The Beatles"};
+  EXPECT_TRUE(a == b);
+}
+
+TEST(Song, DifferentArtistNotEqual) {
+  Song a{"Hallelujah", "Leonard Cohen"};
+  Song b{"Hallelujah", "Jeff Buckley"};
+  EXPECT_TRUE(a == b);
+}
+
+TEST(Playlist, ParseNormalSplit) {
+  Song s = parseSong("Hey Jude - The Beatles");
+  EXPECT_EQ("Hey Jude", s.title);
+  EXPECT_EQ("The Beatles", s.artist);
+}
+'''
+code_before = '''
+struct Song {
+  std::string title;
+  std::string artist;
+};
+
+bool operator==(const Song& a, const Song& b) {
+  return a.title == b.title && a.artist == b.artist;
+}
+'''
+tests = '''
+TEST(Song, SameTitleAndArtistAreEqual) {
+  Song a{"Hey Jude", "The Beatles"};
+  Song b{"Hey Jude", "The Beatles"};
+  EXPECT_TRUE(a == b);
+}
+
+TEST(Song, DifferentArtistNotEqual) {
+  Song a{"Hallelujah", "Leonard Cohen"};
+  Song b{"Hallelujah", "Jeff Buckley"};
+  EXPECT_TRUE(a == b);
+}
+
+//TEST(Playlist, ParseNormalSplit) {
+//  Song s = parseSong("Hey Jude - The Beatles");
+//  EXPECT_EQ("Hey Jude", s.title);
+//  EXPECT_EQ("The Beatles", s.artist);
+//}
+'''
+code = '''
+struct Song {
+  std::string title;
+  std::string artist;
+};
+
+bool operator==(const Song& a, const Song& b) {
+  return a.title == b.title && a.artist == b.artist;
+}
+'''
+test_result = "1 failed: Song.DifferentArtistNotEqual (Value of: a == b. Actual: false. Expected: true); 1 passed"
+
+[expect]
+decision = ["redo"]
+driver_mentions = ["DifferentArtistNotEqual"]
+driver_avoids = ["ParseNormalSplit", "uncomment"]

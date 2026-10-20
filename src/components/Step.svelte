@@ -4,6 +4,7 @@
   import { createEventDispatcher } from "svelte";
   import Icon from "./Icon.svelte";
   import WaitingDots from "./WaitingDots.svelte";
+  import { helper } from "../helper.js";
 
   const dispatch = createEventDispatcher();
   const interact = (what) => dispatch("interact", what);
@@ -39,16 +40,33 @@
   export let buildErrors = [];
   // true after [No, start fresh] on one_failing
   export let freshStart = false;
+  // Source files not yet committed. Held ("uncommitted"): the live list. Not
+  // enforced: the list when this Red started, shown as a warning.
+  export let uncommittedFiles = [];
+  // the helper is connected but the project isn't in git (or git failed)
+  export let noRepo = false;
+  // git is missing or failing on this machine: not the pair's fault, so no tip
+  $: gitError = $helper.data?.git?.error;
 
   // What the start card says for each state. `box` picks the box colour,
   // `wait` is what the game is waiting to see before carrying on.
-  const startCard = (state, failing, errors, fresh) => {
+  const startCard = (state, failing, errors, fresh, uncommitted) => {
     const name = failing[0] || "a test";
     switch (state) {
+      case "uncommitted":
+        return {
+          box: "heldBox",
+          heading: "Commit first",
+          message: "Commit your work before writing the next test.",
+          list: uncommitted,
+          driver: "Commit with a message that says what this cycle achieved.",
+          navigator: "Suggest the commit message.",
+          wait: "Waiting for a commit",
+        };
       case "unknown":
         return {
           box: "infoBox",
-          heading: "Where are you?",
+          heading: "Run your tests first",
           message: "Run your tests in Visual Studio so the game can see where you are.",
           driver: "Build the solution and run all the tests in Test Explorer.",
           navigator: "Check the badge at the top of the page says the code is connected.",
@@ -96,14 +114,24 @@
         return null;
     }
   };
-  $: start = startCard(startState, failingTests, buildErrors, freshStart);
+  $: start = startCard(startState, failingTests, buildErrors, freshStart, uncommittedFiles);
+  $: isRed = step.stateName == "red";
+  // not enforced: warn, but Red carries on
+  $: commitWarning = isRed && !start && uncommittedFiles.length > 0;
 
   $: isCycleStep = step.stateName != "swap";
   $: busy = waiting || finishState == "asking";
   $: heldByCoach = held && coach;
-  $: reasons = heldByCoach
-    ? coach.rule_problems || []
-    : findings.map((f) => f.message);
+  $: heldReason = heldByCoach
+    ? "fix this first"
+    : findings.some((f) => f.rule == "one_failing")
+    ? "only one test may fail in Red"
+    : "a TDD rule isn't met yet";
+  // One thing at a time: only the most important problem. The coach orders
+  // its rule_problems that way; for the app's own findings, one_failing (which
+  // the held marker names) comes first, otherwise the first finding.
+  $: firstFinding = findings.find((f) => f.rule == "one_failing") || findings[0];
+  $: reason = heldByCoach ? coach.rule_problems?.[0] : firstFinding?.message;
   $: canFinish = step.stateName == "refactor" && !held && !waiting;
 
   //TODO move into game
@@ -145,21 +173,27 @@
       </div>
     {:else if held}
       <div class="heldBox" transition:fade>
-        <p class="marker">{heldByCoach ? "Coach" : "Rules"}: not yet</p>
+        <p class="marker">Stay on this step: {heldReason}</p>
         {#if heldByCoach && coach.note}
           <p>{coach.note}</p>
         {/if}
-        {#if reasons.length}
-          <ul>
-            {#each reasons as reason}<li>{reason}</li>{/each}
-          </ul>
+        {#if reason}
+          <p>{reason}</p>
         {/if}
       </div>
     {:else if findings.length}
       <div class="warnBox">
-        <p class="marker">Rule check</p>
+        <p class="marker">Heads up: a TDD rule isn't met (you can carry on)</p>
+        <p>{firstFinding.message}</p>
+      </div>
+    {/if}
+
+    {#if commitWarning && !held}
+      <div class="warnBox">
+        <p class="marker">Heads up: commit first (you can carry on)</p>
+        <p>Commit your work before writing the next test.</p>
         <ul>
-          {#each findings as finding}<li>{finding.message}</li>{/each}
+          {#each uncommittedFiles as file}<li>{file}</li>{/each}
         </ul>
       </div>
     {/if}
@@ -200,6 +234,15 @@
         {#if !held && !start}
           <div><HintLabel text={hint} /></div>
         {/if}
+        {#if isRed && noRepo}
+          <p class="muted tip">
+            {#if gitError}
+              The helper couldn't run git, so commits aren't checked.
+            {:else}
+              Tip: put your project in git; the game will remind you to commit each cycle.
+            {/if}
+          </p>
+        {/if}
       {/if}
 
       <div class="actions">
@@ -230,7 +273,7 @@
           {#if finishState == "asking"}
             <p class="muted">Asking the coach if you're finished<WaitingDots /></p>
           {:else if finishState == "disagreed"}
-            <p class="marker">Coach: not finished yet</p>
+            <p class="marker">Keep going: the coach thinks there's more to do</p>
             {#if coach?.note}<p>{coach.note}</p>{/if}
             {#if coach?.next_test}
               <p><strong>Next test:</strong> {coach.next_test}</p>
@@ -421,6 +464,11 @@
 
   .muted {
     color: var(--text-muted);
+  }
+
+  .tip {
+    margin: 0.5em 0 0 0;
+    font-size: 0.85em;
   }
 
   span {
