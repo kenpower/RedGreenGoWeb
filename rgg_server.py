@@ -1,7 +1,9 @@
 """RedGreenGo helper: watches what Visual Studio produces (GoogleTest results, build
-log, source files) and pushes it to the RedGreenGo web app.
+log, source files) and the project's git status, and pushes it to the RedGreenGo web app.
 
-It never runs anything and only reads files, so it is safe to leave running.
+It only reads: it never builds, never runs tests and never writes to the project. The
+one program it runs is git, read-only (status, log, branch; --no-optional-locks, so not
+even git's index refresh is written), so it is safe to leave running.
 
 No setup needed: Visual Studio's Google Test adapter writes XMLGoogleTestResults.xml
 next to the test .exe on every run, and the build writes <Project>.log; the helper
@@ -23,6 +25,7 @@ import glob
 import json
 import os
 import re
+import subprocess
 import threading
 import time
 import webbrowser
@@ -52,6 +55,8 @@ TEST_MARKER = re.compile(r"\bTEST(?:_F|_P)?\s*\(")
 MAX_FILE_BYTES = 100_000
 MAX_FILES = 50
 MAX_README_CHARS = 8_000  # the problem description sent to the coach
+GIT_TIMEOUT_SECONDS = 3
+MAX_DIRTY = 200  # untracked build output can be thousands of files when there's no .gitignore
 
 changed = threading.Condition()  # guards state and sse_clients; notified on every change
 sse_clients = 0
@@ -63,8 +68,9 @@ state = {
     "runTime": None,
     "tests": {},  # "Suite.Name" -> {name, status, message, run}
     "build": None,  # {status, errors, time} from the latest build log
-    "files": [],  # [{path, kind: test|production, content}] read when results/build arrive
+    "files": [],  # [{path, kind: test|production, content, mtime}] read when results/build arrive
     "readme": None,  # {path, content} of the solution's README.md, read alongside the files
+    "git": None,  # see read_git()
 }
 
 
@@ -168,6 +174,7 @@ def read_sources(project_dir):
                 "path": os.path.relpath(path, project_dir).replace("\\", "/"),
                 "kind": "test" if TEST_MARKER.search(content) else "production",
                 "content": content,
+                "mtime": os.path.getmtime(path),  # same clock as runTime/build.time: spots stale results
             })
             if len(files) >= MAX_FILES:
                 return files
@@ -201,6 +208,99 @@ def read_readme(project_dir):
     }
 
 
+class GitError(Exception):
+    pass
+
+
+def run_git(project_dir, *args):
+    """Run a read-only git command in the project; return its stdout or raise GitError."""
+    try:
+        result = subprocess.run(
+            ["git", "--no-optional-locks", *args], cwd=project_dir, capture_output=True,
+            timeout=GIT_TIMEOUT_SECONDS, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except FileNotFoundError:
+        raise GitError("git is not installed")
+    except subprocess.TimeoutExpired:
+        raise GitError("git took too long")
+    except OSError as e:
+        raise GitError(str(e))
+    if result.returncode != 0:
+        raise GitError(result.stderr.decode("utf-8", errors="replace").strip() or f"git {args[0]} failed")
+    return result.stdout.decode("utf-8", errors="replace")
+
+
+def is_source_path(path):
+    """Same rule as read_sources: a .cpp/.h outside build output, packages and dot folders."""
+    *dirs, name = path.split("/")
+    return (os.path.splitext(name)[1].lower() in SOURCE_EXTENSIONS and not SKIP_FILES.match(name)
+            and not any(d in SKIP_DIRS or d.startswith(".") for d in dirs))
+
+
+def read_git(project_dir):
+    """{repo: true, branch, head, headTime, headMessage, dirty, dirtySource} or {repo: false, error}.
+
+    Paths are relative to the project folder (like files[].path) and only cover files inside it.
+    branch is None when HEAD is detached; head/headTime/headMessage are None before the first commit.
+    """
+    try:
+        # the project folder's path inside the repo, e.g. "Bowling/" ("" at the top); status
+        # paths start with it. Safer than relpath against --show-toplevel, which can differ
+        # in drive-letter case or 8.3 short names on Windows.
+        prefix = run_git(project_dir, "rev-parse", "--show-prefix").strip()
+    except GitError as e:
+        not_repo = "not a git repository" in str(e)
+        return {"repo": False, "error": None if not_repo else str(e)}
+    try:
+        # -uall lists files inside new folders; "." keeps it to the project folder
+        status = run_git(project_dir, "status", "--porcelain=v1", "-z", "-uall", "--", ".")
+        try:
+            branch = run_git(project_dir, "symbolic-ref", "--short", "-q", "HEAD").strip() or None
+        except GitError:
+            branch = None  # detached HEAD
+        try:
+            head, head_time, head_message = run_git(
+                project_dir, "log", "-1", "--format=%H%x00%ct%x00%s").rstrip("\n").split("\0")
+            head_time = int(head_time)
+        except GitError:
+            head = head_time = head_message = None  # no commits yet
+    except (GitError, ValueError) as e:
+        return {"repo": False, "error": str(e)}
+
+    dirty = []
+    entries = status.split("\0")
+    i = 0
+    while i < len(entries):
+        entry = entries[i]
+        i += 1
+        if len(entry) < 4:
+            continue
+        if entry[0] in "RC":
+            i += 1  # a rename/copy is followed by its old path
+        path = entry[3:]
+        dirty.append(path[len(prefix):] if path.startswith(prefix) else path)
+    dirty.sort()
+    return {
+        "repo": True,
+        "branch": branch,
+        "head": head,
+        "headTime": head_time,
+        "headMessage": head_message,
+        "dirty": dirty[:MAX_DIRTY],
+        "dirtySource": [p for p in dirty if is_source_path(p)][:MAX_DIRTY],
+    }
+
+
+def update_git(git):
+    """Publish a new git status on its own, but only if it changed."""
+    with changed:
+        if state["git"] == git:
+            return
+        state["git"] = git
+        state["version"] += 1
+        changed.notify_all()
+
+
 def beep(runs):
     try:
         import winsound
@@ -210,9 +310,10 @@ def beep(runs):
     winsound.MessageBeep(winsound.MB_OK if all_passed else winsound.MB_ICONHAND)
 
 
-def publish(runs, build, files, readme):
+def publish(runs, build, files, readme, git):
     """Apply new results/build/files as one change, so the app never sees a half-updated state."""
     with changed:
+        state["git"] = git
         for mtime, results in runs:
             state["run"] += 1
             state["runTime"] = mtime
@@ -252,7 +353,8 @@ def reload_from_disk(clear):
             state["tests"] = {}
             state["build"] = None
             state["runTime"] = None
-        publish(runs, build, read_sources(config["project"]), read_readme(config["project"]))
+        publish(runs, build, read_sources(config["project"]), read_readme(config["project"]),
+                read_git(config["project"]))
 
 
 def watch(beep_on_results):
@@ -262,7 +364,8 @@ def watch(beep_on_results):
     result_files, logs, next_scan = [], [], 0
     while True:
         try:
-            if time.time() >= next_scan:
+            rescan = time.time() >= next_scan
+            if rescan:
                 result_files, logs = find_inputs()
                 next_scan = time.time() + RESCAN_SECONDS
 
@@ -270,13 +373,16 @@ def watch(beep_on_results):
             build = check_build_logs(logs, seen_mtimes)
 
             if runs or build:
-                publish(runs, build, read_sources(config["project"]), read_readme(config["project"]))
+                publish(runs, build, read_sources(config["project"]), read_readme(config["project"]),
+                        read_git(config["project"]))
                 for _, results in runs:
                     print("tests: " + ", ".join(f'{r["name"]}={r["status"]}' for r in results), flush=True)
                 if build:
                     print(f'build {build["status"]}: {len(build["errors"])} error(s)', flush=True)
                 if runs and beep_on_results:
                     beep(runs)
+            elif rescan:
+                update_git(read_git(config["project"]))  # e.g. a commit made in VS between test runs
         except OSError as e:
             print(f"watch error: {e}", flush=True)
         time.sleep(POLL_SECONDS)
@@ -292,6 +398,7 @@ def snapshot():
             "build": state["build"],
             "files": state["files"],
             "readme": state["readme"],
+            "git": state["git"],
         }
 
 
@@ -428,11 +535,17 @@ def main():
     with changed:
         state["files"] = read_sources(project_dir)
         state["readme"] = read_readme(project_dir)
+        state["git"] = read_git(project_dir)
         state["version"] = 1
 
     print(f"Project: {project_dir} ({len(state['files'])} source files)")
     if state["readme"]:
         print(f"  Problem description: {state['readme']['path']}")
+    git = state["git"]
+    if git["repo"]:
+        print(f"  Git: {git['branch'] or 'detached HEAD'}, {len(git['dirtySource'])} uncommitted source file(s)")
+    else:
+        print(f"  Git: {git['error'] or 'not a git repository'}")
     if not (args.results or find_result_files(project_dir)):
         print("  No test results yet - run your tests in Visual Studio's Test Explorer.")
     print(f"Serving http://127.0.0.1:{PORT}  (Ctrl+C to stop)", flush=True)

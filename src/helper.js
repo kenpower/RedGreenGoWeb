@@ -67,6 +67,22 @@ export function disableHelper() {
   helper.set({ status: "off", data: null });
 }
 
+// Asks the helper to re-read results, build and sources from disk now (the
+// SSE push only follows test runs and builds, not plain saves). Updates the
+// store and returns the fresh data, or null if the helper can't be reached.
+export async function refreshHelper(fetchFn = fetch) {
+  if (!helperEnabled()) return null;
+  try {
+    const response = await fetchFn(HELPER_URL + "/results");
+    if (!response.ok) return null;
+    const data = await response.json();
+    helper.set({ status: "connected", data });
+    return data;
+  } catch {
+    return null; // helper not running
+  }
+}
+
 // Forget results from the previous game; the helper then re-reads the results already
 // on disk. Fetch them straight away rather than waiting for the SSE push.
 // Harmless if the helper isn't running.
@@ -74,9 +90,8 @@ export async function resetHelper() {
   if (!helperEnabled()) return;
   try {
     await fetch(HELPER_URL + "/reset", { method: "POST" });
-    const response = await fetch(HELPER_URL + "/results");
-    if (response.ok) helper.set({ status: "connected", data: await response.json() });
   } catch {
-    // helper not running
+    return; // helper not running
   }
+  await refreshHelper();
 }
