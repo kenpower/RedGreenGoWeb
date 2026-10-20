@@ -22,7 +22,10 @@ override the port and the SQLite file.
 
 Endpoints:
   POST /coach     body: a step (see coach.py); returns the coach's verdict.
-                  With pair and game_id, the verdict is also counted in that game's progress.
+                  With pair and game_id, a Done verdict is also counted in that game's progress
+                  (a verdict call, or a Look with done: true). {mode: "look", done: true,
+                  reuse: true, game_id, pair, phase} counts the game's last Look instead, without
+                  a model call: 200 {status: "recorded", decision}, or 409 if there is none to reuse.
   POST /progress  body: the browser's own progress counts and new events for one game (see
                   validate_progress); needs an active class code but doesn't use up its allowance
   GET  /class?code=CODE   {"ok": true, "name"} for an active class, else 404 {"ok": false};
@@ -88,6 +91,8 @@ PROGRESS_ADDED_COLUMNS = {
 MAX_COUNT = 10_000
 COACH_DECISIONS = ("advance", "redo", "back_to_red")
 NON_VERDICT_MODES = {"orient", "look", "next_steps"}
+LOOK_REUSE_SECONDS = 600  # a Done can reuse a Look this recent
+REUSE_PHASES = {"red", "green", "refactor", "finish"}  # the step phases coach.py accepts
 
 EVENT_KINDS = {"advance", "hold", "release", "override", "back_to_red", "intent", "prediction",
                "hint", "smell", "commit", "finish", "rescue", "passed_first_time", "orient"}
@@ -188,6 +193,16 @@ def db():
             updated INTEGER NOT NULL,
             PRIMARY KEY (code, pair_key, criterion)
         );
+        -- The last Look the coach answered for each game, so a Done with unchanged code
+        -- can count that verdict without another call (see reuse_look).
+        CREATE TABLE IF NOT EXISTS looks (
+            game_id TEXT PRIMARY KEY,
+            code TEXT NOT NULL,
+            t INTEGER NOT NULL,
+            phase TEXT NOT NULL,
+            verdict TEXT NOT NULL,
+            used INTEGER NOT NULL DEFAULT 0
+        );
         """
     )
     columns = {r["name"] for r in con.execute("PRAGMA table_info(classes)")}
@@ -258,9 +273,11 @@ def record_usage(con, code, step, usage):
 
 def record_verdict(con, code, step, verdict):
     """Count the coach's verdict in the game's progress row. Older clients send no game_id.
-    Only a Done verdict counts: Orient, Look and next-steps calls guide but never hold."""
+    Only a Done verdict counts: a verdict call, or a Look sent for a Done click (done: true).
+    Orient, plain Look and next-steps calls guide but never hold."""
     game_id = step.get("game_id")
-    if not game_id or step.get("mode", "verdict") in NON_VERDICT_MODES:
+    is_done = step.get("mode", "verdict") not in NON_VERDICT_MODES or step.get("done") is True
+    if not game_id or not is_done:
         return
     decision = verdict.get("decision")
     counts = {f"coach_{d}": int(decision == d) for d in COACH_DECISIONS}
@@ -279,6 +296,53 @@ def record_verdict(con, code, step, verdict):
         (game_id, code, step.get("pair") or "", (step.get("problem") or "")[:100], stamp, stamp, *counts.values()),
     )
     con.commit()
+
+
+def remember_look(con, code, step, verdict):
+    """Keep a Look's verdict for one later reuse. A Look made for a Done is counted
+    already, so it is stored as used."""
+    game_id = step.get("game_id")
+    if step.get("mode") != "look" or not game_id or verdict.get("decision") not in COACH_DECISIONS:
+        return
+    con.execute(
+        "INSERT INTO looks (game_id, code, t, phase, verdict, used) VALUES (?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(game_id) DO UPDATE SET t = excluded.t, phase = excluded.phase, "
+        "verdict = excluded.verdict, used = excluded.used WHERE looks.code = excluded.code",
+        (game_id, code, int(time.time()), step["phase"],
+         json.dumps({"decision": verdict["decision"], "advice": bool(verdict.get("advice"))}),
+         int(step.get("done") is True)),
+    )
+    con.commit()
+
+
+def reuse_look(con, code, step):
+    """A Done whose code hasn't changed since the last Look: count that Look's stored
+    verdict, once, without calling the coach. Returns the decision, or None if there is
+    no unused Look for this game and phase from the last LOOK_REUSE_SECONDS. Whatever
+    decision the browser holds is ignored, so a reuse can't be forged."""
+    row = con.execute(
+        "SELECT verdict FROM looks WHERE game_id = ? AND code = ? AND phase = ? AND used = 0 AND t >= ?",
+        (step["game_id"], code, step["phase"], int(time.time()) - LOOK_REUSE_SECONDS),
+    ).fetchone()
+    # used = 0 again in the UPDATE: of two reuses at once, only one wins
+    if not row or not con.execute(
+        "UPDATE looks SET used = 1 WHERE game_id = ? AND code = ? AND used = 0", (step["game_id"], code)
+    ).rowcount:
+        return None
+    verdict = json.loads(row["verdict"])
+    record_verdict(con, code, step, verdict)  # commits
+    return verdict["decision"]
+
+
+def validate_reuse(step):
+    if step.get("mode") != "look" or step.get("done") is not True:
+        raise BadStep("reuse is for a Look sent for a Done click (mode look, done true)")
+    if not isinstance(step.get("game_id"), str) or not 0 < len(step["game_id"]) <= 64:
+        raise BadStep("game_id is required")
+    if not isinstance(step.get("pair", ""), str) or len(step.get("pair", "")) > 200:
+        raise BadStep("pair must be text of at most 200 characters")
+    if step.get("phase") not in REUSE_PHASES:
+        raise BadStep("phase must be red, green, refactor or finish")
 
 
 class BadProgress(ValueError):
@@ -560,6 +624,8 @@ class Handler(BaseHTTPRequestHandler):
             con.close()
 
     def coach(self, step, code):
+        if isinstance(step, dict) and step.get("reuse") is True:
+            return self.reuse(step, code)
         try:
             validate(step)
         except BadStep as e:
@@ -579,7 +645,27 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(502, {"error": "coach unavailable"})
             record_usage(con, code, step, usage)
             record_verdict(con, code, step, verdict)
+            remember_look(con, code, step, verdict)
             self.send_json(200, verdict)
+        finally:
+            con.close()
+
+    def reuse(self, step, code):
+        """POST /coach {mode: "look", done: true, reuse: true, game_id, pair, phase}:
+        200 {status: "recorded", decision}, or 409 when there is no Look to reuse
+        (the browser then makes a real call). No model call, no allowance used."""
+        try:
+            validate_reuse(step)
+        except BadStep as e:
+            return self.send_json(400, {"error": str(e)})
+        con = db()
+        try:
+            if not class_active(con, code):
+                return self.send_json(403, {"error": "unknown class code"})
+            decision = reuse_look(con, code, step)
+            if decision is None:
+                return self.send_json(409, {"error": "no recent look to reuse"})
+            self.send_json(200, {"status": "recorded", "decision": decision})
         finally:
             con.close()
 
@@ -798,6 +884,7 @@ def clear_progress(args):
     with con:
         con.execute("DELETE FROM progress WHERE code = ?", (code,))
         con.execute("DELETE FROM events WHERE code = ?", (code,))
+        con.execute("DELETE FROM looks WHERE code = ?", (code,))
     print(f"deleted {games} game(s) of progress and {events} event(s) for {code} (grades are kept)")
 
 
