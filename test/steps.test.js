@@ -1,5 +1,6 @@
 import {
-  STEPS, stepById, catalogueFor, groupSteps, pickSteps, nextStepsDue, codeKey, runMark, NEXT_STEPS_GAP,
+  STEPS, stepById, catalogueFor, groupSteps, pickSteps, cardSteps, hasGuidance, nextStepsDue, codeKey, runMark,
+  NEXT_STEPS_GAP,
 } from "../src/content/steps.js";
 import { liveStatus } from "../src/rules.js";
 
@@ -134,6 +135,35 @@ describe("groupSteps", () => {
   test("the free-text extra goes at the end of its group, without a tick", () => {
     const g = groupSteps("red", [], { text: "Ask your teacher about the header.", needed: false }, before, now, live);
     expect(g.practice).toEqual([{ id: "extra", text: "Ask your teacher about the header.", done: null, extra: true }]);
+  });
+});
+
+describe("cardSteps: the coach's guidance, else the rule-picked steps", () => {
+  const before = snap({ testFile: 'TEST(Fizz, OneIsOne) {\n  EXPECT_EQ("1", fizzBuzz(1));\n}\n' });
+  const now = snap({
+    testFile: 'TEST(Fizz, OneIsOne) {\n  EXPECT_EQ("1", fizzBuzz(1));\n}\n',
+    code: 'std::string fizzBuzz(int n) { return "1"; }\nstd::string fizz() { return "Fizz"; }\n',
+    results: { "Fizz.OneIsOne": "passed" },
+  });
+  const live = liveStatus("green", before, now);
+  const ids = (card) => [...card.needed, ...card.practice].map((s) => s.id);
+
+  test("a held Done's Look is the verdict alone, so the card shows the rule-picked steps", () => {
+    const heldDone = { decision: "redo", note: "Take out the extra code.", steps: [], extra: "", extra_needed: false };
+    expect(hasGuidance(heldDone)).toBe(false);
+    const card = cardSteps("green", heldDone, before, now, live, { novice: true });
+    const picked = pickSteps("green", before, now, live, { novice: true }).map((s) => s.id);
+    expect(picked.length).toBeGreaterThan(0);
+    expect(ids(card)).toEqual(expect.arrayContaining(picked));
+    expect(ids(card)).toEqual(ids(cardSteps("green", null, before, now, live, { novice: true })));
+  });
+
+  test("a Look with guidance shows the coach's steps, in its order, with its extra", () => {
+    const look = { decision: "advance", steps: [{ id: "green.all_green", detail: "Both pass." }], extra: "Commit now.", extra_needed: false };
+    expect(hasGuidance(look)).toBe(true);
+    const card = cardSteps("green", look, before, now, live);
+    expect(ids(card)).toEqual(["green.all_green", "extra"]);
+    expect(hasGuidance({ steps: [], extra: "Ask your teacher." })).toBe(true);
   });
 });
 

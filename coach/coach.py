@@ -304,15 +304,20 @@ def _ask(client, system, schema, user, max_tokens):
     return json.loads(text), response.usage
 
 
-def ask_coach(client, step):
+def ask_coach(client, step, guidance=None):
     """Return (answer, usage): one Look, the verdict fields and the guidance (steps,
     extra, extra_needed, on_track) together. The verdict comes first (coach/prompt.md),
     then, with a catalogue, the guidance is asked with that verdict
-    (coach/next_steps.md); usage adds up both. Raises anthropic.APIError,
-    RuntimeError or json.JSONDecodeError."""
+    (coach/next_steps.md); usage adds up both. A Look for a Done (done: true) is
+    the verdict alone: after an advance nobody sees this step's guidance, and a
+    held step's card falls back to the app's rule-picked steps until the next
+    Look. `guidance` True asks for it anyway (run_fixtures scores it on every
+    fixture). Raises anthropic.APIError, RuntimeError or json.JSONDecodeError."""
+    if guidance is None:
+        guidance = not step.get("done")
     verdict, usage = _ask(client, "prompt.md", SCHEMA, build_user(step), 4000)
-    if not step.get("catalogue"):
+    if not step.get("catalogue") or not guidance:
         return {**verdict, **NO_GUIDANCE}, usage
-    guidance, more = _ask(client, "next_steps.md", guidance_schema(step["catalogue"]),
-                          build_guidance_user(step, verdict), 3000)
-    return {**verdict, **_clean_steps(guidance, step)}, Usage(usage, more)
+    picked, more = _ask(client, "next_steps.md", guidance_schema(step["catalogue"]),
+                        build_guidance_user(step, verdict), 3000)
+    return {**verdict, **_clean_steps(picked, step)}, Usage(usage, more)

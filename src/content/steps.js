@@ -579,3 +579,18 @@ export function groupSteps(phase, chosen, extra, before, now, live) {
   if (current >= 0) needed[current] = { ...needed[current], current: true };
   return { needed, practice };
 }
+
+// Does a coach answer carry guidance? A Done's Look is the verdict alone
+// (steps [] and no extra), and so is any answer without a catalogue.
+export const hasGuidance = (answer) => !!(answer?.steps?.length || answer?.extra);
+
+// The step card: the coach's guidance when it has some, else the steps the
+// rules pick for the code as it is (pickSteps): before the first Look, with
+// the coach off, and after a held Done.
+export function cardSteps(phase, answer, before, now, live, { novice = false } = {}) {
+  if (hasGuidance(answer)) {
+    const extra = answer.extra ? { text: answer.extra, needed: !!answer.extra_needed } : null;
+    return groupSteps(phase, answer.steps, extra, before, now, live);
+  }
+  return groupSteps(phase, pickSteps(phase, before, now, live, { novice }), null, before, now, live);
+}

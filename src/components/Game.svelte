@@ -12,7 +12,7 @@
   import { hintFor } from "../content/hints.js";
   import { guideFor, unlockAction, GUIDE_CYCLES } from "../guide.js";
   import { rescueOffer } from "../gameState.js";
-  import { catalogueFor, groupSteps, pickSteps, nextStepsDue, runMark, codeKey } from "../content/steps.js";
+  import { catalogueFor, cardSteps, hasGuidance, nextStepsDue, runMark, codeKey } from "../content/steps.js";
   import { reuseLook, lookKey } from "../coach.js";
 
   const dispatch = createEventDispatcher();
@@ -99,7 +99,9 @@
 
   // Done: if the code and results are what the last Look saw (and no Done has
   // used it yet), its verdict is the verdict: the server records it without a
-  // model call. Otherwise one more Look, marked as a Done.
+  // model call. Otherwise one more Look, marked as a Done: the verdict alone
+  // (no guidance, so it's quicker), and a held step's card falls back to the
+  // rule-picked steps until the next Look.
   const doneLook = async (phase, stepFindings) => {
     const key = lookKey(snapshot, gameState.stepNumber);
     const cached = gameState.nextStepsFor(gameState.stepNumber);
@@ -117,27 +119,12 @@
     return result;
   };
   $: chosen = step && nextStepsAnswer?.stepNumber === step.stepNumber ? nextStepsAnswer : null;
-  // Without a coach answer (coach off, or not answered yet): the steps that
-  // fit the code as it is, picked by rules (steps.pickSteps), never a script
-  // that assumes an empty project.
-  $: nextSteps = chosen
-    ? groupSteps(
-        step.stateName,
-        chosen.steps,
-        chosen.extra ? { text: chosen.extra, needed: chosen.extra_needed } : null,
-        gameState.before,
-        snapshot,
-        live
-      )
-    : step && snapshot && CHECKED_PHASES.includes(step.stateName)
-      ? groupSteps(
-          step.stateName,
-          pickSteps(step.stateName, gameState.before, snapshot, live, { novice: step.cycle <= GUIDE_CYCLES }),
-          null,
-          gameState.before,
-          snapshot,
-          live
-        )
+  // Without coach guidance (coach off, not answered yet, or a held Done, whose
+  // Look is the verdict alone): the steps that fit the code as it is, picked by
+  // rules (steps.pickSteps), never a script that assumes an empty project.
+  $: nextSteps =
+    step && (hasGuidance(chosen) || (snapshot && CHECKED_PHASES.includes(step.stateName)))
+      ? cardSteps(step.stateName, chosen, gameState.before, snapshot, live, { novice: step.cycle <= GUIDE_CYCLES })
       : null;
   // the step to work on now: what the Driver/Navigator lines say
   $: currentStep = nextSteps?.needed.find((s) => s.current) || null;

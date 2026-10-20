@@ -228,7 +228,8 @@ def main(prefixes):
             fx["catalogue"] = catalogue[fx["phase"]]
         validate(fx)  # fixtures must be valid server requests too
         try:
-            verdict, usage = ask_coach(client, fx)
+            # the server skips the guidance for a Done; ask it here too, to score it
+            verdict, usage = ask_coach(client, fx, guidance=with_steps)
         except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.BadRequestError) as e:
             # Same for every fixture (bad key, no credit, bad request shape), so stop here.
             print(f"ERROR {f.stem}: {e}\nStopping: this would fail the same way for every fixture.")
