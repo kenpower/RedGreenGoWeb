@@ -35,7 +35,13 @@ Check it: `curl https://compucore3.setu.ie/rgg-coach/health`.
 The coach accepts requests from the game on GitHub Pages, from the dev server
 (`http://localhost:8080`) and from the game page served by a student's own helper
 (`http://127.0.0.1:8000` or `http://localhost:8000`; `rgg_server.py` serves it so Chrome lets the
-page reach the helper). The helper origins can use `/coach` and `/progress` but not `/teacher/...`.
+page reach the helper). The helper origins can use `/coach`, `/progress` and `/class` but not `/teacher/...`.
+
+The game won't start without a valid class code. It checks the code first with
+`GET /class?code=CODE`, which answers `{"ok": true, "name": "..."}` for an active class and
+404 `{"ok": false}` for an unknown or disabled one. The check doesn't use up the class's
+allowance. It shares the students' per-IP nginx rate limit, which also stops anyone trying
+codes one after another.
 
 ## Classes
 

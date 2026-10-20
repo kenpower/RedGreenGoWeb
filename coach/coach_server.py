@@ -25,6 +25,8 @@ Endpoints:
                   With pair and game_id, the verdict is also counted in that game's progress.
   POST /progress  body: the browser's own progress counts and new events for one game (see
                   validate_progress); needs an active class code but doesn't use up its allowance
+  GET  /class?code=CODE   {"ok": true, "name"} for an active class, else 404 {"ok": false};
+                  the game checks the code before it starts. Doesn't use up the allowance.
   GET  /health    "ok"
 
 Teacher endpoints need X-Class-Code and X-Teacher-Key (from teacher-link):
@@ -459,6 +461,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
             return self.send_json(200, {"status": "ok"})
+        if urlsplit(self.path).path == "/class":
+            return self.dispatch({"/class": (None, self.check_code)})
         self.dispatch({
             "/teacher/progress": (None, self.teacher_progress),
             "/teacher/pair": (None, self.teacher_pair),
@@ -517,6 +521,19 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(400, {"error": str(e)})
         finally:
             con.close()
+
+    def check_code(self, query, _header_code):
+        """The game checks a class code before it starts. Free: no allowance used."""
+        code = query.get("code", "").strip().upper()
+        con = db()
+        try:
+            row = con.execute("SELECT name FROM classes WHERE code = ? AND active = 1", (code,)).fetchone()
+        finally:
+            con.close()
+        if row:
+            self.send_json(200, {"ok": True, "name": row["name"]})
+        else:
+            self.send_json(404, {"ok": False})
 
     def progress(self, body, code):
         try:
