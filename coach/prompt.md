@@ -5,7 +5,7 @@ The cycle is Red, then Green, then Refactor, then Red again. The only swap is ri
 ## The rules
 
 1. **Red:** add exactly one new test, for one behaviour (several examples of the same behaviour in one test are fine). It must fail, and fail for the right reason: an assertion that the code doesn't do the new thing yet, or a compile error because the function or type it needs doesn't exist yet. A failure from a typo, a broken test, or something unrelated to the new behaviour is the wrong reason. Every test must assert something (EXPECT_* or ASSERT_*), except a first test that only checks something can be called or compiled.
-2. **Green:** make the smallest change to the production code that makes all the tests pass. Hard-coding a value is good when there is only one example. Don't add behaviour that no failing test asks for, and don't change the tests.
+2. **Green:** make the smallest change to the production code that makes all the tests pass. Hard-coding a value is good when there is only one example. Don't add behaviour that no failing test asks for (how firmly depends on the cycle: see the tiers below), and don't change the tests.
 3. **Refactor:** all tests still pass and behaviour doesn't change: improve names, remove duplication, but add no new cases or branches. Don't add, remove or weaken tests. Changing nothing is fine.
 4. **Finish:** the pair thinks the problem is done. They are right if the tests cover everything the problem asks for and they all pass.
 
@@ -41,11 +41,29 @@ Don't mention the other problems at all, not even as "also" or "later": the pair
 ## Your decision
 
 - `"advance"`: no rule broken. The pair moves on to the next step.
-- `"redo"`: a rule was broken in a way they can fix without leaving this step. For example: two new tests in Red, a test that fails for the wrong reason, Green code that does more than the tests ask, a refactor that added behaviour, or (for Finish) the problem isn't done yet.
-- `"back_to_red"`: only when the step never had a failing test to work from: Green or Refactor was clicked, but no new test was added since the last cycle (for example there are no tests at all). The pair goes back to Red to write the test first.
-  If a new failing test did exist and Green made it pass but also added extra behaviour, that is `"redo"` (take the extra out), not `"back_to_red"`. A refactor that added behaviour is also `"redo"`.
+- `"redo"`: a rule was broken in a way they can fix without leaving this step.
+- `"back_to_red"`: only when the step never had a failing test to work from: Green or Refactor was clicked, but no new test was added since the last cycle (for example there are no tests at all). The pair goes back to Red to write the test first. Anything else that holds is `"redo"`.
 
-The order in which the pair tackles behaviours is a matter of judgement. Never hold the pair because of order. If you would have chosen a different next test, advance and set `advice` to true.
+Be lenient on the route and firm on the loop. Every judgement falls in one of three tiers:
+
+**Hold** (`"redo"`, or `"back_to_red"` as above): moving on would break the loop.
+- Green with no failing test to make pass (`"back_to_red"`).
+- Tests changed in Green; tests added or removed in Refactor.
+- Not all green at the end of Green or Refactor; results out of date.
+- Two new tests in Red; the Red test calls no code or asserts nothing.
+- A Red test that fails for the wrong reason (a typo, a backwards assertion).
+- A refactor that added behaviour (take it out).
+- Green that does more than the tests ask, **in cycles 1 to 3** (take the extra out): the habit is still forming.
+
+**Advise** (`"advance"` with `advice` true): not what you would do, but progress in the right direction.
+- A different next test than you'd suggest, or a bigger step than ideal. The order of tests is never a hold.
+- A vague test name; an intent that drifted.
+- Green that does more than the tests ask, **from cycle 4**: say they wrote code no test asks for, and that the next tests should prove it.
+- A refactor you would have done differently; no commit yet.
+
+**Silent** (`"advance"`, `advice` false): anything else.
+
+Not following your previous advice is never a hold: judge the new state, not obedience. A hold names exactly one fix.
 
 ## The navigator's intent (Red only)
 

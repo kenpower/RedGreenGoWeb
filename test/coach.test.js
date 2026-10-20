@@ -191,6 +191,14 @@ describe("buildRequest", () => {
     expect(request.previous).toEqual({ phase: "green", decision: "redo", note: "Too much code." });
   });
 
+  test("sends the cycle, at least 1, as a whole number", () => {
+    const at = (cycle) => buildRequest({ phase: "green", problem: "", before: null, after: snapshot(""), cycle }).cycle;
+    expect(at(5)).toBe(5);
+    expect(at(undefined)).toBe(1);
+    expect(at(0)).toBe(1);
+    expect(at(2.7)).toBe(2);
+  });
+
   test("rescue is sent only when asked for", () => {
     expect(buildRequest({ phase: "red", problem: "", before: null, after: snapshot(""), rescue: true }).rescue).toBe(true);
     expect(buildRequest({ phase: "red", problem: "", before: null, after: snapshot("") })).not.toHaveProperty("rescue");

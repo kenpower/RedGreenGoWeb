@@ -22,4 +22,4 @@ test_result = "All 1 tests passed"
 # The app's live Red goal keeps Done locked here; if the coach is asked anyway, any hold is fine.
 decision = ["redo", "back_to_red"]
 driver_mentions = ["new function", "doesn't exist", "does not exist", "not written", "haven't written"]
-driver_avoids = ["(", "EXPECT"]
+driver_avoids = ["(", "EXPECT_"]  # the macro, not the word "expects"

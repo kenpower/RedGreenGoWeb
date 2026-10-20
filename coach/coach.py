@@ -17,6 +17,7 @@ A step is a dict:
     expected       what the game requires of this step, already checked by it (optional)
     previous       the verdict on the step before: {phase, decision, note} or None (optional)
     pair, game_id  who and which game, for coach_server's records (optional)
+    cycle          which Red-Green-Refactor cycle, from 1 (optional; leniency depends on it)
     rescue         true when the pair is stuck and asked to see the code (optional)
 """
 import json
@@ -122,6 +123,9 @@ def validate(step):
     for field, limit in (("pair", 200), ("game_id", 64), ("intent", MAX_INTENT)):
         if not isinstance(step.get(field, ""), str) or len(step.get(field, "")) > limit:
             raise BadStep(f"{field} must be text of at most {limit} characters")
+    cycle = step.get("cycle", 1)
+    if not isinstance(cycle, int) or isinstance(cycle, bool) or not 1 <= cycle <= 10000:
+        raise BadStep("cycle must be a whole number from 1")
     if not _short_strings(step.get("rule_findings", []), MAX_FINDINGS, MAX_NOTE):
         raise BadStep("rule_findings must be a short list of short strings")
     history = step.get("history", [])
@@ -165,6 +169,7 @@ def build_user(step):
     phase = step["phase"]
     parts = [
         f"Problem:\n{step.get('problem', '').strip() or '(not given)'}",
+        f"Cycle {step.get('cycle', 1)}.",
         f"Step just finished: {phase.upper()}" if phase != "finish"
         else "The pair says they are FINISHED with the problem.",
     ]

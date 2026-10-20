@@ -1,5 +1,6 @@
 description = "FizzBuzz: Green writes the whole kata to pass the test for 2"
 phase = "green"
+cycle = 2
 expected = "Green: make FizzBuzz.Returns2For2 pass with the least production code, test files unchanged. The game has checked all tests pass."
 problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
 tests_before = '''

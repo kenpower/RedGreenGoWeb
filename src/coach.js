@@ -190,6 +190,7 @@ export function pairKey(players) {
 // or null at the start of a game.
 export function buildRequest({
   phase, problem, before, after, ruleFindings = [], history = [], gameId = "", players = [], expected = "", rescue = false,
+  cycle = 1,
 }) {
   // Stale results go first: until the pair runs the tests again, nothing
   // else the coach could say about the results can be trusted.
@@ -197,6 +198,7 @@ export function buildRequest({
   const last = history[history.length - 1];
   const request = {
     phase,
+    cycle: Math.max(1, Math.floor(Number(cycle) || 1)), // the coach's leniency depends on it
     expected: String(expected || "").slice(0, 300),
     previous: last
       ? { phase: last.phase, decision: last.decision || "", note: (last.note || "").slice(0, 500) }

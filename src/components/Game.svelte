@@ -99,6 +99,7 @@
         expected: expectedFor(phase, liveStatus(phase, gameState.before, current)),
         gameId: gameState.gameId,
         players: gameState.players,
+        cycle: forStep.cycle,
       },
       catalogueFor(phase),
       { novice: forStep.cycle <= GUIDE_CYCLES }
@@ -343,6 +344,7 @@
       history: gameState.history,
       gameId: gameState.gameId,
       players: gameState.players,
+      cycle: gameState.iteration + 1,
     });
 
   // Only one test may fail in Red. When the rules are enforced or the coach
