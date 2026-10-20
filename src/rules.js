@@ -99,12 +99,37 @@ export function buildFailed(snapshot) {
 
 const results = (snapshot) => Object.fromEntries((snapshot?.tests || []).map((t) => [t.name, t.status]));
 
-const testFiles = (snapshot) =>
-  (snapshot?.files || [])
-    .filter((f) => f.kind === "test")
-    .map((f) => `${f.path}\n${f.content}`)
-    .sort()
-    .join("\n\0\n");
+// How the tests themselves changed between two snapshots: the TEST(...) blocks
+// compared by name and body, comments and whitespace ignored. Edits outside
+// them (an #include for the new header, using lines, helper declarations,
+// comments) aren't changes to the tests.
+export function testChanges(before, now) {
+  const was = testBodies(before);
+  const is = testBodies(now);
+  return {
+    added: Object.keys(is).filter((name) => !(name in was)),
+    removed: Object.keys(was).filter((name) => !(name in is)),
+    changed: Object.keys(is).filter((name) => name in was && was[name] !== is[name]),
+  };
+}
+
+const anyChange = (c) => c.added.length + c.removed.length + c.changed.length > 0;
+
+// What to tell the pair about tests changed in Green (where none may change)
+// or Refactor (where the same tests must stay; editing a test's body is
+// allowed there, as long as it still checks the same thing).
+export function testChangeMessage(phase, changes) {
+  const { added, removed, changed } = changes;
+  if (phase === "green") {
+    if (changed.length) return `You changed the test ${list(changed)}: Green only changes production code`;
+    if (added.length) return `You added a test (${list(added)}): new tests belong in the next Red`;
+    if (removed.length) return `You removed the test ${list(removed)}: put it back`;
+  } else {
+    if (added.length) return `You added a test (${list(added)}): Refactor keeps the same tests`;
+    if (removed.length) return `You removed the test ${list(removed)}: Refactor keeps the same tests`;
+  }
+  return "";
+}
 
 const sameSet = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
 
@@ -225,14 +250,15 @@ function checkRed(before, after, findings) {
 
 function checkGreen(before, after, findings) {
   allPass(after, findings);
-  if (before && testFiles(before) !== testFiles(after))
-    findings.push({ rule: "tests_changed", message: "Make the test pass by changing the code, not the tests." });
+  const changes = before && testChanges(before, after);
+  if (changes && anyChange(changes))
+    findings.push({ rule: "tests_changed", message: testChangeMessage("green", changes) + "." });
 }
 
 function checkRefactor(before, after, findings) {
   allPass(after, findings);
   if (before && !sameSet(testNames(before), testNames(after)))
-    findings.push({ rule: "tests_added_or_removed", message: "Refactoring shouldn't add or remove tests." });
+    findings.push({ rule: "tests_added_or_removed", message: testChangeMessage("refactor", testChanges(before, after)) + "." });
 }
 
 const CHECKS = { red: checkRed, green: checkGreen, refactor: checkRefactor };
@@ -430,8 +456,8 @@ function liveGreen(before, now) {
     if (failing.length) lines.push({ text: `Not all tests pass: ${list(failing)}`, ok: false });
     else if (!unrun.length && !(focus && ran[focus] !== "passed")) lines.push({ text: "All tests green ✓", ok: true });
   }
-  if (before && testFiles(before) !== testFiles(now))
-    lines.push({ text: "Test files changed: Green only changes production code", ok: false });
+  const changes = before && testChanges(before, now);
+  if (changes && anyChange(changes)) lines.push({ text: testChangeMessage("green", changes), ok: false, testsChanged: true });
   return { lines, focusTest: focus, backToRed, entryOk: !backToRed };
 }
 
@@ -454,7 +480,7 @@ function liveRefactor(before, now) {
     else if (!unrun.length) lines.push({ text: "All tests green ✓", ok: true });
   }
   if (before && !sameSet(testNames(before), testNames(now)))
-    lines.push({ text: "Tests added or removed: Refactor keeps the tests the same", ok: false });
+    lines.push({ text: testChangeMessage("refactor", testChanges(before, now)), ok: false, testsChanged: true });
   return { lines, entryProblem, entryOk: !entryProblem };
 }
 

@@ -6,17 +6,20 @@
 //   done true = ticked, false = a problem (reason says what), null = not done yet
 //   short: a few words naming the item, for "Not yet: see <short>"
 //   current: the item to work on now (never "Click Done" while Done is locked)
-import { pickRedTest, changedSinceRun, buildFailed, callsCode, testBodies, failingTests, untestedFunctions } from "./rules.js";
+import {
+  pickRedTest, changedSinceRun, buildFailed, callsCode, testBodies, failingTests, untestedFunctions,
+  testChanges, testChangeMessage,
+} from "./rules.js";
 
 export const GUIDE_CYCLES = 2;
 
 const results = (snapshot) => Object.fromEntries((snapshot?.tests || []).map((t) => [t.name, t.status]));
-const testFiles = (snapshot) =>
-  (snapshot?.files || [])
-    .filter((f) => f.kind === "test")
-    .map((f) => `${f.path}\n${f.content}`)
-    .sort()
-    .join("\n");
+// Green may touch the test files (an #include for a new header), not the tests themselves.
+const greenTestChange = (before, now) => {
+  if (!before || !now) return "";
+  const changes = testChanges(before, now);
+  return testChangeMessage("green", changes);
+};
 const shortName = (name) => (name || "").split(".").pop();
 const RUN_AGAIN = "You've changed the code since the last run: run the tests";
 
@@ -71,7 +74,7 @@ function redGuide(before, now, live) {
 function greenGuide(before, now, live) {
   const focus = live?.focusTest;
   const ran = results(now);
-  const testsChanged = !!(before && now && testFiles(before) !== testFiles(now));
+  const testChange = greenTestChange(before, now);
   const stale = !!now && changedSinceRun(now);
 
   const pass = {
@@ -81,11 +84,11 @@ function greenGuide(before, now, live) {
   };
   pass.done = focus && now && !buildFailed(now) && !stale && focus in ran ? ran[focus] === "passed" || null : null;
 
-  const keep = { text: "Don't change the tests in this step", short: "leave the tests alone", done: now ? !testsChanged : null };
-  if (testsChanged) keep.reason = "Test files changed: Green only changes production code";
+  const keep = { text: "Don't change the tests in this step", short: "leave the tests alone", done: now ? !testChange : null };
+  if (testChange) keep.reason = testChange;
 
   const green = { text: "Run all tests and see everything green", short: "run all tests" };
-  const otherFailing = live?.lines?.find((l) => l.ok === false && !/^Make |Test files changed/.test(l.text));
+  const otherFailing = live?.lines?.find((l) => l.ok === false && !l.testsChanged && !/^Make /.test(l.text));
   if (!live) green.done = null;
   else if (live.goalMet) green.done = true;
   else if (stale) Object.assign(green, { done: null, reason: RUN_AGAIN });
@@ -191,9 +194,15 @@ export function unlockAction(phase, before, now, live) {
   }
 
   const failing = buildFailed(now) ? [] : failingTests(now);
-  const changedTests = live.lines.some((l) => /^Test files changed|^Tests added or removed/.test(l.text));
+  const changedTests = live.lines.some((l) => l.testsChanged);
+  const changes = changedTests ? testChanges(before, now) : null;
   if (phase === "green") {
-    if (changedTests) return { driver: "Undo your changes to the test files.", navigator: "Check only production code changes in Green." };
+    if (changes) {
+      const navigator = "Check only production code changes in Green (an #include line is fine).";
+      if (changes.changed.length) return { driver: `Undo your changes to ${shortName(changes.changed[0])}.`, navigator };
+      if (changes.added.length) return { driver: `Remove ${shortName(changes.added[0])} for now: it belongs in the next Red.`, navigator };
+      if (changes.removed.length) return { driver: `Put ${shortName(changes.removed[0])} back.`, navigator };
+    }
     const target = live.focusTest || failing[0];
     if (buildFailed(now) || failing.length || target)
       return {
@@ -204,7 +213,9 @@ export function unlockAction(phase, before, now, live) {
     return null;
   }
   if (phase === "refactor") {
-    if (changedTests) return { driver: "Put the tests back as they were.", navigator: "Check the same tests still run." };
+    if (changes?.removed.length) return { driver: `Put ${shortName(changes.removed[0])} back.`, navigator: "Check the same tests still run." };
+    if (changes?.added.length)
+      return { driver: `Remove ${shortName(changes.added[0])} for now: it belongs in the next Red.`, navigator: "Check the same tests still run." };
     if (buildFailed(now) || failing.length)
       return { driver: "Undo the last change so all tests pass again.", navigator: "Suggest a smaller change to try next." };
     if (live.lines.some((l) => l.ok === null)) return RUN_ACTION;

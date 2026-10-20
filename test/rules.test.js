@@ -232,7 +232,7 @@ describe("green", () => {
 
   test("the tests were changed", () => {
     const after = snap({
-      testFile: testSource(["F.a", "F.b"]) + "\n// loosened",
+      testFile: testSource(["F.a", "F.b"]).replace("TEST(F, b) {\n  EXPECT_EQ(1, f());", "TEST(F, b) {\n  EXPECT_EQ(2, f());"),
       results: { "F.a": "passed", "F.b": "passed" },
     });
     expect(rules(checkRules("green", before, after))).toEqual(["tests_changed"]);
@@ -575,10 +575,10 @@ describe("liveStatus", () => {
       const now = snap({
         source: ["A.one", "A.two"],
         results: { "A.one": "passed", "A.two": "passed" },
-        testFile: testSource(["A.one", "A.two"]) + "// edited",
+        testFile: testSource(["A.one", "A.two"]).replace("TEST(A, two) {\n  EXPECT_EQ(1, f());", "TEST(A, two) {\n  EXPECT_TRUE(f());"),
       });
       const s = liveStatus("green", redEnd, now);
-      expect(lines(s)).toContainEqual(["Test files changed: Green only changes production code", false]);
+      expect(lines(s)).toContainEqual(["You changed the test A.two: Green only changes production code", false]);
       expect(s.goalMet).toBe(false);
     });
 
@@ -606,7 +606,7 @@ describe("liveStatus", () => {
     test("a test added", () => {
       const now = snap({ source: ["A.one", "A.two", "A.three"], results: { "A.one": "passed", "A.two": "passed", "A.three": "passed" } });
       expect(lines(liveStatus("refactor", green, now))).toContainEqual([
-        "Tests added or removed: Refactor keeps the tests the same", false,
+        "You added a test (A.three): Refactor keeps the same tests", false,
       ]);
     });
 
@@ -736,6 +736,54 @@ describe("test names", () => {
     const a = snap({ testFile: "TEST(A, b) {\n  EXPECT_EQ(1, f());\n}\n" });
     const b = snap({ testFile: "TEST(A, b) {   EXPECT_EQ(1, f()); // note\n}\n" });
     expect(testBodies(a)).toEqual(testBodies(b));
+  });
+});
+
+describe("tests unchanged in Green: the TEST blocks, not the whole file", () => {
+  const T = 'TEST(Calc, Sum) {\n  EXPECT_EQ(3, add("1,2"));\n}\n';
+  const redEnd = snap({ testFile: T, results: { "Calc.Sum": "failed" } });
+  const green = (testFile) => snap({ testFile, results: { "Calc.Sum": "passed" }, code: "int add(std::string) { return 3; }" });
+
+  test("adding an #include (or using lines, comments) to the test file is fine", () => {
+    const now = green('#include "calc.h"\nusing namespace std;\n// calculator tests\n\n' + T);
+    expect(checkRules("green", redEnd, now)).toEqual([]);
+    expect(liveStatus("green", redEnd, now).goalMet).toBe(true);
+  });
+
+  test("a comment-only change inside a TEST is fine", () => {
+    const now = green('TEST(Calc, Sum) {\n  // two numbers\n  EXPECT_EQ(3, add("1,2"));  // sum\n}\n');
+    expect(checkRules("green", redEnd, now)).toEqual([]);
+  });
+
+  test("editing a TEST's body is a change, named", () => {
+    const now = green('TEST(Calc, Sum) {\n  EXPECT_EQ(0, add("1,2"));\n}\n');
+    expect(checkRules("green", redEnd, now)).toEqual([
+      { rule: "tests_changed", message: "You changed the test Calc.Sum: Green only changes production code." },
+    ]);
+    expect(liveStatus("green", redEnd, now).lines).toContainEqual({
+      text: "You changed the test Calc.Sum: Green only changes production code", ok: false, testsChanged: true,
+    });
+  });
+
+  test("adding a TEST is a change", () => {
+    const now = green(T + 'TEST(Calc, Empty) {\n  EXPECT_EQ(0, add(""));\n}\n');
+    expect(checkRules("green", redEnd, now).find((f) => f.rule === "tests_changed").message).toEqual(
+      "You added a test (Calc.Empty): new tests belong in the next Red."
+    );
+  });
+
+  test("removing a TEST is a change", () => {
+    const before = snap({ testFile: T + "TEST(Calc, Two) {\n  EXPECT_EQ(2, add(\"2\"));\n}\n", results: { "Calc.Sum": "failed", "Calc.Two": "passed" } });
+    const now = green(T);
+    expect(checkRules("green", before, now)[0].message).toEqual("You removed the test Calc.Two: put it back.");
+  });
+
+  test("Refactor names an added or removed test", () => {
+    const greenEnd = green(T);
+    const now = green(T + 'TEST(Calc, Empty) {\n  EXPECT_EQ(0, add(""));\n}\n');
+    expect(checkRules("refactor", greenEnd, now).find((f) => f.rule === "tests_added_or_removed").message).toEqual(
+      "You added a test (Calc.Empty): Refactor keeps the same tests."
+    );
   });
 });
 

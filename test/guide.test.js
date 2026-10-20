@@ -160,8 +160,15 @@ describe("green", () => {
   test("LOCKED: changing the tests", () => {
     const now = snap({ tests: [ONE, ["A", "two", "EXPECT_EQ(1, g());"]], results: { "A.one": "passed", "A.two": "passed" } });
     const items = guide("green", 1, redEnd, now);
-    expect(items[1]).toMatchObject({ done: false, reason: "Test files changed: Green only changes production code", current: true });
-    expect(unlockAction("green", redEnd, now, live("green", redEnd, now)).driver).toEqual("Undo your changes to the test files.");
+    expect(items[1]).toMatchObject({ done: false, reason: "You changed the test A.two: Green only changes production code", current: true });
+    expect(unlockAction("green", redEnd, now, live("green", redEnd, now)).driver).toEqual("Undo your changes to two.");
+  });
+
+  test("an #include added to the test file isn't changing the tests", () => {
+    const now = snap({ testText: '#include "lib.h"\n' + testFile([ONE, TWO]), results: { "A.one": "passed", "A.two": "passed" } });
+    const items = guide("green", 1, redEnd, now);
+    expect(items[1].done).toBe(true);
+    expect(ticks(items)).toEqual([true, true, true, null]);
   });
 });
 
