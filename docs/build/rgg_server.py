@@ -1,21 +1,23 @@
 """RedGreenGo helper: watches what Visual Studio produces (GoogleTest results, build
-log, source files) and pushes it to the RedGreenGo web app.
+log, source files) and the project's git status, and pushes it to the RedGreenGo web app.
 
-It never runs anything and only reads files, so it is safe to leave running.
+It only reads: it never builds, never runs tests and never writes to the project. The
+one program it runs is git, read-only (status, log, branch; --no-optional-locks, so not
+even git's index refresh is written), so it is safe to leave running.
 
 No setup needed: Visual Studio's Google Test adapter writes XMLGoogleTestResults.xml
 next to the test .exe on every run, and the build writes <Project>.log; the helper
 finds both under the solution folder.
 
 Run from the folder that holds your solution:
-  python rgg_server.py                  opens the game in your browser
+  python rgg_server.py                  opens the game (after the first test run, if there are tests)
   python rgg_server.py --dev            opens the dev build on http://localhost:8080
   python rgg_server.py --help           all options
 
 Endpoints (127.0.0.1:8000):
   GET  /events    Server-Sent Events stream; one message per change
-  GET  /results   the same data once (handy for debugging)
-  POST /reset     forget test results and build status (new game)
+  GET  /results   the same data once, re-read from disk
+  POST /reset     new game: forget the previous game's results, then re-read what is on disk
 """
 
 import argparse
@@ -23,6 +25,7 @@ import glob
 import json
 import os
 import re
+import subprocess
 import threading
 import time
 import webbrowser
@@ -39,6 +42,7 @@ POLL_SECONDS = 0.5
 SETTLE_SECONDS = 0.3  # ignore files modified more recently than this (still being written)
 RESCAN_SECONDS = 5  # how often to look for new result/log files (e.g. a new build configuration)
 BROWSER_GRACE_SECONDS = 4  # an already-open game tab reconnects within this time
+RESULTS_WAIT_SECONDS = 60  # longest the game waits for the first test run before opening anyway
 SSE_RETRY_MS = 2000
 SSE_PING_SECONDS = 15
 
@@ -51,9 +55,13 @@ TEST_MARKER = re.compile(r"\bTEST(?:_F|_P)?\s*\(")
 MAX_FILE_BYTES = 100_000
 MAX_FILES = 50
 MAX_README_CHARS = 8_000  # the problem description sent to the coach
+GIT_TIMEOUT_SECONDS = 3
+MAX_DIRTY = 200  # untracked build output can be thousands of files when there's no .gitignore
 
 changed = threading.Condition()  # guards state and sse_clients; notified on every change
 sse_clients = 0
+have_results = threading.Event()  # set once any GoogleTest XML has been read; the game opens then
+config = {"project": ".", "results": [], "build_logs": []}  # set by main() from the command line
 state = {
     "version": 0,  # bumps on every change
     "run": 0,  # id of the latest test run
@@ -62,6 +70,7 @@ state = {
     "build": None,  # {status, errors, time} from the latest build log
     "files": [],  # [{path, kind: test|production, content}] read when results/build arrive
     "readme": None,  # {path, content} of the solution's README.md, read alongside the files
+    "git": None,  # see read_git()
 }
 
 
@@ -198,6 +207,99 @@ def read_readme(project_dir):
     }
 
 
+class GitError(Exception):
+    pass
+
+
+def run_git(project_dir, *args):
+    """Run a read-only git command in the project; return its stdout or raise GitError."""
+    try:
+        result = subprocess.run(
+            ["git", "--no-optional-locks", *args], cwd=project_dir, capture_output=True,
+            timeout=GIT_TIMEOUT_SECONDS, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except FileNotFoundError:
+        raise GitError("git is not installed")
+    except subprocess.TimeoutExpired:
+        raise GitError("git took too long")
+    except OSError as e:
+        raise GitError(str(e))
+    if result.returncode != 0:
+        raise GitError(result.stderr.decode("utf-8", errors="replace").strip() or f"git {args[0]} failed")
+    return result.stdout.decode("utf-8", errors="replace")
+
+
+def is_source_path(path):
+    """Same rule as read_sources: a .cpp/.h outside build output, packages and dot folders."""
+    *dirs, name = path.split("/")
+    return (os.path.splitext(name)[1].lower() in SOURCE_EXTENSIONS and not SKIP_FILES.match(name)
+            and not any(d in SKIP_DIRS or d.startswith(".") for d in dirs))
+
+
+def read_git(project_dir):
+    """{repo: true, branch, head, headTime, headMessage, dirty, dirtySource} or {repo: false, error}.
+
+    Paths are relative to the project folder (like files[].path) and only cover files inside it.
+    branch is None when HEAD is detached; head/headTime/headMessage are None before the first commit.
+    """
+    try:
+        # the project folder's path inside the repo, e.g. "Bowling/" ("" at the top); status
+        # paths start with it. Safer than relpath against --show-toplevel, which can differ
+        # in drive-letter case or 8.3 short names on Windows.
+        prefix = run_git(project_dir, "rev-parse", "--show-prefix").strip()
+    except GitError as e:
+        not_repo = "not a git repository" in str(e)
+        return {"repo": False, "error": None if not_repo else str(e)}
+    try:
+        # -uall lists files inside new folders; "." keeps it to the project folder
+        status = run_git(project_dir, "status", "--porcelain=v1", "-z", "-uall", "--", ".")
+        try:
+            branch = run_git(project_dir, "symbolic-ref", "--short", "-q", "HEAD").strip() or None
+        except GitError:
+            branch = None  # detached HEAD
+        try:
+            head, head_time, head_message = run_git(
+                project_dir, "log", "-1", "--format=%H%x00%ct%x00%s").rstrip("\n").split("\0")
+            head_time = int(head_time)
+        except GitError:
+            head = head_time = head_message = None  # no commits yet
+    except (GitError, ValueError) as e:
+        return {"repo": False, "error": str(e)}
+
+    dirty = []
+    entries = status.split("\0")
+    i = 0
+    while i < len(entries):
+        entry = entries[i]
+        i += 1
+        if len(entry) < 4:
+            continue
+        if entry[0] in "RC":
+            i += 1  # a rename/copy is followed by its old path
+        path = entry[3:]
+        dirty.append(path[len(prefix):] if path.startswith(prefix) else path)
+    dirty.sort()
+    return {
+        "repo": True,
+        "branch": branch,
+        "head": head,
+        "headTime": head_time,
+        "headMessage": head_message,
+        "dirty": dirty[:MAX_DIRTY],
+        "dirtySource": [p for p in dirty if is_source_path(p)][:MAX_DIRTY],
+    }
+
+
+def update_git(git):
+    """Publish a new git status on its own, but only if it changed."""
+    with changed:
+        if state["git"] == git:
+            return
+        state["git"] = git
+        state["version"] += 1
+        changed.notify_all()
+
+
 def beep(runs):
     try:
         import winsound
@@ -207,9 +309,10 @@ def beep(runs):
     winsound.MessageBeep(winsound.MB_OK if all_passed else winsound.MB_ICONHAND)
 
 
-def publish(runs, build, files, readme):
+def publish(runs, build, files, readme, git):
     """Apply new results/build/files as one change, so the app never sees a half-updated state."""
     with changed:
+        state["git"] = git
         for mtime, results in runs:
             state["run"] += 1
             state["runTime"] = mtime
@@ -221,35 +324,64 @@ def publish(runs, build, files, readme):
         state["readme"] = readme
         state["version"] += 1
         changed.notify_all()
+    if runs:
+        have_results.set()
 
 
 def expand(patterns):
     return [path for pattern in patterns for path in glob.glob(pattern, recursive=True)]
 
 
-def watch(project_dir, result_patterns, build_log_patterns, beep_on_results):
+def find_inputs():
+    """The result files and build logs to read, from --results/--build-log or auto-detected."""
+    result_files = expand(config["results"]) if config["results"] else find_result_files(config["project"])
+    logs = expand(config["build_logs"]) if config["build_logs"] else find_build_logs(config["project"])
+    return result_files, logs
+
+
+def reload_from_disk(clear):
+    """Re-read every result file and the newest build log whether or not they changed, so
+    the state matches what is on disk now. Used on reset (clear=True: forget the previous
+    game first) and whenever the app asks for the state; the watch loop keeps its own
+    mtimes for spotting new runs."""
+    result_files, logs = find_inputs()
+    runs = check_result_files(result_files, {})
+    build = check_build_logs(logs, {})
+    with changed:  # an RLock, so publish() can take it again; the app sees one change
+        if clear:
+            state["tests"] = {}
+            state["build"] = None
+            state["runTime"] = None
+        publish(runs, build, read_sources(config["project"]), read_readme(config["project"]),
+                read_git(config["project"]))
+
+
+def watch(beep_on_results):
     """Poll result files and build logs. Whatever is on disk at startup is reported too:
     it is the project's latest state, and the app can tell its age from the times."""
     seen_mtimes = {}
     result_files, logs, next_scan = [], [], 0
     while True:
         try:
-            if time.time() >= next_scan:
-                result_files = expand(result_patterns) if result_patterns else find_result_files(project_dir)
-                logs = expand(build_log_patterns) if build_log_patterns else find_build_logs(project_dir)
+            rescan = time.time() >= next_scan
+            if rescan:
+                result_files, logs = find_inputs()
                 next_scan = time.time() + RESCAN_SECONDS
 
             runs = check_result_files(result_files, seen_mtimes)
             build = check_build_logs(logs, seen_mtimes)
 
             if runs or build:
-                publish(runs, build, read_sources(project_dir), read_readme(project_dir))
+                publish(runs, build, read_sources(config["project"]), read_readme(config["project"]),
+                        read_git(config["project"]))
                 for _, results in runs:
                     print("tests: " + ", ".join(f'{r["name"]}={r["status"]}' for r in results), flush=True)
                 if build:
                     print(f'build {build["status"]}: {len(build["errors"])} error(s)', flush=True)
                 if runs and beep_on_results:
                     beep(runs)
+            elif rescan:
+                update_git(read_git(config["project"]))  # e.g. a commit made in VS between test runs
         except OSError as e:
             print(f"watch error: {e}", flush=True)
         time.sleep(POLL_SECONDS)
@@ -265,16 +397,8 @@ def snapshot():
             "build": state["build"],
             "files": state["files"],
             "readme": state["readme"],
+            "git": state["git"],
         }
-
-
-def reset():
-    with changed:
-        state["tests"] = {}
-        state["build"] = None
-        state["runTime"] = None
-        state["version"] += 1
-        changed.notify_all()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -294,6 +418,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/events":
             self.stream_events()
         elif path == "/results":
+            reload_from_disk(clear=False)
             self.send_json(snapshot())
         else:
             self.send_error(404)
@@ -305,8 +430,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split("?")[0] != "/reset":
             self.send_error(404)
             return
-        reset()
-        print("reset", flush=True)
+        reload_from_disk(clear=True)
+        print("reset: re-read results from disk", flush=True)
         self.send_response(204)
         self.send_cors_headers()
         self.end_headers()
@@ -371,6 +496,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def open_game_unless_connected(url):
+    """If the project has tests, wait for their first results (up to RESULTS_WAIT_SECONDS)
+    so the game starts from a real test run; a project with no tests yet opens straight
+    away. Then open the game unless a game tab is already connected."""
+    with changed:
+        has_tests = any(f["kind"] == "test" for f in state["files"])
+    if has_tests and not have_results.wait(timeout=1):
+        print("Waiting for your first test run in Test Explorer...", flush=True)
+        if not have_results.wait(timeout=RESULTS_WAIT_SECONDS):
+            print(f"No test results after {RESULTS_WAIT_SECONDS} s - opening the game anyway.", flush=True)
     time.sleep(BROWSER_GRACE_SECONDS)
     with changed:
         connected = sse_clients > 0
@@ -395,21 +529,28 @@ def main():
     args = parser.parse_args()
 
     project_dir = os.path.abspath(args.project)
+    config.update(project=project_dir, results=args.results, build_logs=args.build_log)
 
     with changed:
         state["files"] = read_sources(project_dir)
         state["readme"] = read_readme(project_dir)
+        state["git"] = read_git(project_dir)
         state["version"] = 1
 
     print(f"Project: {project_dir} ({len(state['files'])} source files)")
     if state["readme"]:
         print(f"  Problem description: {state['readme']['path']}")
+    git = state["git"]
+    if git["repo"]:
+        print(f"  Git: {git['branch'] or 'detached HEAD'}, {len(git['dirtySource'])} uncommitted source file(s)")
+    else:
+        print(f"  Git: {git['error'] or 'not a git repository'}")
     if not (args.results or find_result_files(project_dir)):
         print("  No test results yet - run your tests in Visual Studio's Test Explorer.")
     print(f"Serving http://127.0.0.1:{PORT}  (Ctrl+C to stop)", flush=True)
 
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    threading.Thread(target=watch, args=(project_dir, args.results, args.build_log, args.beep), daemon=True).start()
+    threading.Thread(target=watch, args=(args.beep,), daemon=True).start()
     if not args.no_browser:
         threading.Thread(target=open_game_unless_connected,
                          args=(DEV_GAME_URL if args.dev else GAME_URL,), daemon=True).start()
