@@ -173,6 +173,25 @@ def validate(step):
     for flag in ("novice", "done"):
         if not isinstance(step.get(flag, False), bool):
             raise BadStep(f"{flag} must be true or false")
+    struggle = step.get("struggle")
+    if struggle is not None and not _struggle_ok(struggle):
+        raise BadStep("struggle must be {runs_without_progress, minutes_on_step, holds_on_step, "
+                      "hints_shown, novice, rung} with whole numbers and a rung from 1 to 3")
+
+
+def _whole(n, top):
+    return isinstance(n, int) and not isinstance(n, bool) and 0 <= n <= top
+
+
+def _struggle_ok(s):
+    """The app's struggle signals (DESIGN-coach-flow.md section 6); every field optional."""
+    known = {"runs_without_progress", "minutes_on_step", "holds_on_step", "hints_shown", "novice", "rung"}
+    return (isinstance(s, dict) and set(s) <= known
+            and all(_whole(s.get(k, 0), top) for k, top in (
+                ("runs_without_progress", 1000), ("minutes_on_step", 100_000), ("holds_on_step", 1000),
+                ("hints_shown", 4)))
+            and isinstance(s.get("novice", False), bool)
+            and _whole(s.get("rung", 1), 3) and s.get("rung", 1) >= 1)
 
 
 def _verdict_entry(h):
@@ -237,6 +256,15 @@ def _code_blocks(step):
     return parts
 
 
+# How specific the guidance details are, by the hint rung the app chose (struggle.rung).
+RUNG_DETAILS = {
+    1: "Point at where to look (the file, function or test), but give no values, expected results "
+       "or names of code they haven't written.",
+    2: "Name the kind of change and where, still with no values or expected results.",
+    3: "Be specific: name the test or function to change and the literal values.",
+}
+
+
 def build_guidance_user(step, verdict):
     """The guidance call: the step plus the settled verdict, so the two agree."""
     parts = [
@@ -245,6 +273,11 @@ def build_guidance_user(step, verdict):
     ]
     if step.get("novice"):
         parts.append("The pair is new to TDD: give a detail for every step.")
+    struggle = step.get("struggle") or {}
+    rung = 3 if step.get("novice") or struggle.get("novice") else struggle.get("rung", 3)
+    parts.append(f"Hint rung for the details: {rung}. " + RUNG_DETAILS[rung]
+                 + (f" They have run the tests {struggle['runs_without_progress']} times on this step "
+                    "without getting closer." if struggle.get("runs_without_progress") else ""))
     if step.get("expected", "").strip():
         parts.append(f"What the game requires of this step: {step['expected'].strip()}")
     findings = step.get("rule_findings", [])

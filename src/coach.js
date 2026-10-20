@@ -191,7 +191,7 @@ export function pairKey(players) {
 // or null at the start of a game.
 export function buildRequest({
   phase, problem, before, after, ruleFindings = [], history = [], gameId = "", players = [], expected = "", rescue = false,
-  cycle = 1, catalogue = null, novice = false, done = false,
+  cycle = 1, catalogue = null, novice = false, done = false, struggle = null,
 }) {
   // Stale results go first: until the pair runs the tests again, nothing
   // else the coach could say about the results can be trusted.
@@ -228,8 +228,21 @@ export function buildRequest({
   // stuck on this step: the one request where the coach may show code
   if (rescue) request.rescue = true;
   if (catalogue?.length) request.catalogue = catalogue;
+  if (struggle) request.struggle = struggleFields(struggle);
   return request;
 }
+
+// The struggle signals (gameState.struggleSignals) as the server checks them:
+// whole numbers from 0, the rung 1–3 the app chose for the step details.
+const upTo = (n, max) => Math.min(max, Math.max(0, Math.floor(Number(n) || 0)));
+const struggleFields = (s) => ({
+  runs_without_progress: upTo(s.runs_without_progress, 1000),
+  minutes_on_step: upTo(s.minutes_on_step, 100000),
+  holds_on_step: upTo(s.holds_on_step, 1000),
+  hints_shown: upTo(s.hints_shown, 4),
+  novice: !!s.novice,
+  rung: Math.max(1, upTo(s.rung, 3)),
+});
 
 const ERROR_MESSAGES = {
   400: "The coach couldn't read this step (is the code very long?).",

@@ -1,0 +1,42 @@
+description = "RUNG 1, Red (cycle 3): the new test passes because the code is ahead; details only point where to look (twin of 42)"
+mode = "look"
+phase = "red"
+cycle = 3
+problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
+struggle = { runs_without_progress = 0, minutes_on_step = 1, holds_on_step = 0, hints_shown = 0, novice = false, rung = 1 }
+tests_before = '''
+// test.cpp
+#include "fizz.hpp"
+TEST(FizzBuzz, OneIsOne) { EXPECT_EQ("1", fizzBuzz(1)); }
+TEST(FizzBuzz, TwoIsTwo) { EXPECT_EQ("2", fizzBuzz(2)); }
+'''
+code_before = '''
+// fizz.hpp
+#include <string>
+inline std::string fizzBuzz(int n) {
+  if (n % 3 == 0) return "Fizz";
+  return std::to_string(n);
+}
+'''
+tests = '''
+// test.cpp
+#include "fizz.hpp"
+TEST(FizzBuzz, OneIsOne) { EXPECT_EQ("1", fizzBuzz(1)); }
+TEST(FizzBuzz, TwoIsTwo) { EXPECT_EQ("2", fizzBuzz(2)); }
+TEST(FizzBuzz, ThreeIsFizz) { EXPECT_EQ("Fizz", fizzBuzz(3)); }
+'''
+code = '''
+// fizz.hpp
+#include <string>
+inline std::string fizzBuzz(int n) {
+  if (n % 3 == 0) return "Fizz";
+  return std::to_string(n);
+}
+'''
+test_result = "All 3 tests passed"
+
+[expect]
+decision = ["redo"]  # the new test passed straight away
+steps_include = ["red.new_test_passes_already", "red.pick_new_behaviour"]
+# rung 1: a nudge, no values or expected results
+detail_avoids = ["'Fizz'", "'Buzz'", "Buzz", "5", "15"]

@@ -74,6 +74,9 @@ def score_next_steps(answer, expect, step):
     for key in ("detail_mentions", "detail_suggests"):
         if key in expect:
             checks.append((key, any(w in text for w in expect[key]), text[:80] or '""'))
+    if "detail_avoids" in expect:  # a low hint rung: none of these specifics
+        said = [w for w in expect["detail_avoids"] if w in text + " " + answer["extra"]]
+        checks.append(("detail_avoids", not said, f"{said[0]!r} in: {text[:70]}" if said else "none"))
     if step.get("novice"):
         checks.append(("detail_every_step", all(d.strip() for d in details), f"{sum(bool(d) for d in details)}/{len(details)}"))
     too_long = [d for d in details if len(d.split()) > MAX_DETAIL_WORDS]

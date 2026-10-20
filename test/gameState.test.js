@@ -550,6 +550,42 @@ test("the_last_look_is_cached_per_step_with_its_verdict_and_reused_once", () => 
   expect(g.nextStepsFor(2)).toBeNull(); // another step: nothing cached
 });
 
+test("struggle_signals_count_runs_without_progress_and_minutes_on_the_step", () => {
+  let g = new GameState();
+  g.start();
+  g.struggleFor(1, 1000);
+  g.noteRun(1, "run-a", "lines-1", 1000); // the first run seen: nothing to compare yet
+  g.noteRun(1, "run-a", "lines-1", 1010); // the same run again: not counted
+  g.noteRun(1, "run-b", "lines-1", 1060); // a new run, goal lines unchanged
+  g.noteRun(1, "run-c", "lines-1", 1120);
+  expect(g.struggleSignals(1, { novice: true, rung: 3 }, 1000 + 6 * 60)).toEqual({
+    runs_without_progress: 2,
+    minutes_on_step: 6,
+    holds_on_step: 0,
+    hints_shown: 0,
+    novice: true,
+    rung: 3,
+  });
+  g.noteRun(1, "run-d", "lines-2", 1200); // a goal line changed: progress, the count starts again
+  expect(g.struggleFor(1).runs).toBe(0);
+  g.noteHeld();
+  expect(GameState.recoverSavedGame().struggleSignals(1, {}, 1200).holds_on_step).toBe(1);
+});
+
+test("more_help_and_the_rungs_shown_are_per_step_and_rungs_2_and_3_are_recorded", () => {
+  let g = new GameState();
+  g.start();
+  g.noteMoreHelp(1);
+  g.noteHintShown(1, 1);
+  g.noteHintShown(1, 2);
+  g.noteHintShown(1, 2); // shown again: recorded once
+  g.noteHintShown(1, 3);
+  expect(g.struggleFor(1)).toMatchObject({ moreHelp: 1, shown: 3 });
+  expect(g.pendingEvents.filter((e) => e.kind === "hint").map((e) => e.detail)).toEqual(["rung 2", "rung 3"]);
+  steps(g, 1); // a new step starts afresh
+  expect(g.struggleFor(g.stepNumber)).toMatchObject({ moreHelp: 0, shown: 0, runs: 0 });
+});
+
 test("keep_only_works_on_red", () => {
   let g = new GameState();
   g.start();

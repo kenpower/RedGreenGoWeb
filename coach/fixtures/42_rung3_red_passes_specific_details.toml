@@ -1,0 +1,42 @@
+description = "RUNG 3, Red (cycle 3): the same code as 41, but the pair is struggling; details name the behaviour and its value"
+mode = "look"
+phase = "red"
+cycle = 3
+problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
+struggle = { runs_without_progress = 2, minutes_on_step = 6, holds_on_step = 1, hints_shown = 2, novice = false, rung = 3 }
+tests_before = '''
+// test.cpp
+#include "fizz.hpp"
+TEST(FizzBuzz, OneIsOne) { EXPECT_EQ("1", fizzBuzz(1)); }
+TEST(FizzBuzz, TwoIsTwo) { EXPECT_EQ("2", fizzBuzz(2)); }
+'''
+code_before = '''
+// fizz.hpp
+#include <string>
+inline std::string fizzBuzz(int n) {
+  if (n % 3 == 0) return "Fizz";
+  return std::to_string(n);
+}
+'''
+tests = '''
+// test.cpp
+#include "fizz.hpp"
+TEST(FizzBuzz, OneIsOne) { EXPECT_EQ("1", fizzBuzz(1)); }
+TEST(FizzBuzz, TwoIsTwo) { EXPECT_EQ("2", fizzBuzz(2)); }
+TEST(FizzBuzz, ThreeIsFizz) { EXPECT_EQ("Fizz", fizzBuzz(3)); }
+'''
+code = '''
+// fizz.hpp
+#include <string>
+inline std::string fizzBuzz(int n) {
+  if (n % 3 == 0) return "Fizz";
+  return std::to_string(n);
+}
+'''
+test_result = "All 3 tests passed"
+
+[expect]
+decision = ["redo"]  # the new test passed straight away
+steps_include = ["red.new_test_passes_already", "red.pick_new_behaviour"]
+# rung 3: specific, a behaviour the code doesn't do yet with its value
+detail_suggests = ["'Buzz'", "5", "'FizzBuzz'", "15"]

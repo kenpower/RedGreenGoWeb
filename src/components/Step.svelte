@@ -26,6 +26,10 @@
   // The coach's verdict for this step, or null. Only read for why the pair is
   // held, or why the coach disagreed that they're finished.
   export let coach = null;
+  // What a coach hold shows at the pair's rung (ladder.ladderFor): {question,
+  // kind, actions, more}, or null. At rung 3 the Driver/Navigator lines carry
+  // the coach's actions (Game puts them there).
+  export let ladder = null;
   // rule findings [{rule, message}]: why we're held without the coach, or
   // warnings when the rules aren't enforced
   export let findings = [];
@@ -247,6 +251,14 @@
         {/if}
         {#if reason}
           <p>{reason}</p>
+        {/if}
+        {#if heldByCoach && ladder}
+          {#if ladder.question}<p class="ladderLine"><span class="ladderLabel">Think:</span> {ladder.question}</p>{/if}
+          {#if ladder.kind}<p class="ladderLine"><span class="ladderLabel">Look for:</span> {ladder.kind}</p>{/if}
+          {#if ladder.actions}<p class="ladderLine">The Driver and Navigator lines below now say exactly what to do.</p>{/if}
+          {#if ladder.more}
+            <button class="moreHelp" disabled={busy} on:click={() => interact("moreHelp")}>More help</button>
+          {/if}
         {/if}
       </div>
     {:else if findings.length}
@@ -828,6 +840,19 @@
   .practiceLine {
     padding-left: 0.6em;
     border-left: 2px solid var(--amber);
+  }
+
+  .ladderLine {
+    padding-left: 0.6em;
+    border-left: 2px solid var(--box-col);
+  }
+
+  .ladderLabel {
+    font-weight: 500;
+  }
+
+  .moreHelp {
+    margin: 0.3em 0;
   }
 
   .rescueRow {

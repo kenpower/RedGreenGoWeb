@@ -76,5 +76,27 @@ class AskCoach(unittest.TestCase):
         self.assertEqual(answer["steps"], [])
 
 
+class Struggle(unittest.TestCase):
+    def test_the_struggle_signals_are_checked(self):
+        good = {"runs_without_progress": 2, "minutes_on_step": 6, "holds_on_step": 1, "hints_shown": 2,
+                "novice": False, "rung": 3}
+        coach.validate(step(struggle=good))
+        coach.validate(step(struggle={}))
+        for bad in ({"rung": 0}, {"rung": 4}, {"runs_without_progress": -1}, {"minutes_on_step": 1.5},
+                    {"novice": "yes"}, {"hints_shown": True}, {"other": 1}, ["rung", 1]):
+            with self.assertRaises(coach.BadStep, msg=bad):
+                coach.validate(step(struggle=bad))
+
+    def test_the_guidance_follows_the_rung_and_novices_always_get_rung_3(self):
+        user = lambda **s: coach.build_guidance_user(step(**s), VERDICT)
+        self.assertIn("Hint rung for the details: 1. Point at where to look", user(struggle={"rung": 1}))
+        self.assertIn("Hint rung for the details: 3.", user(struggle={"rung": 1}, novice=True))
+        self.assertIn("Hint rung for the details: 3.", user())  # no signals: as specific as before
+        self.assertIn("run the tests 2 times on this step without getting closer",
+                      user(struggle={"rung": 2, "runs_without_progress": 2}))
+        # the verdict call never sees the rung: it fills every rung of its ladder
+        self.assertNotIn("Hint rung", coach.build_user(step(struggle={"rung": 1})))
+
+
 if __name__ == "__main__":
     unittest.main()

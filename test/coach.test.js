@@ -202,6 +202,14 @@ describe("buildRequest", () => {
     expect(done).not.toHaveProperty("catalogue"); // none given (e.g. Finish)
   });
 
+  test("sends the struggle signals as whole numbers, with the rung 1 to 3", () => {
+    const struggle = { runs_without_progress: 2.7, minutes_on_step: -4, holds_on_step: 1, hints_shown: 9, novice: 1, rung: 7 };
+    const look = buildRequest({ phase: "green", problem: "", before: null, after: snapshot("v1"), struggle });
+    expect(look.struggle).toEqual({ runs_without_progress: 2, minutes_on_step: 0, holds_on_step: 1, hints_shown: 4, novice: true, rung: 3 });
+    expect(buildRequest({ phase: "green", problem: "", before: null, after: snapshot("v1"), struggle: { rung: 0 } }).struggle.rung).toBe(1);
+    expect(buildRequest({ phase: "finish", problem: "", before: null, after: snapshot("v1") })).not.toHaveProperty("struggle");
+  });
+
   test("the baseline goes with every Look", () => {
     const look = buildRequest({ phase: "green", problem: "", before: snapshot("v1"), after: snapshot("v2") });
     expect(look.code_before).toEqual("// lib.cpp\nv1");

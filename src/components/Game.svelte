@@ -2,7 +2,7 @@
   import Step from "./Step.svelte";
   import CycleLine from "./CycleLine.svelte";
   import { fade, fly } from "svelte/transition";
-  import { createEventDispatcher, tick } from "svelte";
+  import { createEventDispatcher, onDestroy, tick } from "svelte";
   import { helper, refreshHelper, BLOCKED_HELP, HELPER_PAGE, onGithubPages } from "../helper.js";
   import { isCoached, askCoach, resolveProblem, toneOf, shouldShow, sendProgress, expectedFor } from "../coach.js";
   import {
@@ -14,6 +14,7 @@
   import { rescueOffer } from "../gameState.js";
   import { catalogueFor, cardSteps, hasGuidance, nextStepsDue, runMark, codeKey } from "../content/steps.js";
   import { reuseLook, lookKey } from "../coach.js";
+  import { hintRung, detailRung, ladderFor, progressKey } from "../ladder.js";
 
   const dispatch = createEventDispatcher();
 
@@ -72,6 +73,29 @@
   $: passedFirst = passedName
     ? { test: passedName, fn: calledFunction(testBodies(snapshot)[passedName]), picking: pickingNew }
     : null;
+
+  // The hint ladder (ladder.js): how much of a hold the pair sees, from how
+  // much they're struggling on this step. gameState keeps the signals; these
+  // mirror them (reassigning gameState would re-key the step card).
+  let nowSec = Date.now() / 1000;
+  const clock = setInterval(() => (nowSec = Date.now() / 1000), 30_000); // for the 5-minute escalation
+  onDestroy(() => clearInterval(clock));
+  let struggleTick = 0; // bumped after each gameState.note… so the lines below recompute
+  $: struggle = step ? (struggleTick, gameState.struggleFor(step.stepNumber)) : null;
+  $: if (step && snapshot && live && CHECKED_PHASES.includes(step.stateName)) {
+    gameState.noteRun(step.stepNumber, runMark(snapshot), progressKey(live));
+    struggleTick++;
+  }
+  $: novice = (step?.cycle || 1) <= GUIDE_CYCLES;
+  $: rung = struggle
+    ? hintRung({ moreHelp: struggle.moreHelp, runsWithoutProgress: struggle.runs, minutesOnStep: (nowSec - struggle.startedAt) / 60 })
+    : 1;
+  $: ladder = held && verdict ? ladderFor(verdict, rung) : null;
+  $: if (ladder && step) gameState.noteHintShown(step.stepNumber, rung);
+  const moreHelp = () => {
+    gameState.noteMoreHelp(step.stepNumber);
+    struggleTick++;
+  };
 
   // cycles 1–2: numbered steps, ticked live; [] from cycle 3
   $: guide = step ? guideFor(step.stateName, step.cycle, gameState.before, snapshot, live, { locked: doneLocked }) : [];
@@ -206,16 +230,17 @@
     advance();
   };
 
-  $: instructions = instructionsFor(step, held, verdict, advice, live, doneLocked, snapshot, currentStep);
+  $: instructions = instructionsFor(step, held, verdict, advice, live, doneLocked, snapshot, currentStep, ladder, detailRung(rung, novice));
   // `snapshot` is passed only so Svelte re-runs this when the code changes
-  const instructionsFor = (step, held, verdict, advice, live, locked, snapshot, current) => {
+  const instructionsFor = (step, held, verdict, advice, live, locked, snapshot, current, ladder, adviceRung) => {
     if (!step) return { driver: "", navigator: "" };
-    // A coach hold keeps the coach's own actions. A rule hold says what
-    // unlocks it, naming the test. Otherwise the step to work on now (from
-    // the coach's next steps, or the rules' pick for this code), so the card
-    // never shows a script that doesn't fit the code.
-    const coachHold = held && verdict;
-    if (coachHold) return { driver: verdict.driver_action || step.bodyText, navigator: verdict.navigator_action || step.navigatorPrompt };
+    // A coach hold shows the coach's own actions from rung 3 of the ladder;
+    // below that the pair works from its question, and these lines stay with
+    // the step. A rule hold says what unlocks it, naming the test. Otherwise
+    // the step to work on now (from the coach's next steps, or the rules' pick
+    // for this code), so the card never shows a script that doesn't fit the code.
+    if (held && verdict && ladder?.actions)
+      return { driver: verdict.driver_action || step.bodyText, navigator: verdict.navigator_action || step.navigatorPrompt };
     if (held) {
       const unlock = unlockAction(step.stateName, gameState.before, snapshot, live);
       if (unlock) return unlock;
@@ -225,7 +250,9 @@
       const unlock = unlockAction(step.stateName, gameState.before, snapshot, live);
       if (unlock) return unlock;
     }
-    const coachSays = advice && { driver_action: advice.driver, navigator_action: advice.navigator };
+    // the last verdict's explicit actions for this step are rung-3 help: novices
+    // get them straight away, others once they're struggling
+    const coachSays = advice && adviceRung >= 3 && { driver_action: advice.driver, navigator_action: advice.navigator };
     // with the helper, the card names the real test; the static text is the fallback
     const liveDriver =
       step.stateName === "green" && live?.focusTest ? `Make ${live.focusTest} pass with the smallest change.` : "";
@@ -343,6 +370,8 @@
       // every call is a Look: the guidance comes from this phase's catalogue
       catalogue: phase === "finish" ? null : catalogueFor(phase),
       novice: (step?.cycle || 1) <= GUIDE_CYCLES,
+      // how much they're struggling, and how specific the step details should be
+      struggle: phase === "finish" ? null : gameState.struggleSignals(gameState.stepNumber, { novice, rung: detailRung(rung, novice) }),
     });
 
   // Only one test may fail in Red. When the rules are enforced or the coach
@@ -490,6 +519,8 @@
       case "rescue":
         if (offer === "show") return askRescue();
         return; // no coach: the button only says to ask the teacher
+      case "moreHelp":
+        return moreHelp();
       case "pickNew":
         pickingNew = true; // stay in Red; the card says what to do
         return;
@@ -533,6 +564,7 @@
         feedbackWho={shownWho}
         {findings}
         coach={verdict}
+        {ladder}
         {canAskAgain}
         {finishState}
         {likelyFinished}

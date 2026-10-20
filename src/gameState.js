@@ -102,6 +102,7 @@ export class GameState {
       this.nextSteps = r.nextSteps || null;
       this.passedFirst = r.passedFirst || 0;
       this.skipGreen = r.skipGreen || false;
+      this.struggle = r.struggle || null;
     } else {
       this.players = ["John", "Jane"];
       this.driver = 0;
@@ -126,6 +127,7 @@ export class GameState {
       this.nextSteps = null; // the coach's last next-steps answer: {stepNumber, steps, extra, extra_needed}
       this.passedFirst = 0; // Red tests kept although they passed straight away
       this.skipGreen = false; // this cycle's Red test passed first time and was kept: no Green
+      this.struggle = null; // this step's struggle signals (see struggleFor), started lazily
     }
     this.#save();
   }
@@ -223,6 +225,56 @@ export class GameState {
   noteHeld() {
     this.stuckAttempts++;
     this.#save();
+  }
+
+  // How much the pair is struggling on this step, for the hint ladder (ladder.js)
+  // and the coach: {step, startedAt, run, lines, runs, moreHelp, shown}. Started
+  // the first time it's asked for on a step, so a new step starts afresh.
+  struggleFor(stepNumber, now = Date.now() / 1000) {
+    if (this.struggle?.step !== stepNumber) {
+      this.struggle = { step: stepNumber, startedAt: now, run: null, lines: null, runs: 0, moreHelp: 0, shown: 0 };
+      this.#save();
+    }
+    return this.struggle;
+  }
+
+  // A fresh run (or build) on this step: with the live goal lines unchanged
+  // since the last one, it's a run without progress; any change starts the count again.
+  noteRun(stepNumber, run, lines, now = Date.now() / 1000) {
+    const s = this.struggleFor(stepNumber, now);
+    if (s.run === run) return;
+    s.runs = s.run !== null && s.lines === lines ? s.runs + 1 : 0;
+    s.run = run;
+    s.lines = lines;
+    this.#save();
+  }
+
+  // "More help": one rung up on this step.
+  noteMoreHelp(stepNumber) {
+    this.struggleFor(stepNumber).moreHelp++;
+    this.#save();
+  }
+
+  // The pair now sees rung `rung` of a hold. The teacher's record counts rungs 2 and 3.
+  noteHintShown(stepNumber, rung) {
+    const s = this.struggleFor(stepNumber);
+    if (rung <= s.shown) return;
+    s.shown = rung;
+    if (rung >= 2) this.addEvent("hint", `rung ${rung}`);
+    this.#save();
+  }
+
+  // The struggle signals sent with every Look (DESIGN-coach-flow.md section 6).
+  struggleSignals(stepNumber, { novice = false, rung = 1 } = {}, now = Date.now() / 1000) {
+    const s = this.struggleFor(stepNumber, now);
+    return {
+      runs_without_progress: s.runs,
+      minutes_on_step: Math.max(0, Math.floor((now - s.startedAt) / 60)),
+      holds_on_step: this.stuckAttempts,
+      hints_shown: s.shown,
+      novice: !!novice,
+      rung,
+    };
   }
 
   // The coach's last Look for one step: its guidance (steps, extra) and its
