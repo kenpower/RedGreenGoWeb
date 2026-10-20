@@ -9,7 +9,7 @@
     checkRules, snapshotOf, startState, failingTests, uncommittedFiles, noRepo, liveStatus, codeFirstAdvice,
   } from "../rules.js";
   import { hintFor } from "../content/hints.js";
-  import { guideFor, GUIDE_CYCLES } from "../guide.js";
+  import { guideFor, unlockAction, GUIDE_CYCLES } from "../guide.js";
 
   const dispatch = createEventDispatcher();
 
@@ -46,7 +46,7 @@
   $: liveLines = live ? (live.backToRed && !gated ? [{ text: live.backToRed, ok: false }, ...live.lines] : live.lines) : [];
   $: doneLocked = (!!live && gated && !live.goalMet) || helperMissing;
   // cycles 1–2: numbered steps, ticked live; [] from cycle 3
-  $: guide = step ? guideFor(step.stateName, step.cycle, gameState.before, snapshot, live) : [];
+  $: guide = step ? guideFor(step.stateName, step.cycle, gameState.before, snapshot, live, { locked: doneLocked }) : [];
   // Advice lines, never a hold: vague test names, and in the first Red, code
   // written before any test calls it. Also passed to the coach, marked as advice.
   $: liveAdvice = live
@@ -119,9 +119,18 @@
     advance();
   };
 
-  $: instructions = instructionsFor(step, held, verdict, advice, live);
-  const instructionsFor = (step, held, verdict, advice, live) => {
+  $: instructions = instructionsFor(step, held, verdict, advice, live, doneLocked, snapshot);
+  // `snapshot` is passed only so Svelte re-runs this when the code changes
+  const instructionsFor = (step, held, verdict, advice, live, locked, snapshot) => {
     if (!step) return { driver: "", navigator: "" };
+    // While Done is locked, or the app's rules hold the step, the lines say
+    // what unlocks it, so the card never contradicts the lock. A coach hold
+    // keeps the coach's own actions.
+    const coachHold = held && verdict;
+    if (!coachHold && (locked || held)) {
+      const unlock = unlockAction(step.stateName, gameState.before, snapshot, live);
+      if (unlock) return unlock;
+    }
     const coachSays = held ? verdict : advice && { driver_action: advice.driver, navigator_action: advice.navigator };
     // with the helper, the card names the real test; the static text is the fallback
     const liveDriver =

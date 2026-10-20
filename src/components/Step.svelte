@@ -63,7 +63,8 @@
   export let entryProblem = null; // {kind, message}, e.g. Refactor entered with failing tests
   export let liveAdvice = []; // never a hold: vague test names, code written before its test
   export let helperMissing = false; // Red/Green/Refactor wait for the helper
-  // Cycles 1–2: numbered steps [{text, why?, done}], ticked live; [] after
+  // Cycles 1–2: a checklist [{text, short, why?, done, reason?, current?}],
+  // ticked live; [] after. done true ✓, false ✖ (reason says why), null not yet.
   export let guide = [];
 
   const DONE_HINT = {
@@ -74,10 +75,29 @@
   const DONE_MET = { red: "Done: our one test fails ✓", green: "Done: all tests pass ✓", refactor: "Done: still green ✓" };
   // the live Done: what's still missing while locked, the label once met
   $: liveDone = isCycleStep && (liveLines.length > 0 || helperMissing);
-  $: lockReason = helperMissing ? "Waiting for the helper" : liveLines.find((l) => l.ok !== true)?.text || "";
+  // With the guide, point at its current item; without, give the first unmet line.
+  $: currentItem = guide.find((g) => g.current);
+  $: lockReason = helperMissing
+    ? "Waiting for the helper"
+    : guide.length && currentItem?.short
+      ? `see "${currentItem.short}" above`
+      : liveLines.find((l) => l.ok !== true)?.text || "";
   $: doneLabel = liveDone ? (goalMet && !doneLocked ? DONE_MET[step.stateName] : "Done") : step.buttonText;
-  // the first guide step not yet ticked is the one to do now
-  $: currentGuide = guide.findIndex((g) => g.done !== true);
+  const BOX = { true: "[✓]", false: "[✖]", null: "[ ]" };
+
+  // A click on a locked Done still answers: the item or line to fix pulses.
+  let pulse = false;
+  let pulseTimer;
+  const onDone = () => {
+    if (isCycleStep && doneLocked) {
+      pulse = false;
+      clearTimeout(pulseTimer);
+      requestAnimationFrame(() => (pulse = true)); // restart the animation on repeat clicks
+      pulseTimer = setTimeout(() => (pulse = false), 1200);
+      return;
+    }
+    interact("done");
+  };
 
   // What the start card says for each state. `box` picks the box colour,
   // `wait` is what the game is waiting to see before carrying on.
@@ -261,15 +281,25 @@
 
         {#if !start && guide.length}
           <h3 class="todoHeading">Step by step</h3>
-          <ol class="guide">
-            {#each guide as item, i}
-              <li class:current={i === currentGuide} class:ticked={item.done === true} class:wrong={item.done === false}>
-                <span class="tick" aria-hidden="true">{item.done === true ? "✓" : item.done === false ? "✗" : ""}</span>
-                {item.text}
-                {#if item.why}<span class="why">{item.why}</span>{/if}
+          <ul class="guide">
+            {#each guide as item}
+              <li
+                class:current={item.current}
+                class:ticked={item.done === true}
+                class:wrong={item.done === false}
+                class:pulse={pulse && item.current}
+              >
+                <span class="box" aria-label={item.done === true ? "done" : item.done === false ? "problem" : "not done yet"}
+                  >{BOX[item.done]}</span
+                >
+                <span class="itemText">
+                  {item.text}
+                  {#if item.reason}<span class="reason">{item.reason}</span>{/if}
+                  {#if item.why}<span class="why">{item.why}</span>{/if}
+                </span>
               </li>
             {/each}
-          </ol>
+          </ul>
         {:else if !start && liveLines.length}
           <ul class="live" class:amberLive title={focusTest ? `This step is about ${focusTest}` : ""}>
             {#each liveLines as line}
@@ -310,7 +340,9 @@
       {/if}
 
       {#if liveDone && !start && !held && !waiting}
-        <p class="doneHint" class:locked={doneLocked}>{doneLocked ? lockReason : DONE_HINT[step.stateName]}</p>
+        <p class="doneHint" class:locked={doneLocked} class:pulse={pulse && !currentItem}>
+          {doneLocked ? lockReason : DONE_HINT[step.stateName]}
+        </p>
       {/if}
       <div class="actions">
         {#if start?.ask}
@@ -333,10 +365,13 @@
             >Progress despite this advice</button
           >
         {:else}
+          <!-- locked: looks disabled but still answers a click (see onDone) -->
           <button
             class:ready={liveDone && goalMet && !doneLocked}
-            disabled={busy || (isCycleStep && doneLocked)}
-            on:click={() => interact("done")}>{doneLabel}</button
+            class:lockedDone={isCycleStep && doneLocked}
+            aria-disabled={isCycleStep && doneLocked}
+            disabled={busy}
+            on:click={onDone}>{doneLabel}</button
           >
         {/if}
       </div>
@@ -458,36 +493,74 @@
     color: var(--text-muted);
   }
 
-  /* cycles 1–2: the numbered guide */
+  /* cycles 1–2: the guide as a checklist: [✓] done, [✖] problem, [ ] not yet */
   .guide {
+    list-style: none;
     margin: 0.3em 0 0.6em 0;
-    padding-left: 1.8em;
+    padding: 0;
   }
 
   .guide li {
-    margin: 0.3em 0;
+    display: flex;
+    gap: 0.6em;
+    margin: 0.35em 0;
+    padding: 0.1em 0.3em;
     overflow-wrap: anywhere;
+    border-left: 2px solid transparent;
+  }
+
+  .guide .box {
+    flex: none;
+    padding-left: 0;
+    white-space: pre; /* keep "[ ]" as wide as "[✓]" */
+  }
+
+  .guide .itemText {
+    padding-left: 0;
+  }
+
+  .guide li.ticked .box {
+    color: var(--coding-green);
+    text-shadow: 0 0 4px var(--coding-green);
+  }
+
+  .guide li.wrong .box {
+    color: var(--testing-red);
+    text-shadow: 0 0 4px var(--testing-red);
+  }
+
+  .guide li.ticked .itemText {
+    color: var(--text-muted);
   }
 
   .guide li.current {
     color: var(--text-bright);
-    text-shadow: 0 0 4px var(--phase-col);
+    border-left-color: var(--phase-col);
+    background: var(--opacity-50);
   }
 
-  .guide li.ticked {
-    color: var(--text-muted);
-  }
-
-  .guide .tick {
-    display: inline-block;
-    min-width: 1em;
+  .reason {
+    display: block;
     padding-left: 0;
-    color: var(--coding-green);
-    text-shadow: none;
+    color: var(--testing-red);
   }
 
-  .guide li.wrong .tick {
-    color: var(--testing-red);
+  .pulse {
+    animation: pulse 0.4s ease-in-out 3;
+  }
+
+  @keyframes pulse {
+    50% {
+      background: var(--testing-red-hint-trans);
+      box-shadow: 0 0 0 2px var(--testing-red);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pulse {
+      animation: none;
+      box-shadow: 0 0 0 2px var(--testing-red);
+    }
   }
 
   .why {
@@ -527,8 +600,19 @@
     color: var(--text-muted);
   }
 
+  .doneHint.locked {
+    color: var(--testing-red);
+  }
+
   .doneHint.locked::before {
     content: "Not yet: ";
+  }
+
+  /* Done while locked: looks disabled, but a click points at what to fix */
+  button.lockedDone,
+  button.lockedDone:hover {
+    color: var(--text-muted);
+    cursor: not-allowed;
   }
 
   button.ready {
