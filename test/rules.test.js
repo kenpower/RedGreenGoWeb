@@ -827,6 +827,44 @@ describe("a Red test that passes straight away", () => {
   });
 });
 
+describe("Green and Refactor end only on a fresh, passing run", () => {
+  const green = (mtimes = {}) => {
+    const s = snap({ source: ["A.one", "A.two"], results: { "A.one": "passed", "A.two": "passed" }, runTime: 100 });
+    s.files[0].mtime = mtimes.test ?? 90;
+    s.files[1].mtime = mtimes.code ?? 90;
+    return s;
+  };
+  const before = green();
+
+  for (const phase of ["green", "refactor"]) {
+    test(`${phase}: code edited after the run → locked, with the file named`, () => {
+      const now = green({ code: 150 });
+      const live = liveStatus(phase, before, now);
+      expect(live.goalMet).toBe(false);
+      expect(live.lines[0]).toMatchObject({
+        text: "You changed f.cpp since the last test run: run all tests (Ctrl+R, A)",
+        ok: false,
+      });
+      expect(rules(checkRules(phase, before, now))).toContain("stale_run");
+    });
+
+    test(`${phase}: after a new passing run → unlocked`, () => {
+      const now = green({ code: 150 });
+      now.runTime = 200;
+      expect(liveStatus(phase, before, now).goalMet).toBe(true);
+      expect(checkRules(phase, before, now)).toEqual([]);
+    });
+
+    test(`${phase}: a test-file edit counts too`, () => {
+      const now = green({ test: 150 });
+      expect(liveStatus(phase, before, now).lines[0].text).toEqual(
+        "You changed test.cpp since the last test run: run all tests (Ctrl+R, A)"
+      );
+      expect(liveStatus(phase, before, now).goalMet).toBe(false);
+    });
+  }
+});
+
 describe("changedSinceRun", () => {
   test("compares file times with the run, or with a failed build", () => {
     const s = snap({ source: ["A.one"], results: { "A.one": "passed" }, runTime: 10 });

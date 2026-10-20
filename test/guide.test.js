@@ -175,6 +175,15 @@ describe("green", () => {
 describe("refactor", () => {
   const green = snap({ tests: [ONE, TWO], results: { "A.one": "passed", "A.two": "passed" } });
 
+  test("LOCKED: code changed since the run → run all tests", () => {
+    const now = snap({ tests: [ONE, TWO], results: { "A.one": "passed", "A.two": "passed" } });
+    now.files[1].mtime = 50;
+    expect(unlockAction("refactor", green, now, live("refactor", green, now))).toEqual({
+      driver: "Run all tests (Test → Run All Tests, Ctrl+R, A).",
+      navigator: "Check every test is green before moving on.",
+    });
+  });
+
   test("still green is ticked; the rest is advice", () => {
     const items = guide("refactor", 1, green, green);
     expect(ticks(items)).toEqual([null, null, true, null]);

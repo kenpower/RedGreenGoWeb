@@ -156,9 +156,15 @@ const RUN_ACTION = {
 // While Done is locked (or the rules hold the step): the one action that
 // unlocks it, for the driver, and how the navigator supports it. Null when
 // nothing specific is wrong (the step's own instructions then apply).
+// Green and Refactor end only on a fresh, passing run.
+const RERUN_ACTION = {
+  driver: "Run all tests (Test → Run All Tests, Ctrl+R, A).",
+  navigator: "Check every test is green before moving on.",
+};
+
 export function unlockAction(phase, before, now, live) {
   if (!now || !live || live.goalMet) return null;
-  if (changedSinceRun(now)) return RUN_ACTION;
+  if (changedSinceRun(now)) return phase === "red" ? RUN_ACTION : RERUN_ACTION;
 
   if (phase === "red") {
     const red = redState(before, now);

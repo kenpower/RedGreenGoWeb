@@ -463,7 +463,10 @@ const FIT = {
     applies: (b, n, live, o) => testsChanged(b, n) || !!o?.novice,
     navigator: "Check only production code changes (an #include is fine).",
   },
-  "green.run_tests": { applies: (b, n) => !!n && (changedSinceRun(n) || !(n.tests || []).length) },
+  "green.run_tests": {
+    applies: (b, n) => !!n && (changedSinceRun(n) || !(n.tests || []).length),
+    navigator: "Check every test is green before moving on.",
+  },
   "green.all_green": { applies: () => true, navigator: "Check every test is green, not just the new one." },
   "green.keep_old_tests_passing": {
     applies: (b, n, live) => fresh(n) && !buildFailed(n) && failingTests(n).some((t) => t !== focusOf(live)),
@@ -486,7 +489,10 @@ const FIT = {
     applies: (b, n) => !!b && !!n && (testChanges(b, n).added.length + testChanges(b, n).removed.length > 0),
     navigator: "Check the same tests still run.",
   },
-  "refactor.run_tests": { applies: (b, n) => !!n && changedSinceRun(n) },
+  "refactor.run_tests": {
+    applies: (b, n) => !!n && changedSinceRun(n),
+    navigator: "Check every test is green before moving on.",
+  },
   "refactor.still_green": { applies: () => true, navigator: "Point out one thing worth tidying, or agree there's nothing yet." },
   "refactor.commit": { applies: (b, n) => !!n?.git?.repo },
 };
@@ -561,6 +567,14 @@ export function groupSteps(phase, chosen, extra, before, now, live) {
     (step.required ? needed : practice).push({ id, text: step.text, detail, why: step.why, navigator: step.navigator, done });
   }
   if (extra?.text) (extra.needed ? needed : practice).push({ id: "extra", text: extra.text, done: null, extra: true });
+  // Green and Refactor end only on a fresh run: after any change, running the
+  // tests comes first, whether or not the coach (or the picker) chose it
+  if ((phase === "green" || phase === "refactor") && now && changedSinceRun(now)) {
+    const id = `${phase}.run_tests`;
+    const at = needed.findIndex((s) => s.id === id);
+    const run = at >= 0 ? needed.splice(at, 1)[0] : { id, text: BY_ID[id].text, detail: "", why: BY_ID[id].why, navigator: BY_ID[id].navigator };
+    needed.unshift({ ...run, done: false });
+  }
   const current = needed.findIndex((s) => s.done !== true);
   if (current >= 0) needed[current] = { ...needed[current], current: true };
   return { needed, practice };

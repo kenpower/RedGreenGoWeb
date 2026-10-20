@@ -124,6 +124,13 @@ describe("groupSteps", () => {
     expect(g.needed.map((s) => s.id)).toEqual(["red.run_tests"]);
   });
 
+  test("Green/Refactor after a change: running the tests comes first, even if not chosen", () => {
+    const green = snap({ testFile: "TEST(F, One) {\n  EXPECT_EQ(1, f());\n}\n", code: "int f() { return 1; }", results: { "F.One": "passed" } });
+    const edited = { ...green, files: green.files.map((f) => ({ ...f, mtime: f.kind === "production" ? 50 : 5 })) };
+    const g = groupSteps("refactor", [{ id: "refactor.still_green", detail: "" }], null, green, edited, liveStatus("refactor", green, edited));
+    expect(g.needed[0]).toMatchObject({ id: "refactor.run_tests", done: false, current: true });
+  });
+
   test("the free-text extra goes at the end of its group, without a tick", () => {
     const g = groupSteps("red", [], { text: "Ask your teacher about the header.", needed: false }, before, now, live);
     expect(g.practice).toEqual([{ id: "extra", text: "Ask your teacher about the header.", done: null, extra: true }]);

@@ -138,6 +138,10 @@ function allPass(after, findings) {
     findings.push({ rule: "build_fails", message: "The code doesn't build. Fix the build so all the tests can run." });
     return;
   }
+  if (changedSinceRun(after)) {
+    findings.push({ rule: "stale_run", message: staleRunMessage(after) + "." });
+    return;
+  }
   const failing = (after.tests || []).filter((t) => t.status === "failed").map((t) => t.name);
   if (failing.length)
     findings.push({ rule: "tests_fail", message: `Not all tests pass yet: ${failing.join(", ")}.` });
@@ -356,6 +360,18 @@ export function changedSinceRun(snapshot) {
   return (snapshot.files || []).some((f) => typeof f.mtime === "number" && f.mtime > latest);
 }
 
+// The source files saved after the latest build or test run (file times from the helper).
+export function changedFiles(snapshot) {
+  const latest = buildFailed(snapshot) ? snapshot.build.time : snapshot?.runTime;
+  if (!latest) return [];
+  return (snapshot.files || []).filter((f) => typeof f.mtime === "number" && f.mtime > latest).map((f) => f.path);
+}
+
+// Green and Refactor may only end on a fresh, passing run: a change to any
+// source file (code or tests) since the last run has to be run again first.
+const staleRunMessage = (snapshot) =>
+  `You changed ${changedFiles(snapshot).map((p) => p.split("/").pop()).join(", ")} since the last test run: run all tests (Ctrl+R, A)`;
+
 // The last test run doesn't describe the code now, so it shouldn't be judged:
 // a source file changed after the run, or, with a successful build, the run
 // had tests no longer in the source or is missing tests that are. A failed
@@ -464,7 +480,7 @@ function liveGreen(before, now) {
   if (buildFailed(now)) {
     lines.push({ text: focus ? `Make ${focus} compile and pass` : "The code doesn't build yet: make it compile", ok: false });
   } else if (changedSinceRun(now)) {
-    lines.push(RUN_AGAIN);
+    lines.push({ text: staleRunMessage(now), ok: false, staleRun: true });
   } else {
     const unrun = notRun(now);
     if (unrun.length) lines.push({ text: `Run the tests: ${list(unrun)} hasn't run yet`, ok: null });
@@ -488,7 +504,7 @@ function liveRefactor(before, now) {
   if (buildFailed(now)) {
     lines.push({ text: "The code doesn't build: undo the last change", ok: false });
   } else if (changedSinceRun(now)) {
-    lines.push(RUN_AGAIN);
+    lines.push({ text: staleRunMessage(now), ok: false, staleRun: true });
   } else {
     const unrun = notRun(now);
     if (unrun.length) lines.push({ text: `Run the tests: ${list(unrun)} hasn't run yet`, ok: null });
