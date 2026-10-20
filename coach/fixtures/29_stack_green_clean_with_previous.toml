@@ -1,0 +1,32 @@
+description = "Stack: a clean, minimal Green; the game's expected and the previous verdict are given"
+phase = "green"
+problem = "Build a Stack class for ints with push, pop, top, size and isEmpty. Popping an empty stack throws std::out_of_range."
+expected = "Green: make Stack.NotEmptyAfterPush pass with the least production code, test files unchanged. The game has checked all tests pass."
+previous = { phase = "red", decision = "advance", note = "Good: one small test for pushing onto a new stack." }
+tests_before = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+TEST(Stack, NotEmptyAfterPush) { Stack s; s.push(7); EXPECT_FALSE(s.isEmpty()); }
+'''
+code_before = '''
+class Stack {
+public:
+  bool isEmpty() const { return true; }
+};
+'''
+tests = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+TEST(Stack, NotEmptyAfterPush) { Stack s; s.push(7); EXPECT_FALSE(s.isEmpty()); }
+'''
+code = '''
+class Stack {
+  bool empty = true;
+public:
+  bool isEmpty() const { return empty; }
+  void push(int) { empty = false; }
+};
+'''
+test_result = "All 2 tests passed"
+
+[expect]
+decision = ["advance"]
+max_problems = 0

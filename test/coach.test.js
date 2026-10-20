@@ -6,6 +6,7 @@ import {
   staleResults,
   currentSnapshot,
   STALE_FINDING,
+  expectedFor,
   isCoached,
   resolveProblem,
   resetCoach,
@@ -170,6 +171,25 @@ describe("buildRequest", () => {
     expect(request).toMatchObject({ pair: "jane__john", game_id: "g-123" });
   });
 
+  test("sends what the game expects and the coach's previous verdict", () => {
+    const history = [
+      { phase: "red", decision: "advance", note: "Good test." },
+      { phase: "green", decision: "redo", note: "Too much code." },
+    ];
+    const request = buildRequest({
+      phase: "green", problem: "", before: null, after: snapshot(""), history,
+      expected: expectedFor("green", { focusTest: "Calc.Sum" }),
+    });
+    expect(request.expected).toEqual(
+      "Green: make Calc.Sum pass with the least production code, test files unchanged. The game has checked all tests pass."
+    );
+    expect(request.previous).toEqual({ phase: "green", decision: "redo", note: "Too much code." });
+  });
+
+  test("no previous verdict at the start of a game", () => {
+    expect(buildRequest({ phase: "red", problem: "", before: null, after: snapshot("") }).previous).toBeNull();
+  });
+
   test("pair and game id are empty when not given", () => {
     const request = buildRequest({ phase: "red", problem: "", before: null, after: snapshot("") });
     expect(request).toMatchObject({ pair: "", game_id: "" });
@@ -278,6 +298,20 @@ describe("askCoach", () => {
     resetCoach();
     reply({ ok: true, status: 200, json: async () => verdict });
     expect((await pending).stale).toBe(true);
+  });
+});
+
+describe("expectedFor", () => {
+  test("names the focus test when the game knows it", () => {
+    expect(expectedFor("red", { focusTest: "A.two" })).toMatch(/^Red: one new test, A\.two, that fails/);
+    expect(expectedFor("green", { focusTest: "A.two" })).toMatch(/^Green: make A\.two pass/);
+  });
+
+  test("falls back to the general requirement", () => {
+    expect(expectedFor("red", null)).toEqual("Red: one new test that fails for the right reason.");
+    expect(expectedFor("refactor", null)).toMatch(/^Refactor:/);
+    expect(expectedFor("finish", null)).toMatch(/^Finish:/);
+    expect(expectedFor("swap", null)).toEqual("");
   });
 });
 

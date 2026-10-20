@@ -176,6 +176,143 @@ export function startState(snapshot, { requireCommit = true } = {}) {
   return failing === 0 ? "clean" : failing === 1 ? "one_failing" : "many_failing";
 }
 
+// The snapshot with only results for tests still in the source, so a deleted,
+// renamed or commented-out test's old result doesn't count. When no names can
+// be read from the source (a macro we don't parse), all results stay.
+export function currentSnapshot(snapshot) {
+  if (!snapshot) return snapshot;
+  const names = testNames(snapshot);
+  if (!names.size) return snapshot;
+  return { ...snapshot, tests: (snapshot.tests || []).filter((t) => names.has(t.name)) };
+}
+
+// A source file was saved after the latest build or test run (when the helper
+// sends file times), so the results don't describe the code now.
+export function changedSinceRun(snapshot) {
+  const latest = buildFailed(snapshot) ? snapshot.build.time : snapshot?.runTime;
+  if (!latest) return false;
+  return (snapshot.files || []).some((f) => typeof f.mtime === "number" && f.mtime > latest);
+}
+
+// The last test run doesn't describe the code now, so it shouldn't be judged:
+// a source file changed after the run, or, with a successful build, the run
+// had tests no longer in the source or is missing tests that are. A failed
+// build is fresh information in itself (its errors describe the code now).
+export function staleResults(snapshot) {
+  if (!snapshot || buildFailed(snapshot)) return false;
+  if (snapshot.runTime && changedSinceRun(snapshot)) return true;
+  const names = testNames(snapshot);
+  if (!names.size) return false;
+  const ran = new Set((snapshot.tests || []).map((t) => t.name));
+  return [...ran].some((n) => !names.has(n)) || [...names].some((n) => !ran.has(n));
+}
+
+// Tests in the source that the last run didn't include.
+const notRun = (snapshot) => {
+  const ran = results(snapshot);
+  return [...testNames(snapshot)].filter((name) => !(name in ran));
+};
+
+const list = (names) => names.join(", ");
+const RUN_AGAIN = { text: "You've changed the code since the last run: run the tests", ok: null };
+const BACK_TO_RED = "There's no failing test to make pass. Back to Red: write the test first.";
+
+// What a step needs, checked live on every helper update. Each step has an
+// entry condition, a goal and lines describing where the pair is, with the
+// real test names: ok true = met, false = not yet, null = waiting (run the tests).
+// `before` is the snapshot at the last satisfied Done (for Red, the baseline
+// taken when the start check passed). Null when there's no helper data.
+export function liveStatus(phase, before, now) {
+  const check = LIVE[phase];
+  if (!check || !now) return null;
+  const status = { entryOk: true, entryProblem: null, focusTest: null, backToRed: null, lines: [], ...check(before, now) };
+  status.goalMet = status.lines.length > 0 && status.lines.every((l) => l.ok === true);
+  return status;
+}
+
+function liveRed(before, now) {
+  if (!before) return { lines: [{ text: "Write one new test that fails", ok: false }] };
+  const old = testNames(before);
+  const added = [...testNames(now)].filter((name) => !old.has(name));
+  if (added.length === 0) return { lines: [{ text: "No new test yet: write one test that fails", ok: false }] };
+  if (added.length > 1)
+    return { lines: [{ text: `${added.length} new tests (${list(added)}): keep one, comment out the others`, ok: false }] };
+
+  const name = added[0];
+  const lines = [];
+  const ran = results(now);
+  if (buildFailed(now)) {
+    lines.push({ text: `New test ${name}: doesn't compile yet ✓ (that counts as failing)`, ok: true });
+  } else if (changedSinceRun(now)) {
+    lines.push(RUN_AGAIN);
+  } else if (!(name in ran)) {
+    lines.push({ text: `New test ${name} hasn't run yet: run the tests`, ok: null });
+  } else if (ran[name] === "failed") {
+    lines.push({ text: `New test ${name}: failing ✓`, ok: true });
+  } else {
+    lines.push({ text: `New test ${name} passes: make it fail for the right reason`, ok: false });
+  }
+  const was = results(before);
+  const broken = failingTests(now).filter((t) => t !== name && was[t] === "passed");
+  const others = failingTests(now).filter((t) => t !== name && !broken.includes(t));
+  if (broken.length) lines.push({ text: `${list(broken)} passed before and now fail${broken.length > 1 ? "" : "s"}: fix that first`, ok: false });
+  if (others.length) lines.push({ text: `Other tests fail too (${list(others)}): only one test may fail in Red`, ok: false });
+  return { lines, focusTest: name };
+}
+
+function liveGreen(before, now) {
+  // Entering Green needs a failing test (or the Red test's compile error). A
+  // fully run, fully passing start means Red never had a failing test, even if
+  // code was saved since: there's still nothing failing to make pass.
+  const entryFails = before && (buildFailed(before) || failingTests(before).length > 0);
+  const backToRed = before && !entryFails && !notRun(before).length ? BACK_TO_RED : null;
+  // the Red test: the one failing, or with a compile error, the one that hasn't run
+  const focus = (before && (failingTests(before)[0] || (buildFailed(before) && notRun(before)[0]))) || null;
+
+  const lines = [];
+  if (buildFailed(now)) {
+    lines.push({ text: focus ? `Make ${focus} compile and pass` : "The code doesn't build yet: make it compile", ok: false });
+  } else if (changedSinceRun(now)) {
+    lines.push(RUN_AGAIN);
+  } else {
+    const unrun = notRun(now);
+    if (unrun.length) lines.push({ text: `Run the tests: ${list(unrun)} hasn't run yet`, ok: null });
+    const ran = results(now);
+    if (focus && focus in ran) lines.push(ran[focus] === "passed" ? { text: `${focus} passes ✓`, ok: true } : { text: `Make ${focus} pass`, ok: false });
+    const failing = failingTests(now).filter((t) => t !== focus);
+    if (failing.length) lines.push({ text: `Not all tests pass: ${list(failing)}`, ok: false });
+    else if (!unrun.length && !(focus && ran[focus] !== "passed")) lines.push({ text: "All tests green ✓", ok: true });
+  }
+  if (before && testFiles(before) !== testFiles(now))
+    lines.push({ text: "Test files changed: Green only changes production code", ok: false });
+  return { lines, focusTest: focus, backToRed, entryOk: !backToRed };
+}
+
+function liveRefactor(before, now) {
+  const entryProblem =
+    before && (buildFailed(before) || failingTests(before).length)
+      ? { kind: "failing", message: "Tests fail as Refactor starts: get back to all green first." }
+      : null;
+  const lines = [];
+  if (buildFailed(now)) {
+    lines.push({ text: "The code doesn't build: undo the last change", ok: false });
+  } else if (changedSinceRun(now)) {
+    lines.push(RUN_AGAIN);
+  } else {
+    const unrun = notRun(now);
+    if (unrun.length) lines.push({ text: `Run the tests: ${list(unrun)} hasn't run yet`, ok: null });
+    const failing = failingTests(now);
+    if (failing.length)
+      lines.push({ text: `${list(failing)} now fail${failing.length > 1 ? "" : "s"}: undo the last change`, ok: false });
+    else if (!unrun.length) lines.push({ text: "All tests green ✓", ok: true });
+  }
+  if (before && !sameSet(testNames(before), testNames(now)))
+    lines.push({ text: "Tests added or removed: Refactor keeps the tests the same", ok: false });
+  return { lines, entryProblem, entryOk: !entryProblem };
+}
+
+const LIVE = { red: liveRed, green: liveGreen, refactor: liveRefactor };
+
 // Keeps only what the rules and the coach need from the helper's data.
 export function snapshotOf(data) {
   if (!data) return null;

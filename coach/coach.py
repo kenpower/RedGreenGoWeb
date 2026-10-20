@@ -13,6 +13,10 @@ A step is a dict:
     test_result    one line: build failure or pass/fail counts
     rule_findings  broken rules found by the app's own checks (optional)
     history        the last few verdicts: [{phase, decision, note}] (optional)
+    intent         Red only: what the navigator said the new test checks (optional)
+    expected       what the game requires of this step, already checked by it (optional)
+    previous       the verdict on the step before: {phase, decision, note} or None (optional)
+    pair, game_id  who and which game, for coach_server's records (optional)
 """
 import json
 from functools import lru_cache
@@ -20,7 +24,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 MODEL = "claude-haiku-5-5"
-EFFORT = "low"
+EFFORT = "medium"  # low missed noticeably more eval checks (2026-10-20); medium costs ~1.7x output
 PHASES = {"red", "green", "refactor", "finish"}
 DECISIONS = {"advance", "redo", "back_to_red"}
 MAX_TEXT = 10_000  # characters per code/test field (~3k tokens); a FizzBuzz file is a few hundred
@@ -28,6 +32,8 @@ MAX_PROBLEM = 8_000  # the helper sends at most ~8 KB of README
 MAX_FINDINGS = 20
 MAX_HISTORY = 5
 MAX_NOTE = 500
+MAX_INTENT = 200
+MAX_EXPECTED = 300
 
 SCHEMA = {
     "type": "object",
@@ -40,9 +46,15 @@ SCHEMA = {
         "next_test": {"type": "string"},
         "likely_finished": {"type": "boolean"},
         "advice": {"type": "boolean"},
+        "intent_match": {"type": "string", "enum": ["yes", "partly", "no", "n_a"]},
+        "hint_question": {"type": "string"},
+        "hint_kind": {"type": "string"},
+        "smell_question": {"type": "string"},
+        "smell_detail": {"type": "string"},
     },
     "required": ["decision", "rule_problems", "note", "driver_action", "navigator_action",
-                 "next_test", "likely_finished", "advice"],
+                 "next_test", "likely_finished", "advice", "intent_match",
+                 "hint_question", "hint_kind", "smell_question", "smell_detail"],
     "additionalProperties": False,
 }
 
@@ -77,8 +89,9 @@ def validate(step):
     for field in ("tests", "code", "tests_before", "code_before", "test_result"):
         if len(step.get(field) or "") > MAX_TEXT:
             raise BadStep(f"{field} is too long")
-    # Who and which game, for the teacher's progress view (coach_server records them).
-    for field, limit in (("pair", 200), ("game_id", 64)):
+    # Who and which game, for the teacher's progress view (coach_server records
+    # them), and the navigator's one-line intent for a Red.
+    for field, limit in (("pair", 200), ("game_id", 64), ("intent", MAX_INTENT)):
         if not isinstance(step.get(field, ""), str) or len(step.get(field, "")) > limit:
             raise BadStep(f"{field} must be text of at most {limit} characters")
     if not _short_strings(step.get("rule_findings", []), MAX_FINDINGS, MAX_NOTE):
@@ -86,11 +99,18 @@ def validate(step):
     history = step.get("history", [])
     if not isinstance(history, list) or len(history) > MAX_HISTORY:
         raise BadStep("history must be a list of at most 5 entries")
-    for h in history:
-        if (not isinstance(h, dict) or h.get("phase") not in PHASES
-                or h.get("decision", "") not in DECISIONS | {""}
-                or not isinstance(h.get("note", ""), str) or len(h.get("note", "")) > MAX_NOTE):
-            raise BadStep("history entries need a phase, a decision and a short note")
+    if not all(_verdict_entry(h) for h in history):
+        raise BadStep("history entries need a phase, a decision and a short note")
+    if not isinstance(step.get("expected", ""), str) or len(step.get("expected", "")) > MAX_EXPECTED:
+        raise BadStep(f"expected must be text of at most {MAX_EXPECTED} characters")
+    if step.get("previous") is not None and not _verdict_entry(step["previous"]):
+        raise BadStep("previous needs a phase, a decision and a short note")
+
+
+def _verdict_entry(h):
+    return (isinstance(h, dict) and h.get("phase") in PHASES
+            and h.get("decision", "") in DECISIONS | {""}
+            and isinstance(h.get("note", ""), str) and len(h.get("note", "")) <= MAX_NOTE)
 
 
 def _block(title, text):
@@ -104,6 +124,17 @@ def build_user(step):
         f"Step just finished: {phase.upper()}" if phase != "finish"
         else "The pair says they are FINISHED with the problem.",
     ]
+    if step.get("expected", "").strip():
+        parts.append(f"What the game requires of this step (already checked by the game, treat as true):\n"
+                     f"{step['expected'].strip()}")
+    previous = step.get("previous")
+    if previous:
+        parts.append(f"Your verdict on their previous step ({previous['phase']}): "
+                     f"{previous.get('decision') or 'no verdict'}. {previous.get('note', '')}".rstrip())
+    if phase == "red":
+        intent = step.get("intent", "").strip()
+        parts.append(f"The navigator said the new test checks: {intent}" if intent
+                     else "The navigator didn't say what the new test checks.")
     history = step.get("history", [])
     if history:
         lines = [f"- {h['phase']}: {h.get('decision') or 'no verdict'}. {h.get('note', '')}".rstrip()

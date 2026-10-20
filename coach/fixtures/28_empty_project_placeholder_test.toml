@@ -1,0 +1,25 @@
+description = "Empty project with only Visual Studio's placeholder test: say to call a NEW function, and that its compile error counts as Red"
+phase = "red"
+problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
+rule_findings = ["No new test was added in Red; Red needs exactly one new failing test."]
+tests_before = '''
+TEST(TestCaseName, TestName) {
+  EXPECT_EQ(1, 1);
+  EXPECT_TRUE(true);
+}
+'''
+code_before = ""
+tests = '''
+TEST(TestCaseName, TestName) {
+  EXPECT_EQ(1, 1);
+  EXPECT_TRUE(true);
+}
+'''
+code = ""
+test_result = "All 1 tests passed"
+
+[expect]
+# The app's live Red goal keeps Done locked here; if the coach is asked anyway, any hold is fine.
+decision = ["redo", "back_to_red"]
+driver_mentions = ["new function", "doesn't exist", "does not exist", "not written", "haven't written"]
+driver_avoids = ["(", "EXPECT"]

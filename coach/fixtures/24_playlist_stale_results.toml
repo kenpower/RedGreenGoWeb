@@ -48,3 +48,4 @@ test_result = "All 1 tests passed"
 decision = ["redo"]
 driver_mentions = ["run"]
 driver_avoids = ["DifferentArtistNotEqual", "EXPECT", "assert"]
+hints = false

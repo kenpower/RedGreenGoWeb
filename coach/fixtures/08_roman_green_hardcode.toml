@@ -18,3 +18,4 @@ test_result = "All 1 tests passed"
 [expect]
 decision = ["advance"]
 max_problems = 0
+smell = false

@@ -1,5 +1,7 @@
 import {
   checkRules,
+  liveStatus,
+  changedSinceRun,
   testNames,
   buildFailed,
   snapshotOf,
@@ -392,6 +394,199 @@ describe("startState", () => {
     test("a repo without a dirtySource list counts as committed", () => {
       expect(startState(snap({ ...passing, git: { repo: true } }))).toBe("clean");
     });
+  });
+});
+
+// The user's real game (2026-10-20): only Visual Studio's placeholder test,
+// passing, no git, production code added during Red. The rules do flag it;
+// Red advanced because Game acted on a coach "advance" (or amber-only with
+// the rules off) without holding on the finding.
+describe("placeholder-only Red", () => {
+  const placeholder = { source: ["TestCaseName.TestName"], results: { "TestCaseName.TestName": "passed" }, git: { repo: false } };
+
+  test("the start check calls it clean, so it becomes the baseline", () => {
+    expect(startState(snap(placeholder), { requireCommit: true })).toEqual("clean");
+  });
+
+  test("Red's Done then finds no new test", () => {
+    const before = snap(placeholder);
+    const after = snap({ ...placeholder, code: "std::string fizzBuzz(int n) { return \"1\"; }" });
+    expect(rules(checkRules("red", before, after))).toEqual(["no_new_test"]);
+  });
+
+  test("without a baseline, it still finds that nothing fails", () => {
+    expect(rules(checkRules("red", null, snap(placeholder)))).toEqual(["nothing_fails"]);
+  });
+});
+
+describe("liveStatus", () => {
+  const lines = (status) => status.lines.map((l) => [l.text, l.ok]);
+  const base = snap({ source: ["A.one"], results: { "A.one": "passed" } });
+
+  test("no helper data or a swap step: nothing to show", () => {
+    expect(liveStatus("red", base, null)).toBeNull();
+    expect(liveStatus("swap", base, base)).toBeNull();
+  });
+
+  describe("red", () => {
+    test("no new test yet", () => {
+      const s = liveStatus("red", base, base);
+      expect(lines(s)).toEqual([["No new test yet: write one test that fails", false]]);
+      expect(s.goalMet).toBe(false);
+    });
+
+    test("only production code added (the user's placeholder game): still no new test", () => {
+      const now = snap({ source: ["A.one"], results: { "A.one": "passed" }, code: "int g() { return 2; }" });
+      expect(liveStatus("red", base, now).goalMet).toBe(false);
+    });
+
+    test("one new failing test meets the goal, and is the focus", () => {
+      const now = snap({ source: ["A.one", "A.two"], results: { "A.one": "passed", "A.two": "failed" } });
+      const s = liveStatus("red", base, now);
+      expect(lines(s)).toEqual([["New test A.two: failing ✓", true]]);
+      expect(s.goalMet).toBe(true);
+      expect(s.focusTest).toEqual("A.two");
+    });
+
+    test("a compile error from the one new test counts as failing", () => {
+      const now = snap({ source: ["A.one", "A.two"], results: { "A.one": "passed" }, build: failedBuild() });
+      const s = liveStatus("red", base, now);
+      expect(lines(s)).toEqual([["New test A.two: doesn't compile yet ✓ (that counts as failing)", true]]);
+      expect(s.goalMet).toBe(true);
+    });
+
+    test("a new test that hasn't run yet is waiting", () => {
+      const now = snap({ source: ["A.one", "A.two"], results: { "A.one": "passed" } });
+      const s = liveStatus("red", base, now);
+      expect(lines(s)).toEqual([["New test A.two hasn't run yet: run the tests", null]]);
+      expect(s.goalMet).toBe(false);
+    });
+
+    test("a new test that passes", () => {
+      const now = snap({ source: ["A.one", "A.two"], results: { "A.one": "passed", "A.two": "passed" } });
+      expect(lines(liveStatus("red", base, now))).toEqual([["New test A.two passes: make it fail for the right reason", false]]);
+    });
+
+    test("two new tests", () => {
+      const now = snap({ source: ["A.one", "A.two", "A.three"], results: {} });
+      expect(lines(liveStatus("red", base, now))).toEqual([
+        ["2 new tests (A.two, A.three): keep one, comment out the others", false],
+      ]);
+    });
+
+    test("an old test broken on the way", () => {
+      const now = snap({ source: ["A.one", "A.two"], results: { "A.one": "failed", "A.two": "failed" } });
+      const s = liveStatus("red", base, now);
+      expect(lines(s)).toEqual([
+        ["New test A.two: failing ✓", true],
+        ["A.one passed before and now fails: fix that first", false],
+      ]);
+      expect(s.goalMet).toBe(false);
+    });
+
+    test("code saved after the last run: run the tests again", () => {
+      const now = snap({ source: ["A.one", "A.two"], results: { "A.one": "passed", "A.two": "failed" } });
+      now.files[0].mtime = 50; // runTime is 10
+      expect(lines(liveStatus("red", base, now))).toEqual([["You've changed the code since the last run: run the tests", null]]);
+    });
+
+    test("without a baseline: write a failing test", () => {
+      expect(liveStatus("red", null, base).goalMet).toBe(false);
+    });
+  });
+
+  describe("green", () => {
+    const redEnd = snap({ source: ["A.one", "A.two"], results: { "A.one": "passed", "A.two": "failed" } });
+
+    test("entered with the Red test failing: focus on it, goal not met yet", () => {
+      const s = liveStatus("green", redEnd, redEnd);
+      expect(s.focusTest).toEqual("A.two");
+      expect(s.backToRed).toBeNull();
+      expect(lines(s)).toEqual([["Make A.two pass", false]]);
+    });
+
+    test("all passing with the tests unchanged meets the goal", () => {
+      const now = snap({ source: ["A.one", "A.two"], results: { "A.one": "passed", "A.two": "passed" }, code: "int f() { return 2; }" });
+      const s = liveStatus("green", redEnd, now);
+      expect(lines(s)).toEqual([["A.two passes ✓", true], ["All tests green ✓", true]]);
+      expect(s.goalMet).toBe(true);
+    });
+
+    test("the user's case: Green entered with only a passing placeholder sends the pair back to Red", () => {
+      const placeholder = snap({ source: ["TestCaseName.TestName"], results: { "TestCaseName.TestName": "passed" } });
+      const s = liveStatus("green", placeholder, placeholder);
+      expect(s.backToRed).toEqual("There's no failing test to make pass. Back to Red: write the test first.");
+      expect(s.entryOk).toBe(false);
+    });
+
+    test("...even when code was saved after the last run", () => {
+      const placeholder = snap({ source: ["TestCaseName.TestName"], results: { "TestCaseName.TestName": "passed" } });
+      placeholder.files[1].mtime = 50;
+      expect(liveStatus("green", placeholder, placeholder).backToRed).not.toBeNull();
+    });
+
+    test("entered with the Red test's compile error: no back to Red, and that test is the focus", () => {
+      const compileRed = snap({ source: ["A.one", "A.two"], results: { "A.one": "passed" }, build: failedBuild() });
+      const s = liveStatus("green", compileRed, compileRed);
+      expect(s.backToRed).toBeNull();
+      expect(s.focusTest).toEqual("A.two");
+      expect(lines(s)).toEqual([["Make A.two compile and pass", false]]);
+    });
+
+    test("changing the tests in Green", () => {
+      const now = snap({
+        source: ["A.one", "A.two"],
+        results: { "A.one": "passed", "A.two": "passed" },
+        testFile: testSource(["A.one", "A.two"]) + "// edited",
+      });
+      const s = liveStatus("green", redEnd, now);
+      expect(lines(s)).toContainEqual(["Test files changed: Green only changes production code", false]);
+      expect(s.goalMet).toBe(false);
+    });
+
+    test("another test fails", () => {
+      const now = snap({ source: ["A.one", "A.two"], results: { "A.one": "failed", "A.two": "passed" } });
+      expect(lines(liveStatus("green", redEnd, now))).toEqual([["A.two passes ✓", true], ["Not all tests pass: A.one", false]]);
+    });
+  });
+
+  describe("refactor", () => {
+    const green = snap({ source: ["A.one", "A.two"], results: { "A.one": "passed", "A.two": "passed" } });
+
+    test("all green with the same tests meets the goal", () => {
+      const s = liveStatus("refactor", green, green);
+      expect(lines(s)).toEqual([["All tests green ✓", true]]);
+      expect(s.goalMet).toBe(true);
+      expect(s.entryProblem).toBeNull();
+    });
+
+    test("a test broken by the refactor", () => {
+      const now = snap({ source: ["A.one", "A.two"], results: { "A.one": "passed", "A.two": "failed" } });
+      expect(lines(liveStatus("refactor", green, now))).toEqual([["A.two now fails: undo the last change", false]]);
+    });
+
+    test("a test added", () => {
+      const now = snap({ source: ["A.one", "A.two", "A.three"], results: { "A.one": "passed", "A.two": "passed", "A.three": "passed" } });
+      expect(lines(liveStatus("refactor", green, now))).toContainEqual([
+        "Tests added or removed: Refactor keeps the tests the same", false,
+      ]);
+    });
+
+    test("entered with failing tests is an entry problem", () => {
+      const failing = snap({ source: ["A.one"], results: { "A.one": "failed" } });
+      expect(liveStatus("refactor", failing, failing).entryProblem.kind).toEqual("failing");
+    });
+  });
+});
+
+describe("changedSinceRun", () => {
+  test("compares file times with the run, or with a failed build", () => {
+    const s = snap({ source: ["A.one"], results: { "A.one": "passed" }, runTime: 10 });
+    expect(changedSinceRun(s)).toBe(false);
+    s.files[0].mtime = 11;
+    expect(changedSinceRun(s)).toBe(true);
+    s.build = failedBuild(20);
+    expect(changedSinceRun(s)).toBe(false);
   });
 });
 

@@ -1,0 +1,29 @@
+description = "Stack: a good Red, but not the test the navigator said (advice, never a hold)"
+phase = "red"
+problem = "Build a Stack class for ints with push, pop, top, size and isEmpty. Popping an empty stack throws std::out_of_range."
+intent = "popping an empty stack throws"
+tests_before = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+'''
+code_before = '''
+class Stack {
+public:
+  bool isEmpty() const { return true; }
+};
+'''
+tests = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+TEST(Stack, SizeIsOneAfterPush) { Stack s; s.push(4); EXPECT_EQ(1, s.size()); }
+'''
+code = '''
+class Stack {
+public:
+  bool isEmpty() const { return true; }
+};
+'''
+test_result = "Build failed: error C2039: 'push': is not a member of 'Stack'"
+
+[expect]
+decision = ["advance"]
+intent_match = ["no", "partly"]
+advice = true

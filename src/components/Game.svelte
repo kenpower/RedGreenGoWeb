@@ -4,8 +4,8 @@
   import { fade, fly } from "svelte/transition";
   import { createEventDispatcher, tick } from "svelte";
   import { helper, refreshHelper } from "../helper.js";
-  import { isCoached, askCoach, resolveProblem, toneOf, shouldShow, sendProgress } from "../coach.js";
-  import { checkRules, snapshotOf, startState, failingTests, uncommittedFiles, noRepo } from "../rules.js";
+  import { isCoached, askCoach, resolveProblem, toneOf, shouldShow, sendProgress, expectedFor } from "../coach.js";
+  import { checkRules, snapshotOf, startState, failingTests, uncommittedFiles, noRepo, liveStatus } from "../rules.js";
   import { hintFor } from "../content/hints.js";
 
   const dispatch = createEventDispatcher();
@@ -32,6 +32,25 @@
   $: step = gameState.getStep();
   $: snapshot = $helper.status === "connected" ? snapshotOf($helper.data) : null;
   $: canAskAgain = held && JSON.stringify(snapshot) !== askedWith;
+
+  // Live steps: the step's goal, checked on every helper update with the real
+  // test names (rules.liveStatus). When the rules are enforced or the coach
+  // is on ("gated"), Done is locked until the goal is met; otherwise the
+  // unmet lines are only amber warnings. No helper: the static card text.
+  $: gated = gameState.enforceRules || isCoached($helper);
+  $: live = step && snapshot ? liveStatus(step.stateName, gameState.before, snapshot) : null;
+  $: liveLines = live ? (live.backToRed && !gated ? [{ text: live.backToRed, ok: false }, ...live.lines] : live.lines) : [];
+  $: doneLocked = !!live && gated && !live.goalMet;
+
+  // Entering Green with nothing failing means Red never had a failing test:
+  // back to Red automatically (same driver, counted as a back to Red).
+  // Checked once per Green step; only when gated, otherwise it's a warning line.
+  let greenEntryChecked = 0;
+  $: if (step?.stateName === "green" && live && gated && greenEntryChecked !== step.stepNumber) enterGreen(live);
+  const enterGreen = (status) => {
+    greenEntryChecked = step.stepNumber;
+    if (status.backToRed) advance({ feedback: status.backToRed, tone: "red" }, true);
+  };
 
   // Before a Red, check where the code is (rules.startState), live as the
   // helper's data arrives: tests already failing, a broken build, or no
@@ -68,12 +87,15 @@
     advance();
   };
 
-  $: instructions = instructionsFor(step, held, verdict, advice);
-  const instructionsFor = (step, held, verdict, advice) => {
+  $: instructions = instructionsFor(step, held, verdict, advice, live);
+  const instructionsFor = (step, held, verdict, advice, live) => {
     if (!step) return { driver: "", navigator: "" };
     const coachSays = held ? verdict : advice && { driver_action: advice.driver, navigator_action: advice.navigator };
+    // with the helper, the card names the real test; the static text is the fallback
+    const liveDriver =
+      step.stateName === "green" && live?.focusTest ? `Make ${live.focusTest} pass with the smallest change.` : "";
     return {
-      driver: coachSays?.driver_action || step.bodyText,
+      driver: coachSays?.driver_action || liveDriver || step.bodyText,
       navigator: coachSays?.navigator_action || step.navigatorPrompt,
     };
   };
@@ -154,6 +176,7 @@
   const ask = (phase, ruleFindings) =>
     askCoach({
       phase,
+      expected: expectedFor(phase, phase === "finish" ? null : liveStatus(phase, gameState.before, snapshot)),
       problem: resolveProblem(gameState.problem, $helper.data),
       before: gameState.before,
       after: snapshot,
@@ -196,16 +219,36 @@
     waiting = false;
   };
 
+  // A rule hold (no coach verdict) lifts by itself once the rules are met
+  // again; the pair then clicks Done to carry on.
+  $: if (held && !verdict && !hardHold && snapshot) recheckRuleHold(snapshot);
+  const recheckRuleHold = (current) => {
+    if (waiting) return;
+    const stepFindings = checkRules(gameState.state.id, gameState.before, current);
+    if (stepFindings.length) findings = stepFindings;
+    else {
+      held = false;
+      findings = [];
+      tone = "";
+    }
+  };
+
   const done = async () => {
     const phase = gameState.state.id;
     if (!CHECKED_PHASES.includes(phase)) return advance();
 
     await refreshSnapshot();
+    // the live goal, again with the fresh data: Done is locked until it's met
+    const status = snapshot ? liveStatus(phase, gameState.before, snapshot) : null;
+    if (gated && status && !status.goalMet) return;
     const stepFindings = checkRules(phase, gameState.before, snapshot);
     if (isHardHold(phase, stepFindings)) {
       hardHold = true;
       return hold(null, stepFindings);
     }
+    // The app holds on any broken rule itself, before the coach is asked, so a
+    // coach "advance" can never let a broken rule through.
+    if (stepFindings.length && gated && snapshot) return hold(null, stepFindings);
     if (!isCoached($helper)) return decideByRules(stepFindings);
 
     waiting = true;
@@ -305,6 +348,12 @@
         {freshStart}
         uncommittedFiles={uncommitted}
         noRepo={repoMissing}
+        {liveLines}
+        focusTest={live?.focusTest || null}
+        goalMet={!!live?.goalMet}
+        {doneLocked}
+        amberLive={!gated}
+        entryProblem={live?.entryProblem || null}
         on:interact={onInteract}
       />
     </div>

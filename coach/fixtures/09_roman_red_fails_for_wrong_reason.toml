@@ -1,5 +1,6 @@
 description = "Roman numerals: new test fails only because of a typo in the test"
 phase = "red"
+expected = "Red: one new test, Roman.TwoIsII, that fails for the right reason. The game has checked it is the only new test and that it fails."
 problem = 'Write toRoman(int n) that converts a whole number from 1 to 3999 to Roman numerals, e.g. 4 gives "IV" and 1994 gives "MCMXCIV".'
 tests_before = '''
 TEST(Roman, OneIsI) { EXPECT_EQ("I", toRoman(1)); }

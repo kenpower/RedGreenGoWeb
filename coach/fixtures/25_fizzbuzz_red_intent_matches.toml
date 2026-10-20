@@ -1,0 +1,29 @@
+description = "FizzBuzz: the navigator's intent matches the new test"
+phase = "red"
+problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
+intent = "the first multiple of three gives back Fizz"
+tests_before = '''
+TEST(FizzBuzz, Returns1For1) { EXPECT_EQ("1", fizzBuzz(1)); }
+TEST(FizzBuzz, Returns2For2) { EXPECT_EQ("2", fizzBuzz(2)); }
+'''
+code_before = '''
+std::string fizzBuzz(int n) {
+  return std::to_string(n);
+}
+'''
+tests = '''
+TEST(FizzBuzz, Returns1For1) { EXPECT_EQ("1", fizzBuzz(1)); }
+TEST(FizzBuzz, Returns2For2) { EXPECT_EQ("2", fizzBuzz(2)); }
+TEST(FizzBuzz, ReturnsFizzFor3) { EXPECT_EQ("Fizz", fizzBuzz(3)); }
+'''
+code = '''
+std::string fizzBuzz(int n) {
+  return std::to_string(n);
+}
+'''
+test_result = '1 failed: FizzBuzz.ReturnsFizzFor3 (Expected: "Fizz", actual: "3"); 2 passed'
+
+[expect]
+decision = ["advance"]
+intent_match = ["yes"]
+max_problems = 0

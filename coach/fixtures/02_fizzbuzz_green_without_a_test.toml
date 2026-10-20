@@ -8,4 +8,6 @@ code = ""
 test_result = "No test results yet"
 
 [expect]
-decision = ["back_to_red"]
+# The app now handles this itself (live Green entry check) and doesn't ask the coach;
+# if it is asked anyway, either way of holding is fine.
+decision = ["back_to_red", "redo"]
