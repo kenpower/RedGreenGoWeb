@@ -68,7 +68,7 @@ state = {
     "runTime": None,
     "tests": {},  # "Suite.Name" -> {name, status, message, run}
     "build": None,  # {status, errors, time} from the latest build log
-    "files": [],  # [{path, kind: test|production, content}] read when results/build arrive
+    "files": [],  # [{path, kind: test|production, content, mtime}] read when results/build arrive
     "readme": None,  # {path, content} of the solution's README.md, read alongside the files
     "git": None,  # see read_git()
 }
@@ -174,6 +174,7 @@ def read_sources(project_dir):
                 "path": os.path.relpath(path, project_dir).replace("\\", "/"),
                 "kind": "test" if TEST_MARKER.search(content) else "production",
                 "content": content,
+                "mtime": os.path.getmtime(path),  # same clock as runTime/build.time: spots stale results
             })
             if len(files) >= MAX_FILES:
                 return files
