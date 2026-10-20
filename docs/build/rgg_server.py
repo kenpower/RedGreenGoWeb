@@ -71,9 +71,9 @@ state = {
     "files": [],  # [{path, kind: test|production, content, mtime}] read when results/build arrive
     "readme": None,  # {path, content} of the solution's README.md, read alongside the files
     "git": None,  # see read_git()
-    "project": None,  # {path, name}: the folder being watched, so the app can show a wrong one
+    "project": None,  # {path, name, vsName}: the folder being watched, so the app can show a wrong one
 }
-VS_PROJECT_EXTENSIONS = (".sln", ".slnx", ".vcxproj")
+VS_PROJECT_EXTENSIONS = (".slnx", ".sln", ".vcxproj")  # solutions first; find_vs_project relies on it
 
 
 def read_text(path):
@@ -210,13 +210,16 @@ def read_readme(project_dir):
     }
 
 
-def has_vs_project(project_dir):
-    """True if a solution or C++ project file is in the folder or up to 2 levels below it."""
-    for depth in range(3):
-        pattern = os.path.join(project_dir, *["*"] * depth, "*")
-        if any(p.lower().endswith(VS_PROJECT_EXTENSIONS) for p in glob.glob(pattern)):
-            return True
-    return False
+def find_vs_project(project_dir):
+    """The solution (.slnx/.sln) nearest the top of the folder, looking up to 2 levels
+    below it, else the nearest C++ project (.vcxproj); None if there is neither."""
+    for extensions in (VS_PROJECT_EXTENSIONS[:2], VS_PROJECT_EXTENSIONS[2:]):
+        for depth in range(3):
+            pattern = os.path.join(project_dir, *["*"] * depth, "*")
+            found = sorted(p for p in glob.glob(pattern) if p.lower().endswith(extensions) and os.path.isfile(p))
+            if found:
+                return found[0]
+    return None
 
 
 class GitError(Exception):
@@ -548,11 +551,17 @@ def main():
         state["files"] = read_sources(project_dir)
         state["readme"] = read_readme(project_dir)
         state["git"] = read_git(project_dir)
-        state["project"] = {"path": project_dir, "name": os.path.basename(project_dir.rstrip("\\/")) or project_dir}
+        vs_project = find_vs_project(project_dir)
+        state["project"] = {
+            "path": project_dir,
+            "name": os.path.basename(project_dir.rstrip("\\/")) or project_dir,
+            "vsName": os.path.splitext(os.path.basename(vs_project))[0] if vs_project else None,
+        }
         state["version"] = 1
 
-    print(f"Project: {project_dir} ({len(state['files'])} source files)")
-    if not has_vs_project(project_dir):
+    vs_name = state["project"]["vsName"]
+    print(f"Project: {project_dir}{f' ({vs_name})' if vs_name else ''}, {len(state['files'])} source files")
+    if not vs_project:
         print("  WARNING: No Visual Studio solution or project found here. Run the helper from your project folder.")
     if state["readme"]:
         print(f"  Problem description: {state['readme']['path']}")
