@@ -10,7 +10,7 @@
 	--border-strong: #666666;
 
 	--glow-green: #00cc00;
-	--link: #009900;
+	--link: #33bb33; /* was #009900 (5.0:1 on --bg): now ~7.4:1 */
 	--link-hover: #99ff99;
 	--star: #ffff66;
 	--amber: #ffb000;
@@ -39,7 +39,7 @@
 
 	--text-color: #cccccc;
 	--text-bright: #ffffff;
-	--text-muted: #8a8a9a;
+	--text-muted: #a9a9ba; /* was #8a8a9a (5.5:1, hard to read in the light font): now ~7.9:1 */
 
 	/* one colour per player, kept distinct from the red/green/blue phase colours */
 	--player-1: #b48cff;
