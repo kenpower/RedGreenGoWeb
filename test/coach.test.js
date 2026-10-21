@@ -2,6 +2,7 @@ import {
   askCoach,
   askOrient,
   buildOrientRequest,
+  buildLabRequest,
   coachUrl,
   reuseLook,
   lookKey,
@@ -241,6 +242,25 @@ describe("buildRequest", () => {
     expect(refactor.checkpoint).toEqual({ tests: "// test.cpp\nTEST(A, B) {}", code: "// lib.cpp\nv1" });
     expect(buildRequest({ phase: "green", problem: "", before: null, after: snapshot("v2"), checkpoint: snapshot("v1") }))
       .not.toHaveProperty("checkpoint");
+  });
+
+  test("a lab Orient carries the lab and its refactorings", () => {
+    const orient = buildOrientRequest({ problem: "", after: snapshot("v1"), refactorings: ["Extract Function"] });
+    expect(orient).toMatchObject({ mode: "orient", phase: "refactor", lab: "refactor", refactorings: ["Extract Function"] });
+    expect(buildOrientRequest({ problem: "", after: snapshot("v1") })).not.toHaveProperty("lab");
+  });
+
+  test("a lab Look: the change since the last commit, the board, the rung", () => {
+    const look = buildLabRequest({
+      problem: "Cart", base: snapshot("v1"), after: snapshot("v2"), labPhase: "test", round: 3,
+      refactorings: ["Extract Function"], board: [{ id: "tax", where: "priceFor", what: "Inline tax.", refactoring: "Extract Function" }],
+      rung: 3, rescue: true,
+    });
+    expect(look).toMatchObject({
+      mode: "look", lab: "refactor", phase: "refactor", lab_phase: "test", cycle: 3, code_before: "// lib.cpp\nv1",
+      code: "// lib.cpp\nv2", board: [{ id: "tax", resolved: false }], rescue: true,
+    });
+    expect(look.struggle.rung).toBe(3);
   });
 
   test("the baseline goes with every Look", () => {

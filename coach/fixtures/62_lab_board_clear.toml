@@ -1,0 +1,46 @@
+description = "LAB LOOK, board clear: the last smell was just fixed and committed code is clean; say the board is clear, no further hint"
+lab = "refactor"
+phase = "refactor"
+lab_phase = "commit"
+cycle = 5
+refactorings = ["Extract Function", "Rename Variable", "Replace Magic Number with Constant", "Decompose Conditional"]
+problem = '''Refactor lab: shopping cart prices. The tests are complete and pass. Improve the code one refactoring at a time.'''
+board = [
+  { id = "magic-tax", where = "priceFor in cart.h", what = "The tax rate 0.2 is a bare number.", refactoring = "Replace Magic Number with Constant", resolved = true },
+  { id = "short-names", where = "priceFor in cart.h", what = "The names q, u and t don't say what they hold.", refactoring = "Rename Variable", resolved = true },
+  { id = "member-condition", where = "priceFor in cart.h", what = "The member rule is a nested condition that's hard to read.", refactoring = "Decompose Conditional" },
+]
+tests_before = '''
+TEST(Cart, MemberOver100) { EXPECT_DOUBLE_EQ(112.8, priceFor(11, 10.0, true)); }
+'''
+code_before = '''
+const double TAX_RATE = 0.2;
+inline double priceFor(int quantity, double unitPrice, bool member) {
+  double total = quantity * unitPrice;
+  if (member == true) { if (total > 100) { total = total - 5; } }
+  return total + total * TAX_RATE;
+}
+'''
+tests = '''
+TEST(Cart, MemberOver100) { EXPECT_DOUBLE_EQ(112.8, priceFor(11, 10.0, true)); }
+'''
+code = '''
+const double TAX_RATE = 0.2;
+const double MEMBER_REWARD = 5;
+
+inline bool earnsMemberReward(bool member, double total) { return member && total > 100; }
+
+inline double priceFor(int quantity, double unitPrice, bool member) {
+  double total = quantity * unitPrice;
+  if (earnsMemberReward(member, total)) total = total - MEMBER_REWARD;
+  return total + total * TAX_RATE;
+}
+'''
+test_result = "All 1 tests passed"
+
+[expect]
+decision = ["advance"]
+resolved_include = ["member-condition"]
+note_mentions = ["clear", "all", "every", "done", "no smells", "nothing left"]
+commit_mentions = ["Decompose", "Conditional", "earnsMemberReward", "member"]
+hints = false

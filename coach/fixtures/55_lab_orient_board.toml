@@ -1,0 +1,29 @@
+description = "LAB ORIENT: messy pricing code with passing tests; the smell board lists the magic numbers and the long function, each with one of the lab's refactorings"
+mode = "orient"
+lab = "refactor"
+refactorings = ["Extract Function", "Rename Variable", "Replace Magic Number with Constant", "Decompose Conditional"]
+problem = '''Refactor lab: shopping cart prices. The tests are complete and pass. Improve the code one refactoring at a time.'''
+tests = '''
+// CartTests.cpp
+#include "cart.h"
+TEST(Cart, OneItem) { EXPECT_DOUBLE_EQ(12.0, priceFor(1, 10.0, false)); }
+TEST(Cart, BulkDiscount) { EXPECT_DOUBLE_EQ(118.8, priceFor(11, 10.0, false)); }
+TEST(Cart, MemberOver100) { EXPECT_DOUBLE_EQ(112.8, priceFor(11, 10.0, true)); }
+TEST(Cart, MemberUnder100) { EXPECT_DOUBLE_EQ(24.0, priceFor(2, 10.0, true)); }
+'''
+code = '''
+// cart.h
+inline double priceFor(int q, double u, bool m) {
+  double t = q * u;
+  if (q > 10) t = t - t * 0.1;
+  if (m == true) { if (t > 100) { t = t - 5; } }
+  double x = t * 0.2;
+  return t + x;
+}
+'''
+test_result = "All 4 tests passed"
+
+[expect]
+code_state = ["partial", "looks_done"]
+min_smells = 3
+smells_mention = ["0.1", "0.2"]

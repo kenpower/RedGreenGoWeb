@@ -272,10 +272,12 @@ export async function askOrient(step, fetchFn = fetch) {
   return { brief: answer, error, stale };
 }
 
-export function buildOrientRequest({ problem, after, ruleFindings = [], gameId = "", players = [] }) {
+export function buildOrientRequest({ problem, after, ruleFindings = [], gameId = "", players = [], refactorings = null }) {
   return {
     mode: "orient",
-    phase: "red",
+    phase: refactorings ? "refactor" : "red",
+    // the refactor lab: Orient also lists the smell board, each fixed by one of these
+    ...(refactorings ? { lab: "refactor", refactorings: refactorings.slice(0, 20).map((r) => String(r).slice(0, 60)) } : {}),
     pair: pairKey(players),
     game_id: String(gameId || "").slice(0, 64),
     problem: problem || "",
@@ -284,6 +286,44 @@ export function buildOrientRequest({ problem, after, ruleFindings = [], gameId =
     test_result: summariseResult(currentSnapshot(after)),
     rule_findings: ruleFindings.slice(0, 20).map((f) => String(f).slice(0, 500)),
   };
+}
+
+// A refactor-lab Look (DESIGN-refactor-lab.md B.3): the change since the last
+// commit, against the smell board. Never throws: { answer, error, stale }.
+export async function askLab(step, fetchFn = fetch) {
+  return postCoach(buildLabRequest(step), fetchFn, "The coach couldn't look at this change.");
+}
+
+export function buildLabRequest({
+  problem, base, after, labPhase = "refactor", round = 1, refactorings = [], board = [], ruleFindings = [],
+  gameId = "", players = [], rung = 1, rescue = false,
+}) {
+  const request = {
+    mode: "look",
+    lab: "refactor",
+    phase: "refactor",
+    lab_phase: labPhase,
+    cycle: Math.max(1, Math.floor(Number(round) || 1)),
+    refactorings: refactorings.slice(0, 20).map((r) => String(r).slice(0, 60)),
+    board: board.slice(0, 8).map((s) => ({
+      id: String(s.id).slice(0, 64), where: String(s.where).slice(0, 200), what: String(s.what).slice(0, 300),
+      refactoring: String(s.refactoring).slice(0, 60), resolved: !!s.resolved,
+    })),
+    pair: pairKey(players),
+    game_id: String(gameId || "").slice(0, 64),
+    problem: problem || "",
+    tests: filesOfKind(after, "test"),
+    code: filesOfKind(after, "production"),
+    test_result: summariseResult(currentSnapshot(after)),
+    rule_findings: ruleFindings.slice(0, 20).map((f) => String(f).slice(0, 500)),
+    struggle: struggleFields({ rung }),
+  };
+  if (base) {
+    request.tests_before = filesOfKind(base, "test");
+    request.code_before = filesOfKind(base, "production");
+  }
+  if (rescue) request.rescue = true;
+  return request;
 }
 
 async function postCoach(body, fetchFn, failed) {

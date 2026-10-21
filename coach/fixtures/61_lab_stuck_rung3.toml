@@ -1,0 +1,41 @@
+description = "LAB LOOK, stuck at rung 3: nothing changed for a while; the driver action names a refactoring from the lab and where to start"
+lab = "refactor"
+phase = "refactor"
+lab_phase = "refactor"
+cycle = 3
+refactorings = ["Extract Function", "Rename Variable", "Replace Magic Number with Constant", "Decompose Conditional"]
+problem = '''Refactor lab: shopping cart prices. The tests are complete and pass. Improve the code one refactoring at a time.'''
+struggle = { runs_without_progress = 2, minutes_on_step = 8, holds_on_step = 0, hints_shown = 2, novice = false, rung = 3 }
+board = [
+  { id = "member-condition", where = "priceFor in cart.h", what = "The member rule is a nested condition that's hard to read.", refactoring = "Decompose Conditional" },
+  { id = "magic-tax", where = "priceFor in cart.h", what = "The tax rate 0.2 is a bare number.", refactoring = "Replace Magic Number with Constant", resolved = true },
+]
+tests_before = '''
+TEST(Cart, MemberOver100) { EXPECT_DOUBLE_EQ(112.8, priceFor(11, 10.0, true)); }
+'''
+code_before = '''
+const double TAX_RATE = 0.2;
+inline double priceFor(int quantity, double unitPrice, bool member) {
+  double total = quantity * unitPrice;
+  if (member == true) { if (total > 100) { total = total - 5; } }
+  return total + total * TAX_RATE;
+}
+'''
+tests = '''
+TEST(Cart, MemberOver100) { EXPECT_DOUBLE_EQ(112.8, priceFor(11, 10.0, true)); }
+'''
+code = '''
+const double TAX_RATE = 0.2;
+inline double priceFor(int quantity, double unitPrice, bool member) {
+  double total = quantity * unitPrice;
+  if (member == true) { if (total > 100) { total = total - 5; } }
+  return total + total * TAX_RATE;
+}
+'''
+test_result = "All 1 tests passed"
+
+[expect]
+decision = ["advance"]
+review_effect = ["none"]
+hints = true
+driver_mentions = ["Decompose Conditional"]

@@ -1,0 +1,43 @@
+description = "LAB LOOK, broken: the new constant has a typo (0.01 instead of 0.1) and the bulk test fails; the review names the mistake (the game holds them)"
+lab = "refactor"
+phase = "refactor"
+lab_phase = "test"
+cycle = 2
+refactorings = ["Extract Function", "Rename Variable", "Replace Magic Number with Constant", "Decompose Conditional"]
+problem = '''Refactor lab: shopping cart prices. The tests are complete and pass. Improve the code one refactoring at a time.'''
+rule_findings = ["Not all tests pass yet: Cart.BulkDiscount."]
+board = [
+  { id = "magic-discount", where = "priceFor in cart.h", what = "The bulk discount 0.1 is a bare number.", refactoring = "Replace Magic Number with Constant" },
+  { id = "magic-tax", where = "priceFor in cart.h", what = "The tax rate 0.2 is a bare number.", refactoring = "Replace Magic Number with Constant" },
+]
+tests_before = '''
+TEST(Cart, OneItem) { EXPECT_DOUBLE_EQ(12.0, priceFor(1, 10.0, false)); }
+TEST(Cart, BulkDiscount) { EXPECT_DOUBLE_EQ(118.8, priceFor(11, 10.0, false)); }
+'''
+code_before = '''
+inline double priceFor(int q, double u, bool m) {
+  double t = q * u;
+  if (q > 10) t = t - t * 0.1;
+  return t + t * 0.2;
+}
+'''
+tests = '''
+TEST(Cart, OneItem) { EXPECT_DOUBLE_EQ(12.0, priceFor(1, 10.0, false)); }
+TEST(Cart, BulkDiscount) { EXPECT_DOUBLE_EQ(118.8, priceFor(11, 10.0, false)); }
+'''
+code = '''
+const double BULK_DISCOUNT = 0.01;
+
+inline double priceFor(int q, double u, bool m) {
+  double t = q * u;
+  if (q > 10) t = t - t * BULK_DISCOUNT;
+  return t + t * 0.2;
+}
+'''
+test_result = "1 of 2 tests failed: Cart.BulkDiscount (Expected: 118.8 Actual: 130.68)"
+
+[expect]
+decision = ["advance"]  # the game holds a red run itself; the coach never redoes it
+review_kept = false
+note_mentions = ["0.01", "0.1", "typo", "discount"]
+resolved_empty = true

@@ -242,6 +242,52 @@ def score_orient(brief, expect):
     return checks
 
 
+def score_board(brief, expect, step):
+    """A lab Orient: the smell board, each smell fixed by one of the lab's refactorings."""
+    smells = brief.get("smells", [])
+    checks = [("smell_count", expect.get("min_smells", 3) <= len(smells) <= 8, len(smells)),
+              ("smells_from_lab", all(s["refactoring"] in step["refactorings"] for s in smells), "ok")]
+    text = " ".join(f"{s['where']} {s['what']}" for s in smells)
+    if "smells_mention" in expect:
+        missing = [w for w in expect["smells_mention"] if w.lower() not in text.lower()]
+        checks.append(("smells_mention", not missing, ", ".join(missing) or "all"))
+    coded = [s["what"] for s in smells if CODE_LIKE.search(s["what"])]
+    checks.append(("smell_no_code", not coded, coded[0][:60] if coded else "none"))
+    return checks
+
+
+def score_lab(answer, expect):
+    """A lab Look: the decision, the review, the board ticks, the hint and commit message."""
+    review = answer["move_review"]
+    checks = []
+    if "decision" in expect:
+        checks.append(("decision", answer["decision"] in expect["decision"], answer["decision"]))
+    for key, value in (("review_effect", review["effect"]), ("review_kept", review["behaviour_kept"])):
+        if key in expect:
+            ok = value in expect[key] if isinstance(expect[key], list) else value == expect[key]
+            checks.append((key, ok, value))
+    for key, text in (("review_mentions", f"{review['refactoring']} {review['note']}"),
+                      ("note_mentions", f"{answer['note']} {review['note']}"),
+                      ("driver_mentions", answer["driver_action"]),
+                      ("commit_mentions", answer["commit_message"])):
+        if key in expect:
+            checks.append((key, any(w.lower() in text.lower() for w in expect[key]), text[:80] or '""'))
+    if "resolved_include" in expect:
+        checks.append(("resolved_include", all(i in answer["smells_resolved"] for i in expect["resolved_include"]),
+                       answer["smells_resolved"]))
+    if "resolved_empty" in expect:
+        checks.append(("resolved_empty", not answer["smells_resolved"], answer["smells_resolved"]))
+    if "hints" in expect:
+        has = bool(answer["hint_question"].strip() and answer["driver_action"].strip())
+        checks.append(("hints", has == expect["hints"], answer["hint_question"] or '""'))
+    if answer["driver_action"]:
+        checks.append(("single_action", single_action(answer["driver_action"]), answer["driver_action"]))
+    coded = [f for f in ("note", "hint_question", "hint_kind", "commit_message") if CODE_LIKE.search(answer[f])]
+    coded += ["review note"] if CODE_LIKE.search(review["note"]) else []
+    checks.append(("lab_no_code", not coded, ", ".join(coded) or "none"))
+    return checks
+
+
 def main(prefixes):
     files = sorted((HERE / "fixtures").glob("*.toml"))
     if prefixes:
@@ -269,7 +315,7 @@ def main(prefixes):
             output_tokens += usage.output_tokens
             cache_written += usage.cache_creation_input_tokens or 0
             cache_read += usage.cache_read_input_tokens or 0
-            checks = score_orient(brief, expect)
+            checks = score_orient(brief, expect) + (score_board(brief, expect, fx) if fx.get("lab") else [])
             ok = all(c[1] for c in checks)
             passed += ok
             print(f"{'PASS' if ok else 'FAIL'} {f.stem}  ({description})")
@@ -281,8 +327,39 @@ def main(prefixes):
             print(f"      code:       {brief['code_state']}")
             for w in brief["warnings"]:
                 print(f"      watch out:  {w}")
-            print(f"      first move: {brief['first_move']}\n")
+            print(f"      first move: {brief['first_move']}")
+            for s in brief.get("smells", []):
+                print(f"      smell:      [{s['id']}] {s['where']}: {s['what']} ({s['refactoring']})")
+            print()
             results.append({"fixture": f.stem, "pass": ok, "checks": checks, "brief": brief})
+            continue
+        if fx.get("lab"):  # a refactor-lab Look: one call (coach/lab.md)
+            fx.setdefault("mode", "look")
+            validate(fx)
+            try:
+                answer, usage = ask_coach(client, fx)
+            except (anthropic.APIError, RuntimeError, json.JSONDecodeError) as e:
+                print(f"ERROR {f.stem}: {e}\n")
+                results.append({"fixture": f.stem, "error": str(e)})
+                continue
+            input_tokens += usage.input_tokens
+            output_tokens += usage.output_tokens
+            cache_written += usage.cache_creation_input_tokens or 0
+            cache_read += usage.cache_read_input_tokens or 0
+            checks = score_lab(answer, expect)
+            ok = all(c[1] for c in checks)
+            passed += ok
+            print(f"{'PASS' if ok else 'FAIL'} {f.stem}  ({description})")
+            for field, field_ok, got in checks:
+                if field_ok and field in ("lab_no_code", "single_action"):
+                    continue
+                print(f"   {'  ' if field_ok else '!!'} {field}: {got}   expected {expect.get(field, 'ok')}")
+            r = answer["move_review"]
+            print(f"      decision:  {answer['decision']}   note: {answer['note']}")
+            print(f"      review:    {r['refactoring'] or '-'} / {r['effect']} / kept={r['behaviour_kept']}: {r['note']}")
+            print(f"      resolved:  {answer['smells_resolved']}   commit: {answer['commit_message'] or '-'}")
+            print(f"      hint:      {answer['hint_question']}  /  {answer['hint_kind']}  /  {answer['driver_action']}\n")
+            results.append({"fixture": f.stem, "pass": ok, "checks": checks, "verdict": answer})
             continue
         # every other fixture is a Look: the guidance from the phase's catalogue, and the verdict.
         # The guidance fixtures (mode = "look") follow a fresh run; the rest are a Done.

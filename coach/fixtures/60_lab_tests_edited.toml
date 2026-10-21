@@ -1,0 +1,39 @@
+description = "LAB LOOK, tests edited: the pair changed a test's expected value to match their change; the game holds it, the coach doesn't redo"
+lab = "refactor"
+phase = "refactor"
+lab_phase = "test"
+cycle = 2
+refactorings = ["Extract Function", "Rename Variable", "Replace Magic Number with Constant", "Decompose Conditional"]
+problem = '''Refactor lab: shopping cart prices. The tests are complete and pass. Improve the code one refactoring at a time.'''
+rule_findings = ["You changed the tests: put them back, the lab only changes production code."]
+board = [
+  { id = "magic-tax", where = "priceFor in cart.h", what = "The tax rate 0.2 is a bare number.", refactoring = "Replace Magic Number with Constant" },
+]
+tests_before = '''
+TEST(Cart, OneItem) { EXPECT_DOUBLE_EQ(12.0, priceFor(1, 10.0, false)); }
+'''
+code_before = '''
+inline double priceFor(int q, double u, bool m) {
+  double t = q * u;
+  return t + t * 0.2;
+}
+'''
+tests = '''
+TEST(Cart, OneItem) { EXPECT_DOUBLE_EQ(12.5, priceFor(1, 10.0, false)); }
+'''
+code = '''
+const double TAX_RATE = 0.25;
+
+inline double priceFor(int q, double u, bool m) {
+  double t = q * u;
+  return t + t * TAX_RATE;
+}
+'''
+test_result = "All 1 tests passed"
+
+[expect]
+# the game holds edited tests itself; the coach may also redo, since the rate change (0.2 to 0.25)
+# changed what the code does, which the edited test hid. Either way it must say what changed.
+decision = ["advance", "redo"]
+review_kept = false
+note_mentions = ["0.25", "0.2", "test"]

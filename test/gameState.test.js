@@ -712,6 +712,20 @@ test("the_refactor_lab_cycles_refactor_test_commit_and_swaps_after_each_commit",
   expect(GameState.recoverSavedGame().lab.round).toBe(2);
 });
 
+test("the_lab_board_ticks_smells_the_coach_saw_resolved", () => {
+  let g = new GameState();
+  g.startLab(["Extract Function"], null);
+  g.setBoard([{ id: "tax", where: "priceFor", what: "Inline tax.", refactoring: "Extract Function" }]);
+  g.labReview({
+    smells_resolved: ["tax", "tax", "nope"],
+    move_review: { refactoring: "Extract Function", effect: "better", behaviour_kept: true, note: "" },
+  });
+  expect(g.lab.board[0].resolved).toBe(true);
+  expect(g.pendingEvents.filter((e) => e.kind === "smell").map((e) => e.detail)).toEqual(["resolved: Inline tax."]);
+  expect(g.refactorings).toEqual({ "Extract Function": 1 });
+  expect(GameState.recoverSavedGame().lab.board[0].resolved).toBe(true);
+});
+
 test("a_lab_phase_is_reported_as_one_the_server_knows", () => {
   let g = new GameState();
   g.startLab([], null);

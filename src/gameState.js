@@ -299,6 +299,27 @@ export class GameState {
     this.#save();
   }
 
+  // The lab's smell board, from the coach's Orient: [{id, where, what, refactoring, resolved}].
+  setBoard(smells) {
+    if (!this.lab) return;
+    this.lab.board = (smells || []).map((s) => ({ ...s, resolved: false }));
+    this.#save();
+  }
+
+  // The coach's review of a lab change: smells it resolved are ticked on the
+  // board (a `smell` event each), and the move counts for the teacher.
+  labReview(answer) {
+    if (!this.lab || !answer) return;
+    for (const id of answer.smells_resolved || []) {
+      const smell = (this.lab.board || []).find((s) => s.id === id && !s.resolved);
+      if (!smell) continue;
+      smell.resolved = true;
+      this.addEvent("smell", `resolved: ${smell.what}`);
+    }
+    this.noteMove(answer.move_review);
+    this.#save();
+  }
+
   // A fresh run in the lab: a red one means a change broke a test; the next
   // green one means they undid (or fixed) it, which the teacher sees as a revert.
   labRun({ red, green }) {

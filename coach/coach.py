@@ -97,6 +97,50 @@ ORIENT_SCHEMA = {
 }
 MAX_CATALOGUE = 60
 MAX_NEXT_STEPS = 4
+
+# The refactor lab (DESIGN-refactor-lab.md B): `lab: "refactor"` on a request.
+# Orient then also lists the smell board (coach/lab_orient.md); a Look is one
+# call with coach/lab.md (no catalogue): the review against the last commit,
+# the smells it resolved, and the next smell's hint ladder.
+MAX_REFACTORINGS = 20
+MAX_SMELLS = 8
+LAB_LOOK_FIELDS = ["decision", "note", "move_review", "smells_resolved", "hint_question", "hint_kind",
+                   "driver_action", "commit_message", "rescue_code", "rescue_why"]
+
+
+def lab_orient_schema(refactorings):
+    smell = {
+        "type": "object",
+        "properties": {"id": {"type": "string"}, "where": {"type": "string"}, "what": {"type": "string"},
+                       "refactoring": {"type": "string", "enum": list(refactorings)}},
+        "required": ["id", "where", "what", "refactoring"],
+        "additionalProperties": False,
+    }
+    properties = {**ORIENT_SCHEMA["properties"], "smells": {"type": "array", "items": smell}}
+    return {"type": "object", "properties": properties, "required": list(properties), "additionalProperties": False}
+
+
+def lab_look_schema(board):
+    resolved = {"type": "string", "enum": [s["id"] for s in board]} if board else {"type": "string"}
+    return {
+        "type": "object",
+        "properties": {
+            "decision": {"type": "string", "enum": ["advance", "redo"]},
+            "note": {"type": "string"},
+            "move_review": MOVE_REVIEW_SCHEMA,
+            "smells_resolved": {"type": "array", "items": resolved},
+            "hint_question": {"type": "string"},
+            "hint_kind": {"type": "string"},
+            "driver_action": {"type": "string"},
+            "commit_message": {"type": "string"},
+            "rescue_code": {"type": "string"},
+            "rescue_why": {"type": "string"},
+        },
+        "required": LAB_LOOK_FIELDS,
+        "additionalProperties": False,
+    }
+
+
 # Code in a guidance detail: braces, operators, a call with brackets, a GoogleTest
 # macro. Such a detail is blanked (the step's own text still stands); run_fixtures
 # checks with the same pattern.
@@ -212,12 +256,30 @@ def validate(step):
     for flag in ("novice", "done"):
         if not isinstance(step.get(flag, False), bool):
             raise BadStep(f"{flag} must be true or false")
+    if step.get("lab") is not None:
+        _validate_lab(step)
     if not isinstance(step.get("building", ""), str) or len(step.get("building", "")) > MAX_BUILDING:
         raise BadStep(f"building must be text of at most {MAX_BUILDING} characters")
     struggle = step.get("struggle")
     if struggle is not None and not _struggle_ok(struggle):
         raise BadStep("struggle must be {runs_without_progress, minutes_on_step, holds_on_step, "
                       "hints_shown, novice, rung} with whole numbers and a rung from 1 to 3")
+
+
+def _validate_lab(step):
+    if step["lab"] != "refactor":
+        raise BadStep('lab must be "refactor"')
+    if not _short_strings(step.get("refactorings", []), MAX_REFACTORINGS, 60) or not step.get("refactorings"):
+        raise BadStep(f"refactorings must be 1 to {MAX_REFACTORINGS} names of at most 60 characters")
+    if step.get("lab_phase", "refactor") not in ("refactor", "test", "commit"):
+        raise BadStep("lab_phase must be refactor, test or commit")
+    board = step.get("board", [])
+    if not isinstance(board, list) or len(board) > MAX_SMELLS or not all(
+            isinstance(s, dict) and set(s) <= {"id", "where", "what", "refactoring", "resolved"}
+            and all(isinstance(s.get(k), str) and 0 < len(s[k]) <= top
+                    for k, top in (("id", 64), ("where", 200), ("what", 300), ("refactoring", 60)))
+            and isinstance(s.get("resolved", False), bool) for s in board):
+        raise BadStep(f"board must be at most {MAX_SMELLS} smells {{id, where, what, refactoring, resolved}}")
 
 
 def _whole(n, top):
@@ -396,6 +458,66 @@ def build_orient_user(step):
     return "\n\n".join(parts)
 
 
+def build_lab_user(step):
+    """A refactor-lab Look: the change since the last commit, against the smell board."""
+    board = step.get("board", [])
+    struggle = step.get("struggle") or {}
+    rung = struggle.get("rung", 1)
+    lines = [f"- [{s['id']}] {s['where']}: {s['what']} ({s['refactoring']})" + (" RESOLVED" if s.get("resolved") else "")
+             for s in board]
+    parts = [
+        _problem(step),
+        "Refactorings this lab practises: " + ", ".join(step["refactorings"]),
+        f"Phase: {step.get('lab_phase', 'refactor').upper()}. Round {step.get('cycle', 1)}.",
+        "Smell board:\n" + ("\n".join(lines) if lines else "(none yet)"),
+        f"Hint rung: {rung} (the game shows the hint fields one rung at a time; fill all three).",
+    ]
+    if step.get("rescue"):
+        parts.append("RESCUE: the pair asked to be shown the code for one refactoring move. "
+                     "Fill rescue_code and rescue_why.")
+    findings = step.get("rule_findings", [])
+    parts.append("Rule findings from the game's checks:\n" + ("\n".join(f"- {f}" for f in findings) if findings else "(none)"))
+    for name, now_key, before_key in (("Tests", "tests", "tests_before"), ("Production code", "code", "code_before")):
+        before = step.get(before_key)
+        if before is None or before == step[now_key]:
+            parts.append(_block(f"{name} now (unchanged since the last commit)" if before is not None else f"{name} now",
+                                step[now_key]))
+        else:
+            parts.append(_block(f"{name} at the last commit", before))
+            parts.append(_block(f"{name} now", step[now_key]))
+    parts.append(f"Build and test result now: {step['test_result'].strip()}")
+    return "\n\n".join(parts)
+
+
+def build_lab_orient_user(step):
+    return build_orient_user(step) + "\n\nRefactorings this lab practises: " + ", ".join(step["refactorings"])
+
+
+def _clean_lab_look(answer, step):
+    board_ids = {s["id"] for s in step.get("board", [])}
+    review = _clean_steps({"steps": [], "move_review": answer.get("move_review") or {}}, {"catalogue": []})["move_review"]
+    cleaned = {k: (answer.get(k) or "").strip() if isinstance(answer.get(k), str) else answer.get(k)
+               for k in LAB_LOOK_FIELDS}
+    cleaned["decision"] = answer.get("decision") if answer.get("decision") in ("advance", "redo") else "advance"
+    cleaned["move_review"] = review
+    cleaned["smells_resolved"] = [i for i in dict.fromkeys(answer.get("smells_resolved") or []) if i in board_ids]
+    if not step.get("rescue"):
+        cleaned["rescue_code"] = cleaned["rescue_why"] = ""
+    return cleaned
+
+
+def _clean_board(smells, refactorings):
+    seen, board = set(), []
+    for s in smells or []:
+        sid = re.sub(r"[^a-z0-9-]+", "-", str(s.get("id", "")).lower()).strip("-")[:64]
+        if not sid or sid in seen or s.get("refactoring") not in refactorings:
+            continue
+        seen.add(sid)
+        board.append({"id": sid, "where": str(s.get("where", "")).strip()[:200],
+                      "what": str(s.get("what", "")).strip()[:300], "refactoring": s["refactoring"]})
+    return board[:MAX_SMELLS]
+
+
 def _clean_brief(brief):
     """At most MAX_WARNINGS non-empty warnings; the rest as the schema gives them."""
     warnings = [w.strip() for w in brief.get("warnings", []) if isinstance(w, str) and w.strip()]
@@ -437,9 +559,17 @@ def ask_coach(client, step, guidance=None):
     held step's card falls back to the app's rule-picked steps until the next
     Look. `guidance` True asks for it anyway (run_fixtures scores it on every
     fixture). Raises anthropic.APIError, RuntimeError or json.JSONDecodeError."""
+    lab = step.get("lab") == "refactor"
+    if step.get("mode") == "orient" and lab:
+        brief, usage = _ask(client, "lab_orient.md", lab_orient_schema(step["refactorings"]),
+                            build_lab_orient_user(step), 4000)
+        return {**_clean_brief(brief), "smells": _clean_board(brief.get("smells"), step["refactorings"])}, usage
     if step.get("mode") == "orient":
         brief, usage = _ask(client, "orient.md", ORIENT_SCHEMA, build_orient_user(step), 3000)
         return _clean_brief(brief), usage
+    if lab:
+        answer, usage = _ask(client, "lab.md", lab_look_schema(step.get("board", [])), build_lab_user(step), 4000)
+        return _clean_lab_look(answer, step), usage
     if guidance is None:
         guidance = not step.get("done")
     verdict, usage = _ask(client, "prompt.md", SCHEMA, build_user(step), 4000)

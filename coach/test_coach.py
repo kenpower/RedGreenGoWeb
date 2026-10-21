@@ -142,6 +142,58 @@ class MoveReview(unittest.TestCase):
                 coach.validate(step(checkpoint=bad))
 
 
+class Lab(unittest.TestCase):
+    REFACTORINGS = ["Extract Function", "Rename Variable"]
+    BOARD = [{"id": "long-price", "where": "priceFor", "what": "Too long.", "refactoring": "Extract Function"}]
+
+    def answering(self, answer):
+        client = FakeClient()
+
+        def create(**kwargs):
+            client.calls.append(kwargs)
+            return SimpleNamespace(stop_reason="end_turn", usage=SimpleNamespace(input_tokens=1, output_tokens=1),
+                                   content=[SimpleNamespace(type="text", text=json.dumps(answer))])
+        client.messages = SimpleNamespace(create=create)
+        return client
+
+    def test_lab_orient_lists_a_smell_board_from_the_labs_refactorings(self):
+        client = self.answering({**Orient.BRIEF, "smells": [
+            {"id": "Long Price!", "where": "priceFor", "what": "Too long.", "refactoring": "Extract Function"},
+            {"id": "long-price", "where": "x", "what": "dup id", "refactoring": "Extract Function"},
+            {"id": "other", "where": "x", "what": "not this lab's", "refactoring": "Inline Function"}]})
+        brief, _ = coach.ask_coach(client, step(mode="orient", catalogue=None, lab="refactor",
+                                                refactorings=self.REFACTORINGS))
+        self.assertEqual(client.calls[0]["system"][0]["text"], coach.build_system("lab_orient.md"))
+        enum = client.calls[0]["output_config"]["format"]["schema"]["properties"]["smells"]["items"]["properties"]["refactoring"]["enum"]
+        self.assertEqual(enum, self.REFACTORINGS)
+        self.assertEqual([s["id"] for s in brief["smells"]], ["long-price"])  # cleaned, unique, the lab's only
+
+    def test_a_lab_look_is_one_call_reviewing_the_change_against_the_board(self):
+        client = self.answering({"decision": "advance", "note": "Good.", "smells_resolved": ["long-price", "nope"],
+                                 "move_review": {"refactoring": "Extract Function", "effect": "better",
+                                                 "behaviour_kept": True, "note": ""},
+                                 "hint_question": "Q?", "hint_kind": "k", "driver_action": "a",
+                                 "commit_message": "Extract Function: lineTotal", "rescue_code": "x", "rescue_why": "y"})
+        answer, _ = coach.ask_coach(client, step(lab="refactor", refactorings=self.REFACTORINGS, board=self.BOARD,
+                                                 lab_phase="test", catalogue=None, code_before="int old();"))
+        self.assertEqual(len(client.calls), 1)
+        self.assertEqual(client.calls[0]["system"][0]["text"], coach.build_system("lab.md"))
+        user = client.calls[0]["messages"][0]["content"]
+        self.assertIn("[long-price] priceFor", user)
+        self.assertIn("Production code at the last commit", user)
+        self.assertEqual(answer["smells_resolved"], ["long-price"])  # board ids only
+        self.assertEqual(answer["move_review"]["refactoring"], "Extract Function")
+        self.assertEqual((answer["rescue_code"], answer["rescue_why"]), ("", ""))  # no RESCUE asked
+
+    def test_lab_fields_are_checked(self):
+        coach.validate(step(lab="refactor", refactorings=self.REFACTORINGS, board=self.BOARD, lab_phase="commit"))
+        for bad in ({"lab": "tdd", "refactorings": self.REFACTORINGS}, {"lab": "refactor", "refactorings": []},
+                    {"lab": "refactor", "refactorings": self.REFACTORINGS, "lab_phase": "red"},
+                    {"lab": "refactor", "refactorings": self.REFACTORINGS, "board": [{"id": "x"}]}):
+            with self.assertRaises(coach.BadStep, msg=bad):
+                coach.validate(step(**bad))
+
+
 class Struggle(unittest.TestCase):
     def test_the_struggle_signals_are_checked(self):
         good = {"runs_without_progress": 2, "minutes_on_step": 6, "holds_on_step": 1, "hints_shown": 2,

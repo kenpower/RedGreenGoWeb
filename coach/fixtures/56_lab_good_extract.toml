@@ -1,0 +1,48 @@
+description = "LAB LOOK, good: the tax calculation was extracted into taxOn since the last commit; tests unchanged and green"
+lab = "refactor"
+phase = "refactor"
+lab_phase = "test"
+cycle = 2
+refactorings = ["Extract Function", "Rename Variable", "Replace Magic Number with Constant", "Decompose Conditional"]
+problem = '''Refactor lab: shopping cart prices. The tests are complete and pass. Improve the code one refactoring at a time.'''
+board = [
+  { id = "magic-discount", where = "priceFor in cart.h", what = "The bulk discount 0.1 is a bare number.", refactoring = "Replace Magic Number with Constant" },
+  { id = "magic-tax", where = "priceFor in cart.h", what = "The tax rate 0.2 is a bare number.", refactoring = "Replace Magic Number with Constant" },
+  { id = "tax-calc", where = "priceFor in cart.h", what = "The tax is worked out inline in a long function.", refactoring = "Extract Function" },
+  { id = "short-names", where = "priceFor in cart.h", what = "The names q, u, m and t don't say what they hold.", refactoring = "Rename Variable" },
+]
+tests_before = '''
+TEST(Cart, OneItem) { EXPECT_DOUBLE_EQ(12.0, priceFor(1, 10.0, false)); }
+TEST(Cart, BulkDiscount) { EXPECT_DOUBLE_EQ(118.8, priceFor(11, 10.0, false)); }
+'''
+code_before = '''
+inline double priceFor(int q, double u, bool m) {
+  double t = q * u;
+  if (q > 10) t = t - t * 0.1;
+  if (m == true) { if (t > 100) { t = t - 5; } }
+  double x = t * 0.2;
+  return t + x;
+}
+'''
+tests = '''
+TEST(Cart, OneItem) { EXPECT_DOUBLE_EQ(12.0, priceFor(1, 10.0, false)); }
+TEST(Cart, BulkDiscount) { EXPECT_DOUBLE_EQ(118.8, priceFor(11, 10.0, false)); }
+'''
+code = '''
+inline double taxOn(double amount) { return amount * 0.2; }
+
+inline double priceFor(int q, double u, bool m) {
+  double t = q * u;
+  if (q > 10) t = t - t * 0.1;
+  if (m == true) { if (t > 100) { t = t - 5; } }
+  return t + taxOn(t);
+}
+'''
+test_result = "All 2 tests passed"
+
+[expect]
+decision = ["advance"]
+review_effect = ["better"]
+review_kept = true
+review_mentions = ["Extract"]
+resolved_include = ["tax-calc"]
