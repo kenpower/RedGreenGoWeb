@@ -6,17 +6,25 @@ model and compares the verdict with the fixture's [expect] table.
 
 Usage:
     pip install anthropic
-    python coach/run_fixtures.py              # all fixtures
+    python coach/run_fixtures.py              # all fixtures, 8 at a time
     python coach/run_fixtures.py 03 07        # fixtures whose name starts with 03 or 07
+    python coach/run_fixtures.py --runs 3     # three full runs at once (one results file each)
+    python coach/run_fixtures.py --workers 4  # fewer requests at once (e.g. a low rate limit)
+
+Output is in fixture order whatever order the answers arrive in.
 
 Needs ANTHROPIC_API_KEY. Results are also saved to coach/results/.
 """
+import argparse
 import datetime
 import json
 import re
 import subprocess
 import sys
+import threading
+import time
 import tomllib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import anthropic
@@ -288,150 +296,170 @@ def score_lab(answer, expect):
     return checks
 
 
-def main(prefixes):
-    files = sorted((HERE / "fixtures").glob("*.toml"))
-    if prefixes:
-        files = [f for f in files if any(f.stem.startswith(p) for p in prefixes)]
+class Fatal(Exception):
+    """Fails the same way for every fixture (bad key, no credit, bad request shape): stop."""
 
-    # a stalled request otherwise waits out the SDK's 10-minute default, retried
-    client = anthropic.Anthropic(timeout=90)
-    results, passed, input_tokens, output_tokens, cache_written, cache_read = [], 0, 0, 0, 0, 0
-    catalogue = None
 
-    for f in files:
-        fx = tomllib.loads(f.read_text(encoding="utf-8"))
-        expect = fx.pop("expect")
-        description = fx.pop("description")
-        if fx.get("mode") == "orient":
-            fx.setdefault("phase", "red")
-            validate(fx)
-            try:
-                brief, usage = ask_coach(client, fx)
-            except (anthropic.APIError, RuntimeError, json.JSONDecodeError) as e:
-                print(f"ERROR {f.stem}: {e}\n")
-                results.append({"fixture": f.stem, "error": str(e)})
-                continue
-            input_tokens += usage.input_tokens
-            output_tokens += usage.output_tokens
-            cache_written += usage.cache_creation_input_tokens or 0
-            cache_read += usage.cache_read_input_tokens or 0
-            checks = score_orient(brief, expect) + (score_board(brief, expect, fx) if fx.get("lab") else [])
-            ok = all(c[1] for c in checks)
-            passed += ok
-            print(f"{'PASS' if ok else 'FAIL'} {f.stem}  ({description})")
-            for field, field_ok, got in checks:
-                if field_ok and field in ("orient_no_code", "first_move_short", "building_short"):
-                    continue
-                print(f"   {'  ' if field_ok else '!!'} {field}: {got}   expected {expect.get(field, 'ok')}")
-            print(f"      building:   {brief['building']}")
-            print(f"      code:       {brief['code_state']}")
-            for w in brief["warnings"]:
-                print(f"      watch out:  {w}")
-            print(f"      first move: {brief['first_move']}")
-            for s in brief.get("smells", []):
-                print(f"      smell:      [{s['id']}] {s['where']}: {s['what']} ({s['refactoring']})")
-            print()
-            results.append({"fixture": f.stem, "pass": ok, "checks": checks, "brief": brief})
-            continue
-        if fx.get("lab"):  # a refactor-lab Look: one call (coach/lab.md)
-            fx.setdefault("mode", "look")
-            validate(fx)
-            try:
-                answer, usage = ask_coach(client, fx)
-            except (anthropic.APIError, RuntimeError, json.JSONDecodeError) as e:
-                print(f"ERROR {f.stem}: {e}\n")
-                results.append({"fixture": f.stem, "error": str(e)})
-                continue
-            input_tokens += usage.input_tokens
-            output_tokens += usage.output_tokens
-            cache_written += usage.cache_creation_input_tokens or 0
-            cache_read += usage.cache_read_input_tokens or 0
-            checks = score_lab(answer, expect)
-            ok = all(c[1] for c in checks)
-            passed += ok
-            print(f"{'PASS' if ok else 'FAIL'} {f.stem}  ({description})")
-            for field, field_ok, got in checks:
-                if field_ok and field in ("lab_no_code", "single_action"):
-                    continue
-                print(f"   {'  ' if field_ok else '!!'} {field}: {got}   expected {expect.get(field, 'ok')}")
-            r = answer["move_review"]
-            print(f"      decision:  {answer['decision']}   note: {answer['note']}")
-            print(f"      review:    {r['refactoring'] or '-'} / {r['effect']} / kept={r['behaviour_kept']}: {r['note']}")
-            print(f"      resolved:  {answer['smells_resolved']}   commit: {answer['commit_message'] or '-'}")
-            print(f"      hint:      {answer['hint_question']}  /  {answer['hint_kind']}  /  {answer['driver_action']}\n")
-            results.append({"fixture": f.stem, "pass": ok, "checks": checks, "verdict": answer})
-            continue
-        # every other fixture is a Look: the guidance from the phase's catalogue, and the verdict.
-        # The guidance fixtures (mode = "look") follow a fresh run; the rest are a Done.
+# Checks only worth a line when they fail, per kind of fixture.
+QUIET = {
+    "orient": ("orient_no_code", "first_move_short", "building_short"),
+    "lab": ("lab_no_code", "single_action"),
+    "look": ("actions", "no_code", "single_action", "hint_is_question", "hint_no_answer", "hint_kind_vague",
+             "smell_complete", "smell_only_on_green", "no_rescue_code", "step_count", "detail_short",
+             "detail_no_code", "detail_every_step"),
+}
+
+
+def evaluate(client, f, catalogue):
+    """Ask the coach about one fixture and score it: {"record", "lines", "usage"}. The
+    lines are printed later, in fixture order, so fixtures can run in threads (nothing
+    shared is written here). Raises Fatal."""
+    fx = tomllib.loads(f.read_text(encoding="utf-8"))
+    expect = fx.pop("expect")
+    description = fx.pop("description")
+    if fx.get("mode") == "orient":
+        kind = "orient"
+        fx.setdefault("phase", "red")
+    elif fx.get("lab"):  # a refactor-lab Look: one call (coach/lab.md)
+        kind = "lab"
+        fx.setdefault("mode", "look")
+    else:
+        # a Look: the guidance from the phase's catalogue, and the verdict. The
+        # guidance fixtures (mode = "look") follow a fresh run; the rest are a Done.
+        kind = "look"
         fx.setdefault("done", fx.get("mode") != "look")
         fx["mode"] = "look"
-        with_steps = fx["phase"] != "finish"
-        if with_steps and "catalogue" not in fx:
-            catalogue = catalogue or catalogues()
+        if fx["phase"] != "finish" and "catalogue" not in fx:
             fx["catalogue"] = catalogue[fx["phase"]]
-        validate(fx)  # fixtures must be valid server requests too
+    validate(fx)  # fixtures must be valid server requests too
+    with_steps = kind == "look" and fx["phase"] != "finish"
+    try:
+        # the server skips the guidance for a Done; ask it here too, to score it
+        answer, usage = ask_coach(client, fx, guidance=with_steps) if kind == "look" else ask_coach(client, fx)
+    except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.BadRequestError) as e:
+        raise Fatal(f"ERROR {f.stem}: {e}") from e
+    except (anthropic.APIError, RuntimeError, json.JSONDecodeError) as e:
+        return {"record": {"fixture": f.stem, "error": str(e)}, "lines": [f"ERROR {f.stem}: {e}\n"], "usage": None}
+
+    if kind == "orient":
+        checks = score_orient(answer, expect) + (score_board(answer, expect, fx) if fx.get("lab") else [])
+    elif kind == "lab":
+        checks = score_lab(answer, expect)
+    else:  # one answer, both halves scored: the verdict, and the guidance steps
+        checks = score(answer, expect, fx) + (score_next_steps(answer, expect, fx) if with_steps else [])
+    ok = all(c[1] for c in checks)
+
+    lines = [f"{'PASS' if ok else 'FAIL'} {f.stem}  ({description})"]
+    lines += [f"   {'  ' if field_ok else '!!'} {field}: {got}   expected {expect.get(field, 'ok')}"
+              for field, field_ok, got in checks if not (field_ok and field in QUIET[kind])]
+    lines += {"orient": describe_brief, "lab": describe_lab, "look": describe_look}[kind](answer)
+    key = "brief" if kind == "orient" else "verdict"
+    return {"record": {"fixture": f.stem, "pass": ok, "checks": checks, key: answer}, "lines": lines, "usage": usage}
+
+
+def describe_brief(brief):
+    lines = [f"      building:   {brief['building']}", f"      code:       {brief['code_state']}"]
+    lines += [f"      watch out:  {w}" for w in brief["warnings"]]
+    lines.append(f"      first move: {brief['first_move']}")
+    lines += [f"      smell:      [{s['id']}] {s['where']}: {s['what']} ({s['refactoring']})"
+              for s in brief.get("smells", [])]
+    return lines + [""]
+
+
+def describe_review(r):
+    return f"      review:    {r['refactoring'] or '-'} / {r['effect']} / kept={r['behaviour_kept']}: {r['note']}"
+
+
+def describe_lab(answer):
+    return [f"      decision:  {answer['decision']}   note: {answer['note']}",
+            describe_review(answer["move_review"]),
+            f"      resolved:  {answer['smells_resolved']}   commit: {answer['commit_message'] or '-'}",
+            f"      hint:      {answer['hint_question']}  /  {answer['hint_kind']}  /  {answer['driver_action']}", ""]
+
+
+def describe_look(verdict):
+    lines = []
+    if verdict["rule_problems"]:
+        lines.append(f"      problems: {'; '.join(verdict['rule_problems'])}")
+    lines += [f"      note:      {verdict['note']}",
+              f"      driver:    {verdict['driver_action']}",
+              f"      navigator: {verdict['navigator_action']}",
+              f"      next test: {verdict['next_test'] or '-'}",
+              f"      hint:      {verdict['hint_question']}  /  {verdict['hint_kind']}"]
+    if verdict["smell_question"] or verdict["smell_detail"]:
+        lines.append(f"      smell:     {verdict['smell_question']}  /  {verdict['smell_detail']}")
+    if verdict["intent_match"] != "n_a":
+        lines.append(f"      intent:    {verdict['intent_match']}")
+    if verdict["rescue_code"]:
+        lines.append(f"      rescue:    {verdict['rescue_why']}")
+        lines += ["        | " + line for line in verdict["rescue_code"].splitlines()]
+    lines.append(f"      on track:  {verdict['on_track']}")
+    if verdict.get("move_review"):
+        lines.append(describe_review(verdict["move_review"]))
+    lines += [f"      [{s['id']}] {s['detail']}" for s in verdict["steps"]]
+    if verdict["extra"]:
+        lines.append(f"      extra ({'needed' if verdict['extra_needed'] else 'practice'}): {verdict['extra']}")
+    return lines + [""]
+
+
+def main(argv):
+    parser = argparse.ArgumentParser(description="Run the coach fixtures against the model.")
+    parser.add_argument("prefixes", nargs="*", help="only fixtures whose name starts with one of these")
+    parser.add_argument("--workers", type=int, default=8, help="fixtures asked at once (default 8)")
+    parser.add_argument("--runs", type=int, default=1, help="full runs, all asked at once (default 1)")
+    args = parser.parse_args(argv)
+
+    files = sorted((HERE / "fixtures").glob("*.toml"))
+    if args.prefixes:
+        files = [f for f in files if any(f.stem.startswith(p) for p in args.prefixes)]
+    catalogue = catalogues()  # once, before the threads (it runs node)
+    # a stalled request otherwise waits out the SDK's 10-minute default, retried
+    client = anthropic.Anthropic(timeout=90)
+    stop = threading.Event()
+
+    def job(f):
+        if stop.is_set():
+            return None
         try:
-            # the server skips the guidance for a Done; ask it here too, to score it
-            verdict, usage = ask_coach(client, fx, guidance=with_steps)
-        except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.BadRequestError) as e:
-            # Same for every fixture (bad key, no credit, bad request shape), so stop here.
-            print(f"ERROR {f.stem}: {e}\nStopping: this would fail the same way for every fixture.")
-            return
-        except (anthropic.APIError, RuntimeError, json.JSONDecodeError) as e:
-            print(f"ERROR {f.stem}: {e}\n")
-            results.append({"fixture": f.stem, "error": str(e)})
-            continue
+            return evaluate(client, f, catalogue)
+        except Fatal as e:
+            stop.set()
+            return {"fatal": str(e)}
 
-        input_tokens += usage.input_tokens
-        output_tokens += usage.output_tokens
-        cache_written += usage.cache_creation_input_tokens or 0
-        cache_read += usage.cache_read_input_tokens or 0
-        # one answer, both halves scored: the verdict, and the guidance steps
-        checks = score(verdict, expect, fx) + (score_next_steps(verdict, expect, fx) if with_steps else [])
-        ok = all(c[1] for c in checks)
-        passed += ok
-
-        print(f"{'PASS' if ok else 'FAIL'} {f.stem}  ({description})")
-        for field, field_ok, got in checks:
-            if field_ok and field in ("actions", "no_code", "single_action", "hint_is_question", "hint_no_answer",
-                                      "hint_kind_vague", "smell_complete", "smell_only_on_green",
-                                      "no_rescue_code", "step_count", "detail_short", "detail_no_code",
-                                      "detail_every_step"):
-                continue  # only worth a line when they fail
-            mark = "  " if field_ok else "!!"
-            print(f"   {mark} {field}: {got}   expected {expect.get(field, 'ok')}")
-        if verdict["rule_problems"]:
-            print(f"      problems: {'; '.join(verdict['rule_problems'])}")
-        print(f"      note:      {verdict['note']}")
-        print(f"      driver:    {verdict['driver_action']}")
-        print(f"      navigator: {verdict['navigator_action']}")
-        print(f"      next test: {verdict['next_test'] or '-'}")
-        print(f"      hint:      {verdict['hint_question']}  /  {verdict['hint_kind']}")
-        if verdict["smell_question"] or verdict["smell_detail"]:
-            print(f"      smell:     {verdict['smell_question']}  /  {verdict['smell_detail']}")
-        if verdict["intent_match"] != "n_a":
-            print(f"      intent:    {verdict['intent_match']}")
-        if verdict["rescue_code"]:
-            print(f"      rescue:    {verdict['rescue_why']}")
-            print("\n".join("        | " + line for line in verdict["rescue_code"].splitlines()))
-        print(f"      on track:  {verdict['on_track']}")
-        if verdict.get("move_review"):
-            r = verdict["move_review"]
-            print(f"      review:    {r['refactoring'] or '-'} / {r['effect']} / kept={r['behaviour_kept']}: {r['note']}")
-        for s in verdict["steps"]:
-            print(f"      [{s['id']}] {s['detail']}")
-        if verdict["extra"]:
-            print(f"      extra ({'needed' if verdict['extra_needed'] else 'practice'}): {verdict['extra']}")
-        print()
-        results.append({"fixture": f.stem, "pass": ok, "checks": checks, "verdict": verdict})
-
-    print(f"{passed}/{len(files)} passed. Tokens: {input_tokens} uncached in, {cache_written} cache written, "
-          f"{cache_read} cache read, {output_tokens} out ({MODEL}, effort {EFFORT}).")
-
+    started = time.monotonic()
     out = HERE / "results"
     out.mkdir(exist_ok=True)
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    (out / f"{stamp}.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+    with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
+        # every run's fixtures go in at once; each run is then printed in fixture order
+        runs = [[pool.submit(job, f) for f in files] for _ in range(max(1, args.runs))]
+        for number, futures in enumerate(runs, 1):
+            if args.runs > 1:
+                print(f"== run {number}", flush=True)
+            results, passed, tokens = [], 0, {"in": 0, "out": 0, "written": 0, "read": 0}
+            for future in futures:  # in fixture order, as each finishes
+                done = future.result()
+                if done is None:
+                    continue  # skipped after a fatal error
+                if "fatal" in done:
+                    print(f"{done['fatal']}\nStopping: this would fail the same way for every fixture.")
+                    for later in (f for run in runs for f in run):
+                        later.cancel()
+                    return
+                print("\n".join(done["lines"]), flush=True)
+                results.append(done["record"])
+                passed += bool(done["record"].get("pass"))
+                usage = done["usage"]
+                if usage:  # summed here, in the main thread
+                    tokens["in"] += usage.input_tokens
+                    tokens["out"] += usage.output_tokens
+                    tokens["written"] += usage.cache_creation_input_tokens or 0
+                    tokens["read"] += usage.cache_read_input_tokens or 0
+            print(f"{passed}/{len(files)} passed. Tokens: {tokens['in']} uncached in, {tokens['written']} cache "
+                  f"written, {tokens['read']} cache read, {tokens['out']} out ({MODEL}, effort {EFFORT}).", flush=True)
+            name = f"{stamp}-run{number}.json" if args.runs > 1 else f"{stamp}.json"
+            (out / name).write_text(json.dumps(results, indent=2), encoding="utf-8")
+    print(f"Done in {time.monotonic() - started:.0f} s ({args.runs} run(s), {args.workers} workers).")
 
 
 if __name__ == "__main__":
