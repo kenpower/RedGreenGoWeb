@@ -311,6 +311,13 @@ class RefactorLabTests(unittest.TestCase):
         table = quietly(s.show_progress, SimpleNamespace(code="LAB", days=None, csv=False))
         self.assertIn("rounds", table.splitlines()[0])
 
+    def test_the_labs_test_and_commit_phases_are_accepted(self):
+        for phase in ("test", "commit"):
+            with self.subTest(phase):
+                body = progress_body(f"lab-{phase}", mode="refactor", phase=phase,
+                                     events=[event("commit", detail="1a2b3c4d Extract Function: total", phase=phase)])
+                self.assertEqual(call("POST", "/progress", body, code="LAB")[0], 200)
+
     def test_refactor_move_events_are_stored(self):
         body = progress_body("lab4", mode="refactor",
                              events=[event("refactor_move", detail="Extract Function | better", phase="refactor")])

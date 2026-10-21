@@ -76,7 +76,7 @@ MAX_BODY_BYTES = 200_000
 MAX_PROGRESS_BYTES = 40_000  # 10 events of 500 characters, even if every one is escaped
 MAX_TEACHER_BYTES = 40_000
 
-PROGRESS_PHASES = {"red", "swap", "green", "refactor", "finished"}
+PROGRESS_PHASES = {"red", "swap", "green", "refactor", "finished", "test", "commit"}  # test, commit: refactor lab
 PROGRESS_COUNTS = ("steps", "cycles", "overrides", "back_to_red")
 # Added with the learning features; optional so an old cached client still works.
 PROGRESS_EXTRA_COUNTS = ("overrides_in_row", "predictions_right", "predictions_total", "intents_given",
