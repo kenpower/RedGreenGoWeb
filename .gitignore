@@ -4,3 +4,4 @@ __pycache__/
 /coach/results
 /coach/*.sqlite3
 /.env.deploy
+/tmp
