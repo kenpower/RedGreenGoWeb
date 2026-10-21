@@ -115,8 +115,9 @@ describe("stale results", () => {
     expect(staleResults(withResults(both))).toBe(false);
   });
 
-  test("a result for a test no longer in the source (commented out) is stale", () => {
-    expect(staleResults(withResults([...both, { name: "Playlist.ParseNormalSplit", status: "failed" }]))).toBe(true);
+  test("a leftover result for a commented-out test is NOT stale: the helper keeps it for ever, no run could clear it", () => {
+    // lab 2026-10-21: this made "run all tests" do nothing and the coach ask for it again and again
+    expect(staleResults(withResults([...both, { name: "Playlist.ParseNormalSplit", status: "failed" }]))).toBe(false);
   });
 
   test("a test in the source that hasn't run is stale", () => {
@@ -143,10 +144,16 @@ describe("stale results", () => {
     expect(currentSnapshot(snap).tests.map((t) => t.name)).toEqual(["Song.Equal", "Song.DifferentArtistNotEqual"]);
   });
 
-  test("the request leads with the stale finding and summarises only current results", () => {
-    const after = withResults([...both, { name: "Playlist.ParseNormalSplit", status: "failed" }]);
+  test("the request leads with the stale finding when a source test hasn't run", () => {
+    const after = withResults([both[0]]);
     const request = buildRequest({ phase: "red", problem: "", before: null, after, ruleFindings: ["other"] });
     expect(request.rule_findings).toEqual([STALE_FINDING, "other"]);
+  });
+
+  test("a commented-out test's old failure: no stale finding, and the summary has only current results", () => {
+    const after = withResults([...both, { name: "Playlist.ParseNormalSplit", status: "failed" }]);
+    const request = buildRequest({ phase: "red", problem: "", before: null, after, ruleFindings: ["other"] });
+    expect(request.rule_findings).toEqual(["other"]);
     expect(request.test_result).toEqual("1 failed: Song.DifferentArtistNotEqual; 1 passed");
   });
 

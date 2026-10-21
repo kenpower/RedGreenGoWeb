@@ -15,10 +15,12 @@
 // does this step fit" rules can be read (and reviewed) together.
 import {
   pickRedTest, callsCode, testBodies, buildFailed, failingTests, changedSinceRun, isVagueTestName,
-  untestedFunctions, testChanges, testNames, passedFirstTest,
+  untestedFunctions, testChanges, testNames, passedFirstTest, currentTests, staleResults,
 } from "../rules.js";
 
-const results = (snapshot) => Object.fromEntries((snapshot?.tests || []).map((t) => [t.name, t.status]));
+// only tests still in the source count (rules.currentTests)
+const results = (snapshot) => Object.fromEntries(currentTests(snapshot).map((t) => [t.name, t.status]));
+const ranAny = (snapshot) => currentTests(snapshot).length > 0;
 const fresh = (now) => !!now && !changedSinceRun(now);
 // this Red's test, or null when there isn't one (yet)
 const redTest = (before, now) => {
@@ -263,14 +265,14 @@ export const STEPS = [
     phase: "green",
     required: true,
     text: "Run all tests: Test → Run All Tests (Ctrl+R, A)",
-    check: (b, n) => (n ? fresh(n) && (n.tests || []).length > 0 : null),
+    check: (b, n) => (n ? fresh(n) && ranAny(n) && !staleResults(n) : null),
   },
   {
     id: "green.all_green",
     phase: "green",
     required: true,
     text: "See every test pass, not just the new one",
-    check: (b, n) => (fresh(n) && !buildFailed(n) && (n.tests || []).length ? failingTests(n).length === 0 : null),
+    check: (b, n) => (fresh(n) && !buildFailed(n) && ranAny(n) ? failingTests(n).length === 0 : null),
   },
   {
     id: "green.keep_old_tests_passing",
@@ -348,7 +350,7 @@ export const STEPS = [
     phase: "refactor",
     required: true,
     text: "Check every test still passes",
-    check: (b, n) => (fresh(n) && !buildFailed(n) && (n.tests || []).length ? failingTests(n).length === 0 : null),
+    check: (b, n) => (fresh(n) && !buildFailed(n) && ranAny(n) ? failingTests(n).length === 0 : null),
   },
   {
     id: "refactor.commit",
@@ -369,7 +371,7 @@ const bodies = (now) => Object.values(testBodies(now));
 // some test calls the pair's code (not just VS's template or EXPECT_TRUE(true))
 const anyTestCallsCode = (now) => bodies(now).some((body) => callsCode(body));
 const allRunAndGreen = (now) =>
-  fresh(now) && !buildFailed(now) && (now.tests || []).length > 0 && failingTests(now).length === 0;
+  fresh(now) && !buildFailed(now) && ranAny(now) && failingTests(now).length === 0;
 const buildErrors = (now) => (buildFailed(now) ? now.build.errors || [] : []);
 const missingName = (now) => buildErrors(now).some((e) => /identifier not found|undeclared identifier|is not a member/.test(e));
 const notRunYet = (b, n) => {
@@ -464,7 +466,7 @@ const FIT = {
     navigator: "Check only production code changes (an #include is fine).",
   },
   "green.run_tests": {
-    applies: (b, n) => !!n && (changedSinceRun(n) || !(n.tests || []).length),
+    applies: (b, n) => !!n && (changedSinceRun(n) || !ranAny(n) || staleResults(n)),
     navigator: "Check every test is green before moving on.",
   },
   "green.all_green": { applies: () => true, navigator: "Check every test is green, not just the new one." },

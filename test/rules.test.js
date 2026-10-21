@@ -18,7 +18,10 @@ import {
   failingTests,
   uncommittedFiles,
   noRepo,
+  staleResults,
+  currentTests,
 } from "../src/rules.js";
+import { stepById } from "../src/content/steps.js";
 
 // Builds a helper snapshot: test source from the names, results as given.
 const testSource = (names) =>
@@ -887,5 +890,83 @@ describe("snapshotOf", () => {
   });
   test("no data", () => {
     expect(snapshotOf(null)).toBeNull();
+  });
+});
+
+// Lab 2026-10-21: the helper keeps every test it has ever seen, so a test the
+// pair commented out (or renamed, or deleted) keeps its last result. None of
+// the rules may count it.
+describe("misread state: leftover results for tests no longer in the source", () => {
+  const OLD_FAIL = { "Rect.Old": "failed" };
+  const check = (id, before, now) => stepById(id).check(before, now, liveStatus(stepById(id).phase, before, now));
+
+  test("Red: a commented-out failing test doesn't make 'two tests fail'", () => {
+    const before = snap({ source: ["Rect.One"], results: { "Rect.One": "passed", ...OLD_FAIL } });
+    const now = snap({ source: ["Rect.One", "Rect.Two"], results: { "Rect.One": "passed", "Rect.Two": "failed", ...OLD_FAIL } });
+    expect(rules(checkRules("red", before, now))).toEqual([]);
+    expect(failingTests(now)).toEqual(["Rect.Two"]);
+    expect(liveStatus("red", before, now).goalMet).toBe(true);
+  });
+
+  test("Red without a baseline: an old failure alone isn't a red test", () => {
+    const now = snap({ source: ["Rect.One"], results: { "Rect.One": "passed", ...OLD_FAIL } });
+    expect(rules(checkRules("red", null, now))).toEqual(["nothing_fails"]);
+  });
+
+  test("Green and Refactor: all current tests pass, so no 'not all tests pass'", () => {
+    const before = snap({ source: ["Rect.One"], results: { "Rect.One": "failed" } });
+    const now = snap({ source: ["Rect.One"], results: { "Rect.One": "passed", ...OLD_FAIL } });
+    expect(rules(checkRules("green", before, now))).toEqual([]);
+    expect(rules(checkRules("refactor", now, now))).toEqual([]);
+    expect(check("green.all_green", before, now)).toBe(true);
+    expect(check("refactor.still_green", now, now)).toBe(true);
+  });
+
+  test("the start of a Red: an old failure is a clean start, not 'is this your Red test?'", () => {
+    expect(startState(snap({ source: ["Rect.One"], results: { "Rect.One": "passed", ...OLD_FAIL } }))).toBe("clean");
+  });
+
+  test("results aren't stale for ever: after a run, 'Run all tests' is ticked", () => {
+    const now = snap({ source: ["Rect.One"], results: { "Rect.One": "passed", ...OLD_FAIL } });
+    expect(staleResults(now)).toBe(false);
+    expect(check("green.run_tests", now, now)).toBe(true);
+    expect(currentTests(now).map((t) => t.name)).toEqual(["Rect.One"]);
+  });
+});
+
+describe("misread state: partial runs and failed builds", () => {
+  const check = (id, before, now) => stepById(id).check(before, now, liveStatus(stepById(id).phase, before, now));
+
+  test("a test in the source that the last run didn't include: stale, and 'Run all tests' isn't ticked", () => {
+    // e.g. only one test was run from Test Explorer, and the new one never ran
+    const now = snap({ source: ["Rect.One", "Rect.Two"], results: { "Rect.One": "passed" } });
+    expect(staleResults(now)).toBe(true);
+    expect(check("green.run_tests", now, now)).toBe(false);
+    expect(rules(checkRules("green", now, now))).toEqual(["not_run"]);
+  });
+
+  test("a later partial run that includes every source test is fresh", () => {
+    const now = snap({ source: ["Rect.One"], results: { "Rect.One": "passed", "Rect.Gone": "passed" } });
+    expect(staleResults(now)).toBe(false);
+  });
+
+  test("a failed build writes no results: Red counts the compile error, Green says fix the build, never 'run again'", () => {
+    const build = { status: "failed", time: 20, errors: ["test.cpp(3): error C3861: 'two': identifier not found"] };
+    const before = snap({ source: ["Rect.One"], results: { "Rect.One": "passed" } });
+    const now = snap({ source: ["Rect.One", "Rect.Two"], results: { "Rect.One": "passed" }, build, runTime: 10 });
+    expect(staleResults(now)).toBe(false);
+    expect(rules(checkRules("red", before, now))).toEqual([]);
+    expect(liveStatus("red", before, now).goalMet).toBe(true);
+    expect(rules(checkRules("green", now, now))).toEqual(["build_fails"]);
+  });
+
+  test("a code change after the run: stale until the next run, then fresh", () => {
+    const changed = snap({ source: ["Rect.One"], results: { "Rect.One": "passed" }, runTime: 10 });
+    changed.files[1].mtime = 15;
+    expect(staleResults(changed)).toBe(true);
+    expect(check("green.run_tests", changed, changed)).toBe(false);
+    const rerun = { ...changed, runTime: 20 };
+    expect(staleResults(rerun)).toBe(false);
+    expect(check("green.run_tests", rerun, rerun)).toBe(true);
   });
 });

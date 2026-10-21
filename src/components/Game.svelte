@@ -87,35 +87,44 @@
   let orientAsked = !!brief; // one automatic reading per game; "Read my code again" for more
   $: if (isCoached($helper) && snapshot && !orientAsked && !gameState.finished) orient(false);
   const orient = async (reread) => {
+    if (orientLoading) return; // one reading at a time
     orientAsked = true;
     orientLoading = true;
     orientError = null;
     if (!reread && gameState.stepNumber === 1) orientOpen = true;
-    if (reread) await refreshSnapshot();
-    const dirty = snapshot ? uncommittedFiles(snapshot) : [];
-    const { brief: b, error, stale } = await askOrient({
-      problem: resolveProblem(gameState.problem, $helper.data),
-      after: snapshot,
-      // the app's own advice (vague names, code before tests) and uncommitted work, as facts
-      ruleFindings: [
-        ...liveAdvice.map((a) => "Advice (not a broken rule): " + a),
-        ...(dirty.length ? [`Uncommitted work: ${dirty.length} source file(s) not committed.`] : []),
-      ],
-      gameId: gameState.gameId,
-      players: gameState.players,
-    });
-    orientLoading = false;
-    if (stale) return;
-    if (!b) {
-      orientError = error;
-      // the automatic reading failed (e.g. a coach server without Orient yet):
-      // no card, the game carries on as before; a re-read keeps the card to show why
+    try {
+      // a re-read takes the code as it is on disk now (without the Step's
+      // `waiting`, so Done isn't disabled meanwhile)
+      if (reread && $helper.status === "connected" && (await refreshHelper())) await tick();
+      const dirty = snapshot ? uncommittedFiles(snapshot) : [];
+      const { brief: b, error, stale } = await askOrient({
+        problem: resolveProblem(gameState.problem, $helper.data),
+        after: snapshot,
+        // the app's own advice (vague names, code before tests) and uncommitted work, as facts
+        ruleFindings: [
+          ...liveAdvice.map((a) => "Advice (not a broken rule): " + a),
+          ...(dirty.length ? [`Uncommitted work: ${dirty.length} source file(s) not committed.`] : []),
+        ],
+        gameId: gameState.gameId,
+        players: gameState.players,
+      });
+      if (stale) return;
+      if (!b) {
+        orientError = error;
+        // the automatic reading failed (e.g. a coach server without Orient yet):
+        // no card, the game carries on as before; a re-read keeps the card to show why
+        if (!reread) orientOpen = false;
+        return;
+      }
+      gameState.setBrief(b, { reread });
+      brief = gameState.brief;
+      if (reread) report();
+    } catch {
+      orientError = "The coach couldn't read your code.";
       if (!reread) orientOpen = false;
-      return;
+    } finally {
+      orientLoading = false;
     }
-    gameState.setBrief(b, { reread });
-    brief = gameState.brief;
-    if (reread) report();
   };
   const editBuilding = (text) => {
     gameState.editBuilding(text);

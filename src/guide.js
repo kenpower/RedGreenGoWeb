@@ -8,12 +8,13 @@
 //   current: the item to work on now (never "Click Done" while Done is locked)
 import {
   pickRedTest, changedSinceRun, buildFailed, callsCode, testBodies, failingTests, untestedFunctions,
-  testChanges, testChangeMessage,
+  testChanges, testChangeMessage, currentTests,
 } from "./rules.js";
 
 export const GUIDE_CYCLES = 2;
 
-const results = (snapshot) => Object.fromEntries((snapshot?.tests || []).map((t) => [t.name, t.status]));
+// only tests still in the source count (rules.currentTests)
+const results = (snapshot) => Object.fromEntries(currentTests(snapshot).map((t) => [t.name, t.status]));
 // Green may touch the test files (an #include for a new header), not the tests themselves.
 const greenTestChange = (before, now) => {
   if (!before || !now) return "";

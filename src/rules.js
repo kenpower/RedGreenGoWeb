@@ -97,7 +97,10 @@ export function buildFailed(snapshot) {
   return build?.status === "failed" && (!snapshot.runTime || build.time >= snapshot.runTime);
 }
 
-const results = (snapshot) => Object.fromEntries((snapshot?.tests || []).map((t) => [t.name, t.status]));
+// The results that count are for tests still in the source (currentTests): the
+// helper keeps every test it has ever seen, so a commented-out, renamed or
+// deleted test keeps its last result there.
+const results = (snapshot) => Object.fromEntries(currentTests(snapshot).map((t) => [t.name, t.status]));
 
 // How the tests themselves changed between two snapshots: the TEST(...) blocks
 // compared by name and body, comments and whitespace ignored. Edits outside
@@ -142,7 +145,7 @@ function allPass(after, findings) {
     findings.push({ rule: "stale_run", message: staleRunMessage(after) + "." });
     return;
   }
-  const failing = (after.tests || []).filter((t) => t.status === "failed").map((t) => t.name);
+  const failing = failingTests(after);
   if (failing.length)
     findings.push({ rule: "tests_fail", message: `Not all tests pass yet: ${failing.join(", ")}.` });
   // tests in the source that the last run didn't include
@@ -227,7 +230,7 @@ const noCodeMessage = (name) =>
 function checkRed(before, after, findings) {
   if (!before) {
     // no baseline (the helper connected mid-game): only check that something is red
-    const red = buildFailed(after) || (after.tests || []).some((t) => t.status === "failed");
+    const red = buildFailed(after) || failingTests(after).length > 0;
     if (!red) findings.push({ rule: "nothing_fails", message: "No test fails. Write a test that fails first." });
     oneFailing(failingTests(after), findings);
     return;
@@ -296,14 +299,16 @@ export function checkRules(phase, before, after) {
   return findings;
 }
 
-// Results for the tests still in the source, so a deleted or renamed test's
-// old result doesn't count. When no names can be read from the source (a
-// macro we don't parse), all results count.
-function currentResults(snapshot) {
+// Results for the tests still in the source, so a deleted, renamed or
+// commented-out test's old result doesn't count. When no names can be read
+// from the source (a macro we don't parse), all results count. Every rule
+// reads results through this (steps.js and guide.js too), never snapshot.tests.
+export function currentTests(snapshot) {
   const names = testNames(snapshot);
   const tests = snapshot?.tests || [];
   return names.size ? tests.filter((t) => names.has(t.name)) : tests;
 }
+const currentResults = currentTests;
 
 export function failingTests(snapshot) {
   return currentResults(snapshot)
@@ -331,7 +336,7 @@ export function startState(snapshot, { requireCommit = true } = {}) {
   if (!snapshot) return "clean";
   if (buildFailed(snapshot)) return "build_failed";
   if (requireCommit && uncommittedFiles(snapshot).length) return "uncommitted";
-  const hasTests = testNames(snapshot).size > 0 || (snapshot.tests || []).length > 0;
+  const hasTests = testNames(snapshot).size > 0 || currentTests(snapshot).length > 0;
   if (!hasTests) return "clean";
   // only VS's template test: no real tests yet, whatever its result (the
   // pair may already have edited it into their first Red test)
@@ -373,16 +378,19 @@ const staleRunMessage = (snapshot) =>
   `You changed ${changedFiles(snapshot).map((p) => p.split("/").pop()).join(", ")} since the last test run: run all tests (Ctrl+R, A)`;
 
 // The last test run doesn't describe the code now, so it shouldn't be judged:
-// a source file changed after the run, or, with a successful build, the run
-// had tests no longer in the source or is missing tests that are. A failed
-// build is fresh information in itself (its errors describe the code now).
+// a source file changed after the run, or, with a successful build, a test in
+// the source has never run. A failed build is fresh information in itself (its
+// errors describe the code now). Results for tests no longer in the source
+// don't make it stale: the helper keeps every test it has ever seen, so a
+// commented-out or renamed test would otherwise be "stale" for ever, and no
+// run could fix it.
 export function staleResults(snapshot) {
   if (!snapshot || buildFailed(snapshot)) return false;
   if (snapshot.runTime && changedSinceRun(snapshot)) return true;
   const names = testNames(snapshot);
   if (!names.size) return false;
   const ran = new Set((snapshot.tests || []).map((t) => t.name));
-  return [...ran].some((n) => !names.has(n)) || [...names].some((n) => !ran.has(n));
+  return [...names].some((n) => !ran.has(n));
 }
 
 // Tests in the source that the last run didn't include.
