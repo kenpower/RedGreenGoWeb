@@ -8,19 +8,24 @@ passes it, then tidy up. A coach watches each step and helps when you get stuck.
 1. Open your C++ project in Visual Studio. It needs GoogleTest tests and a git repository.
 2. Download [rgg_server.py](https://kenpower.github.io/RedGreenGoWeb/build/rgg_server.py) into your
    solution folder (the one with the `.sln` file). You need Python 3.
-3. Open a terminal in that folder and run, with your teacher's class code:
+3. Open a terminal in the solution folder. In Visual Studio: **Tools → Command Line → Developer
+   PowerShell** (or **View → Terminal**), which opens there. Or, in Solution Explorer, right-click
+   the solution and choose **Open in Terminal**. Then run, with your teacher's class code:
 
    ```
    python rgg_server.py --class-code YOURCODE
    ```
 
+   If `python` opens the Microsoft Store or says it isn't found, use `py rgg_server.py --class-code YOURCODE`.
+   Type `dir rgg_server.py` first if you're not sure you're in the right folder: it should list the file.
    Leave it running. It only reads your files; it never changes them.
 4. The game opens at **http://127.0.0.1:8000/**. Always play there: the github.io page can't see
    your code, because Chrome blocks it.
 5. Optional: put a `README.md` in the solution folder that says what you're building, plus a line
    `Class code: YOURCODE`. The coach reads the problem, and you can then run plain
    `python rgg_server.py`.
-6. Run your tests once in Test Explorer, type both your names and click **Start Game**.
+6. Run your tests once (**Test → Run All Tests**). The helper opens the game when the results
+   arrive, or after 10 seconds. Type both your names and click **Start Game**.
 
 ## How a game goes
 

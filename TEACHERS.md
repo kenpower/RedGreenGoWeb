@@ -45,13 +45,17 @@ Give the students [STUDENTS.md](STUDENTS.md). In short:
 1. A Visual Studio C++ project with GoogleTest tests, in a git repository.
 2. Download the helper, [rgg_server.py](https://kenpower.github.io/RedGreenGoWeb/build/rgg_server.py),
    into the solution folder (next to the `.sln`). It needs Python 3.
-3. In that folder run `python rgg_server.py --class-code SD2-2026`. The game opens in the browser.
+3. Open a terminal in the solution folder (Visual Studio: **Tools → Command Line → Developer
+   PowerShell**, or right-click the solution in Solution Explorer → **Open in Terminal**) and run
+   `python rgg_server.py --class-code SD2-2026` (`py` instead of `python` if the Microsoft Store
+   opens). The game opens in the browser.
 4. Play at **http://127.0.0.1:8000/**, the page the helper opens, not at github.io: Chrome blocks
    the github.io page from talking to the helper.
 5. Optional: a `README.md` in the solution folder that describes the problem, with a line
    `Class code: SD2-2026`. The coach reads the problem, and the helper then picks up the class code
    without `--class-code`.
-6. Run the tests once in Test Explorer, enter both names and click **Start Game**.
+6. Run the tests once (**Test → Run All Tests**), enter both names and click **Start Game**. Tell
+   them to use Run All: a run of only some tests leaves the others' results from earlier.
 
 ## 4. During class
 
