@@ -81,13 +81,17 @@ PROGRESS_COUNTS = ("steps", "cycles", "overrides", "back_to_red")
 # Added with the learning features; optional so an old cached client still works.
 PROGRESS_EXTRA_COUNTS = ("overrides_in_row", "predictions_right", "predictions_total", "intents_given",
                          "hints_l2", "hints_l3", "smells_shown", "smells_revealed", "rescues",
-                         "passed_first")
+                         "passed_first", "rounds", "commits", "reverts")  # the last three: refactor lab
 PROGRESS_ADDED_COLUMNS = {
     "held": "INTEGER NOT NULL DEFAULT 0",
     "held_since": "REAL",
     "last_note": "TEXT NOT NULL DEFAULT ''",
     **{c: "INTEGER NOT NULL DEFAULT 0" for c in PROGRESS_EXTRA_COUNTS},
+    "mode": "TEXT NOT NULL DEFAULT 'tdd'",  # tdd | refactor (DESIGN-refactor-lab.md)
+    "refactorings": "TEXT NOT NULL DEFAULT '{}'",  # JSON {"Extract Function": 3, ...}, running totals
 }
+GAME_MODES = {"tdd", "refactor"}
+MAX_REFACTORING_KINDS = 20
 MAX_COUNT = 10_000
 COACH_DECISIONS = ("advance", "redo", "back_to_red")
 NON_VERDICT_MODES = {"orient", "look", "next_steps"}
@@ -96,7 +100,8 @@ REUSE_PHASES = {"red", "green", "refactor", "finish"}  # the step phases coach.p
 
 EVENT_KINDS = {"advance", "hold", "release", "override", "back_to_red", "intent", "prediction",
                "hint", "smell", "commit", "finish", "rescue", "passed_first_time", "orient",
-               "recheck"}  # detail = the phase the pair re-checked from
+               "recheck",  # detail = the phase the pair re-checked from
+               "refactor_move"}  # detail = "<refactoring> | <effect>", e.g. "Extract Function | better"
 EVENT_PHASES = PROGRESS_PHASES | {"finish", ""}
 MAX_EVENTS_PER_CALL = 10
 MAX_EVENTS_PER_GAME = 3_000
@@ -391,6 +396,14 @@ def validate_progress(body):
         check_time(body["held_since"], "held_since")
     body.setdefault("last_note", "")
     check_string(body, "last_note", 300)
+    if body.setdefault("mode", "tdd") not in GAME_MODES:
+        raise BadProgress("mode must be tdd or refactor")
+    kinds = body.setdefault("refactorings", {})
+    if (not isinstance(kinds, dict) or len(kinds) > MAX_REFACTORING_KINDS
+            or not all(isinstance(k, str) and 0 < len(k) <= 60 and type(v) is int and 0 <= v <= MAX_COUNT
+                       for k, v in kinds.items())):
+        raise BadProgress(f"refactorings must map at most {MAX_REFACTORING_KINDS} names (60 characters) "
+                          f"to whole numbers from 0 to {MAX_COUNT}")
 
     events = body.setdefault("events", [])
     if not isinstance(events, list) or len(events) > MAX_EVENTS_PER_CALL:
@@ -417,7 +430,8 @@ def record_progress(con, code, body, ip):
         "ON CONFLICT(game_id) DO UPDATE SET updated = excluded.updated, ip = excluded.ip, "
         + ", ".join(f"{f} = excluded.{f}" for f in fields)
         + " WHERE progress.code = excluded.code",
-        (body["game_id"], code, stamp, stamp, ip, *(body[f] for f in fields)),
+        (body["game_id"], code, stamp, stamp, ip,
+         *(json.dumps(body[f], sort_keys=True) if f == "refactorings" else body[f] for f in fields)),
     )
     owner = con.execute("SELECT code FROM progress WHERE game_id = ?", (body["game_id"],)).fetchone()
     stored = con.execute("SELECT COUNT(*) FROM events WHERE game_id = ?", (body["game_id"],)).fetchone()[0]
@@ -443,20 +457,29 @@ SUMMED = ("steps", "cycles", "coach_asks", "coach_advance", "overrides", "back_t
 def summarize(rows):
     """Add up a pair's games."""
     s = dict.fromkeys(SUMMED, 0)
-    s.update(games=len(rows), holds=0, coach_agreed=0)
+    s.update(games=len(rows), holds=0, coach_agreed=0, refactorings={})
     for r in rows:
         for f in SUMMED:
             s[f] += r[f]
         s["holds"] += r["coach_redo"] + r["coach_back_to_red"]
         s["coach_agreed"] += r["coach_agreed_finish"]
+        for kind, n in json.loads(r["refactorings"]).items():
+            s["refactorings"][kind] = s["refactorings"].get(kind, 0) + n
     s["first_time_pct"] = round(100 * s["coach_advance"] / s["coach_asks"]) if s["coach_asks"] else None
     return s
 
 
+def refactorings_text(kinds):
+    """{"Extract Function": 3, "Rename Variable": 2} as "Extract Function:3; Rename Variable:2", most first."""
+    return "; ".join(f"{k}:{n}" for k, n in sorted(kinds.items(), key=lambda kn: (-kn[1], kn[0])))
+
+
 def game_json(r):
     """One progress row for the teacher view."""
-    game = {f: r[f] for f in ("game_id", "pair", "problem", "phase", "held_since", "last_note", "ip", *SUMMED)}
+    game = {f: r[f] for f in ("game_id", "pair", "problem", "phase", "held_since", "last_note", "ip", "mode",
+                              *SUMMED)}
     game.update(
+        refactorings=json.loads(r["refactorings"]),
         pair_key=pair_key(r["pair"]),
         started=epoch(r["started"]),
         updated=epoch(r["updated"]),
@@ -847,17 +870,20 @@ def show_progress(args):
         pairs.append(p)
 
     columns = ["class", "pair", "games", "last_active", "steps", "cycles", "coach_asks", "first_time_pct",
-               "holds", "overrides", "rescues", "passed_first", "finished", "coach_agreed"]
+               "holds", "overrides", "rescues", "passed_first", "rounds", "commits", "reverts", "refactorings",
+               "finished", "coach_agreed"]
     ordered = sorted(pairs, key=lambda p: (p["class"], p["pair"]))
     if args.csv:
-        return write_csv(ordered, columns)
+        return write_csv([{**p, "refactorings": refactorings_text(p["refactorings"])} for p in ordered], columns)
     print(f"{'class':<10} {'pair':<28} {'games':>5}  {'last active':<19} {'steps':>5} {'cycles':>6} "
-          f"{'asks':>5} {'1st ok':>6} {'holds':>5} {'overr':>5} {'rescue':>6} {'kept':>4}  finished (coach agreed)")
+          f"{'asks':>5} {'1st ok':>6} {'holds':>5} {'overr':>5} {'rescue':>6} {'kept':>4} {'rounds':>6} {'revert':>6}"
+          f"  finished (coach agreed)")
     for p in ordered:
         pct = f"{p['first_time_pct']}%" if p["coach_asks"] else "-"
         print(f"{p['class']:<10} {p['pair']:<28} {p['games']:>5}  {p['last_active']:<19} {p['steps']:>5} "
               f"{p['cycles']:>6} {p['coach_asks']:>5} {pct:>6} {p['holds']:>5} {p['overrides']:>5} "
-              f"{p['rescues']:>6} {p['passed_first']:>4}  {p['finished']}/{p['games']} ({p['coach_agreed']})")
+              f"{p['rescues']:>6} {p['passed_first']:>4} {p['rounds']:>6} {p['reverts']:>6}  "
+              f"{p['finished']}/{p['games']} ({p['coach_agreed']})")
     if not ordered:
         print("(no progress recorded)")
 

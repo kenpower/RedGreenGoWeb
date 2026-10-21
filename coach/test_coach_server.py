@@ -130,10 +130,12 @@ class ProgressTests(unittest.TestCase):
 
     def test_resent_events_are_stored_once(self):
         body = progress_body("p-events", events=[event("rescue"), event("orient", detail="Bowling"),
-                                                 event("recheck", detail="red", phase="red")])
+                                                 event("recheck", detail="red", phase="red"),
+                                                 event("refactor_move", detail="Extract Function | better",
+                                                       phase="refactor")])
         for _ in range(2):
             self.assertEqual(call("POST", "/progress", body, code="PROG")[0], 200)
-        self.assertEqual(rows("SELECT COUNT(*) FROM events WHERE game_id = 'p-events'"), [(3,)])
+        self.assertEqual(rows("SELECT COUNT(*) FROM events WHERE game_id = 'p-events'"), [(4,)])
 
     def test_bad_bodies_are_refused(self):
         good = progress_body("p-bad", events=[event()])
@@ -150,6 +152,12 @@ class ProgressTests(unittest.TestCase):
             "detail too long": {"events": [event(detail="x" * 501)]},
             "event not an object": {"events": ["x"]},
             "no game_id": {"game_id": ""},
+            "unknown mode": {"mode": "kata"},
+            "refactorings not a map": {"refactorings": ["Extract Function"]},
+            "refactoring count a bool": {"refactorings": {"Extract Function": True}},
+            "refactoring name too long": {"refactorings": {"x" * 61: 1}},
+            "too many refactorings": {"refactorings": {f"R{i}": 1 for i in range(21)}},
+            "rounds negative": {"rounds": -1},
         }
         for name, change in cases.items():
             with self.subTest(name):
@@ -261,6 +269,54 @@ class TeacherTests(unittest.TestCase):
         self.assertNotEqual(old, new)
         self.assertEqual(call("GET", "/teacher/progress", code="ROTATE", key=old)[0], 403)
         self.assertEqual(call("GET", "/teacher/progress", code="ROTATE", key=new)[0], 200)
+
+
+class RefactorLabTests(unittest.TestCase):
+    """The refactor lab's progress (DESIGN-refactor-lab.md): mode, rounds, commits, reverts, refactorings."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.key = add_class("LAB", teacher=True)
+        lab = {"mode": "refactor", "rounds": 3, "commits": 3, "reverts": 1,
+               "refactorings": {"Extract Function": 2, "Rename Variable": 1}}
+        call("POST", "/progress", progress_body("lab1", "ann__bo", phase="refactor", **lab), code="LAB")
+        call("POST", "/progress", progress_body("lab2", "bo__ann", phase="refactor", mode="refactor", rounds=1,
+                                                commits=1, refactorings={"Extract Function": 1}), code="LAB")
+        call("POST", "/progress", progress_body("tdd1", "cy__di"), code="LAB")
+
+    def test_teacher_progress_shows_the_lab_fields(self):
+        games = {g["game_id"]: g for g in call("GET", "/teacher/progress", code="LAB", key=self.key)[1]["games"]}
+        self.assertEqual((games["lab1"]["mode"], games["lab1"]["rounds"], games["lab1"]["reverts"]), ("refactor", 3, 1))
+        self.assertEqual(games["lab1"]["refactorings"], {"Extract Function": 2, "Rename Variable": 1})
+        self.assertEqual((games["tdd1"]["mode"], games["tdd1"]["refactorings"]), ("tdd", {}), "defaults for TDD games")
+
+    def test_the_pair_summary_adds_refactorings_up_by_name(self):
+        summary = call("GET", "/teacher/pair?key=ann__bo", code="LAB", key=self.key)[1]["summary"]
+        self.assertEqual((summary["rounds"], summary["commits"], summary["reverts"]), (4, 4, 1))
+        self.assertEqual(summary["refactorings"], {"Extract Function": 3, "Rename Variable": 1})
+
+    def test_totals_are_replaced_not_added(self):
+        call("POST", "/progress", progress_body("lab3", "ed__fi", mode="refactor", refactorings={"Extract Function": 1}),
+             code="LAB")
+        call("POST", "/progress", progress_body("lab3", "ed__fi", mode="refactor", refactorings={"Extract Function": 2}),
+             code="LAB")
+        self.assertEqual(rows("SELECT refactorings FROM progress WHERE game_id = 'lab3'"), [('{"Extract Function": 2}',)])
+
+    def test_progress_report_has_rounds_reverts_and_refactorings(self):
+        csv = quietly(s.show_progress, SimpleNamespace(code="LAB", days=None, csv=True)).splitlines()
+        header = csv[0].split(",")
+        row = next(line for line in csv[1:] if "ann__bo" in line or "bo__ann" in line).split(",")
+        self.assertEqual((row[header.index("rounds")], row[header.index("reverts")]), ("4", "1"))
+        self.assertEqual(row[header.index("refactorings")], "Extract Function:3; Rename Variable:1")
+        table = quietly(s.show_progress, SimpleNamespace(code="LAB", days=None, csv=False))
+        self.assertIn("rounds", table.splitlines()[0])
+
+    def test_refactor_move_events_are_stored(self):
+        body = progress_body("lab4", mode="refactor",
+                             events=[event("refactor_move", detail="Extract Function | better", phase="refactor")])
+        self.assertEqual(call("POST", "/progress", body, code="LAB")[0], 200)
+        self.assertEqual(rows("SELECT kind, detail FROM events WHERE game_id = 'lab4'"),
+                         [("refactor_move", "Extract Function | better")])
 
 
 class ClassCheckTests(unittest.TestCase):
