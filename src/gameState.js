@@ -229,6 +229,22 @@ export class GameState {
     this.#save();
   }
 
+  // "Re-check from here": start this step afresh without restarting the game.
+  // Red goes back to its start check, which takes the baseline again as at
+  // Red's start; Green and Refactor take the code as it is now as their
+  // baseline. The stuck count, the struggle signals and the cached Look go.
+  // Recorded for the teacher.
+  recheck(snapshot) {
+    if (!["red", "green", "refactor"].includes(this.state.id)) return;
+    if (this.state.id === "red") this.startChecked = false;
+    else if (snapshot) this.before = snapshot;
+    this.stuckAttempts = 0;
+    this.struggle = null;
+    this.nextSteps = null;
+    this.addEvent("recheck", this.state.id);
+    this.#save();
+  }
+
   // How much the pair is struggling on this step, for the hint ladder (ladder.js)
   // and the coach: {step, startedAt, run, lines, runs, moreHelp, shown}. Started
   // the first time it's asked for on a step, so a new step starts afresh.

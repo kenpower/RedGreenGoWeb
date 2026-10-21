@@ -168,9 +168,9 @@
     lookForNextSteps(snapshot, step);
   // A Look between Dones: guidance for the card, plus the verdict the coach
   // would give at Done now, cached so an unchanged Done can reuse it.
-  const lookForNextSteps = async (current, forStep) => {
+  const lookForNextSteps = async (current, forStep, force = false) => {
     const now = Date.now() / 1000;
-    if (!nextStepsDue(lastLook, forStep.stepNumber, current, now)) return;
+    if (!force && !nextStepsDue(lastLook, forStep.stepNumber, current, now)) return;
     lastLook = { step: forStep.stepNumber, run: runMark(current), code: codeKey(current), at: now };
     const phase = forStep.stateName;
     const { verdict: answer, stale } = await ask(phase, checkRules(phase, gameState.before, current));
@@ -511,6 +511,30 @@
     decideByCoach(phase, v);
   };
 
+  // "Re-check from here" (lab 2026-10-21: stuck pairs restarted the whole game):
+  // re-read the code from the helper, start this step afresh (gameState.recheck:
+  // the baseline again, no stuck count, no cached Look), then a fresh Look.
+  const recheck = async () => {
+    if (!step || !CHECKED_PHASES.includes(step.stateName)) return;
+    await refreshSnapshot();
+    gameState.recheck(snapshot);
+    startChecked = gameState.startChecked;
+    held = false;
+    hardHold = false;
+    verdict = null;
+    findings = [];
+    askedWith = null;
+    refused = false;
+    rescue = null;
+    attempts = gameState.stuckAttempts;
+    tone = "";
+    nextStepsAnswer = null;
+    lastLook = null;
+    struggleTick++;
+    report();
+    if (snapshot && isCoached($helper)) lookForNextSteps(snapshot, step, true);
+  };
+
   // "Show me the code": after RESCUE_AFTER held attempts, the coach shows the
   // code for this step only. The pair types it in themselves.
   const askRescue = async () => {
@@ -580,6 +604,8 @@
         return; // no coach: the button only says to ask the teacher
       case "moreHelp":
         return moreHelp();
+      case "recheck":
+        return recheck();
       case "pickNew":
         pickingNew = true; // stay in Red; the card says what to do
         return;

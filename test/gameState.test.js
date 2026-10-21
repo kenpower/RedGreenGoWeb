@@ -603,6 +603,38 @@ test("the_orient_brief_is_kept_and_edits_and_rereads_are_events_for_the_teacher"
   expect(GameState.recoverSavedGame().brief.code_state).toBe("partial");
 });
 
+test("recheck_starts_this_step_afresh_without_restarting_the_game", () => {
+  let g = new GameState();
+  g.start();
+  g.takeBaseline("red start");
+  g.noteHeld();
+  g.noteMoreHelp(1);
+  g.setNextSteps(1, { steps: [], decision: "redo", note: "n" }, { key: "k" });
+  g.recheck("now");
+  // Red: back to its start check, which takes the baseline again
+  expect(g.startChecked).toBe(false);
+  expect(g.takeBaseline("red again")).toBe(true);
+  expect(g.before).toBe("red again");
+  expect(g.stuckAttempts).toBe(0);
+  expect(g.nextStepsFor(1)).toBeNull();
+  expect(g.struggleFor(1).moreHelp).toBe(0);
+  expect(g.pendingEvents.filter((e) => e.kind === "recheck").map((e) => e.detail)).toEqual(["red"]);
+  expect(g.iteration).toBe(0); // the game goes on: same cycle, same step
+  expect(g.stepNumber).toBe(1);
+
+  steps(g, 2); // swap, then green
+  g.recheck("green now");
+  expect(g.before).toBe("green now"); // Green and Refactor: the code now is the baseline
+  steps(g, 1); // refactor
+  g.recheck(null);
+  expect(g.before).toBe("green now"); // nothing to take: kept
+  expect(GameState.recoverSavedGame().pendingEvents.filter((e) => e.kind === "recheck").map((e) => e.detail)).toEqual([
+    "red",
+    "green",
+    "refactor",
+  ]);
+});
+
 test("keep_only_works_on_red", () => {
   let g = new GameState();
   g.start();

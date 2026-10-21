@@ -5,6 +5,7 @@
   import Icon from "./Icon.svelte";
   import WaitingDots from "./WaitingDots.svelte";
   import { helper } from "../helper.js";
+  import { lockReason as lockReasonFor } from "../lock.js";
 
   const dispatch = createEventDispatcher();
   const interact = (what) => dispatch("interact", what);
@@ -93,13 +94,8 @@
   $: liveDone = isCycleStep && (liveLines.length > 0 || helperMissing);
   // With the guide, point at its current item; without, give the first unmet line.
   $: currentItem = (nextSteps?.needed || guide).find((g) => g.current);
-  $: lockReason = helperMissing
-    ? "Waiting for the helper"
-    : nextSteps?.needed.length && currentItem
-      ? `see "${currentItem.text}" above`
-      : guide.length && currentItem?.short
-        ? `see "${currentItem.short}" above`
-      : liveLines.find((l) => l.ok !== true)?.text || "";
+  // never empty while Done is locked (lock.js)
+  $: lockReason = lockReasonFor({ helperMissing, items: nextSteps?.needed.length ? nextSteps.needed : guide, liveLines });
   $: doneLabel = liveDone ? (goalMet && !doneLocked ? DONE_MET[step.stateName] : "Done") : step.buttonText;
   const BOX = { true: "[✓]", false: "[✖]", null: "[ ]" };
 
@@ -418,7 +414,7 @@
         {/if}
       {/if}
 
-      {#if liveDone && !start && !held && !waiting}
+      {#if (liveDone || (isCycleStep && doneLocked)) && !start && !held && !waiting}
         <p class="doneHint" class:locked={doneLocked} class:pulse={pulse && !currentItem}>
           {doneLocked ? lockReason : DONE_HINT[step.stateName]}
         </p>
@@ -455,6 +451,17 @@
         {/if}
       </div>
 
+      {#if isCycleStep && !helperMissing}
+        <!-- stuck or out of step with the code: start this step's checks afresh, not the whole game -->
+        <p class="recheckRow">
+          <button
+            class="quiet recheck"
+            disabled={busy}
+            title="Re-read your code and start this step's checks afresh (the game keeps your progress)"
+            on:click={() => interact("recheck")}>Re-check from here</button
+          >
+        </p>
+      {/if}
       {#if rescueOffer && isCycleStep}
         <div class="rescueRow">
           {#if rescueOffer == "show"}
@@ -840,6 +847,16 @@
   .practiceLine {
     padding-left: 0.6em;
     border-left: 2px solid var(--amber);
+  }
+
+  .recheckRow {
+    margin: 0.4em 0 0 0;
+    text-align: right;
+  }
+
+  .recheck {
+    font-size: 0.85em;
+    margin: 0;
   }
 
   .ladderLine {
