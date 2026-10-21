@@ -1,0 +1,34 @@
+description = "REFACTOR REVIEW, worse: a clear one-line rule moved into a helper with cryptic names and a magic number (advice, not a hold)"
+mode = "look"
+phase = "refactor"
+cycle = 4
+problem = 'Write toRoman(int n) that converts a whole number from 1 to 3999 to Roman numerals.'
+checkpoint = { tests = '''
+TEST(Roman, OneIsI) { EXPECT_EQ("I", toRoman(1)); }
+TEST(Roman, TwoIsII) { EXPECT_EQ("II", toRoman(2)); }
+TEST(Roman, ThreeIsIII) { EXPECT_EQ("III", toRoman(3)); }
+''', code = '''
+std::string toRoman(int n) {
+  return std::string(n, 'I');
+}
+''' }
+tests = '''
+TEST(Roman, OneIsI) { EXPECT_EQ("I", toRoman(1)); }
+TEST(Roman, TwoIsII) { EXPECT_EQ("II", toRoman(2)); }
+TEST(Roman, ThreeIsIII) { EXPECT_EQ("III", toRoman(3)); }
+'''
+code = '''
+std::string q2(int z) {
+  return std::string(z, static_cast<char>(73));
+}
+
+std::string toRoman(int n) {
+  return q2(n);
+}
+'''
+test_result = "All 3 tests passed"
+
+[expect]
+decision = ["advance"]  # quality is advice, never a hold
+review_effect = ["worse"]
+review_kept = true

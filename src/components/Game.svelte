@@ -9,7 +9,7 @@
   import { isCoached, askCoach, resolveProblem, toneOf, shouldShow, sendProgress, expectedFor } from "../coach.js";
   import {
     checkRules, snapshotOf, startState, failingTests, uncommittedFiles, noRepo, liveStatus, codeFirstAdvice,
-    passedFirstTest, calledFunction, testBodies,
+    passedFirstTest, calledFunction, testBodies, staleResults, buildFailed, currentTests,
   } from "../rules.js";
   import { hintFor } from "../content/hints.js";
   import { guideFor, unlockAction, GUIDE_CYCLES } from "../guide.js";
@@ -52,7 +52,14 @@
     gameState.noteHeld();
     attempts = gameState.stuckAttempts;
   };
-  $: offer = step && CHECKED_PHASES.includes(step.stateName) && !rescue ? rescueOffer(attempts, isCoached($helper)) : "";
+  // In Refactor the code for one move can be asked for from rung 3, without
+  // three holds first (DESIGN-refactor-lab.md A.5)
+  $: offer =
+    step && CHECKED_PHASES.includes(step.stateName) && !rescue
+      ? step.stateName === "refactor" && isCoached($helper) && rung >= 3
+        ? "show"
+        : rescueOffer(attempts, isCoached($helper))
+      : "";
 
   $: step = gameState.getStep();
   $: snapshot = $helper.status === "connected" ? snapshotOf($helper.data) : null;
@@ -201,7 +208,19 @@
     if (stale || !answer || gameState.stepNumber !== forStep.stepNumber) return; // moved on meanwhile
     gameState.setNextSteps(forStep.stepNumber, answer, { key: lookKey(current, forStep.stepNumber) });
     nextStepsAnswer = gameState.nextStepsFor(forStep.stepNumber);
+    if (phase === "refactor") gameState.noteMove(answer.move_review); // for the teacher
   };
+
+  // Refactor's checkpoint: each fresh, all-green run is the code the next
+  // change is reviewed against (gameState.noteGreenRun / checkpointFor).
+  $: if (step?.stateName === "refactor" && snapshot && freshGreen(snapshot))
+    gameState.noteGreenRun(step.stepNumber, runMark(snapshot), snapshot);
+  const freshGreen = (s) => !staleResults(s) && !buildFailed(s) && currentTests(s).length > 0 && !failingTests(s).length;
+  // the coach's review of the last refactoring move, shown on the Refactor card
+  // "broke" only when the run really is red; otherwise a changed behaviour is the coach's advice
+  $: moveReview = step?.stateName === "refactor" && chosen?.move_review?.effect && chosen.move_review.effect !== "none"
+    ? { ...chosen.move_review, broke: !chosen.move_review.behaviour_kept && !!snapshot && (buildFailed(snapshot) || failingTests(snapshot).length > 0) }
+    : null;
 
   // Done: if the code and results are what the last Look saw (and no Done has
   // used it yet), its verdict is the verdict: the server records it without a
@@ -458,6 +477,8 @@
       // how much they're struggling, and how specific the step details should be
       struggle: phase === "finish" ? null : gameState.struggleSignals(gameState.stepNumber, { novice, rung: detailRung(rung, novice) }),
       building: brief?.building || "",
+      // Refactor: the code at the green run before this one, to review the change since
+      checkpoint: phase === "refactor" ? gameState.checkpointFor(gameState.stepNumber, runMark(snapshot)) : null,
     });
 
   // Only one test may fail in Red. When the rules are enforced or the coach
@@ -697,6 +718,7 @@
         coach={verdict}
         {ladder}
         refactorCard={refactorView}
+        {moveReview}
         {canAskAgain}
         {finishState}
         {likelyFinished}

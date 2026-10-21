@@ -1,0 +1,36 @@
+description = "REFACTOR REVIEW, neutral: the pair only reordered two independent lines since the last green run"
+mode = "look"
+phase = "refactor"
+cycle = 4
+problem = 'Build a Stack class for ints with push, pop, top, size and isEmpty.'
+checkpoint = { tests = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+TEST(Stack, SizeAfterPush) { Stack s; s.push(4); EXPECT_EQ(1, s.size()); }
+''', code = '''
+class Stack {
+  std::vector<int> items;
+public:
+  bool isEmpty() const { return items.empty(); }
+  int size() const { return static_cast<int>(items.size()); }
+  void push(int value) { items.push_back(value); }
+};
+''' }
+tests = '''
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+TEST(Stack, SizeAfterPush) { Stack s; s.push(4); EXPECT_EQ(1, s.size()); }
+'''
+code = '''
+class Stack {
+  std::vector<int> items;
+public:
+  int size() const { return static_cast<int>(items.size()); }
+  bool isEmpty() const { return items.empty(); }
+  void push(int value) { items.push_back(value); }
+};
+'''
+test_result = "All 2 tests passed"
+
+[expect]
+decision = ["advance"]
+review_effect = ["same"]
+review_kept = true

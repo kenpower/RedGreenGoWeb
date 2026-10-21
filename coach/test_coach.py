@@ -107,6 +107,41 @@ class Orient(unittest.TestCase):
         coach.validate(step(mode="orient", catalogue=None))
 
 
+class MoveReview(unittest.TestCase):
+    def test_refactor_guidance_reviews_the_change_since_the_checkpoint(self):
+        client = FakeClient()
+        refactor = step(phase="refactor", checkpoint={"tests": "TEST(F, One) {}", "code": "int old();"})
+        coach.ask_coach(client, refactor)
+        guidance_call = client.calls[1]
+        self.assertIn("move_review", guidance_call["output_config"]["format"]["schema"]["properties"])
+        user = guidance_call["messages"][0]["content"]
+        self.assertIn("Production code at the checkpoint", user)
+        self.assertIn("int old();", user)
+        self.assertNotIn("Tests at the checkpoint", user)  # unchanged tests aren't repeated
+        # other phases: no review
+        client = FakeClient()
+        coach.ask_coach(client, step(phase="green"))
+        self.assertNotIn("move_review", client.calls[1]["output_config"]["format"]["schema"]["properties"])
+
+    def test_the_review_is_cleaned(self):
+        cleaned = coach._clean_steps({"steps": [], "extra": "", "extra_needed": False, "on_track": True, "move_review": {
+            "refactoring": " Extract Function ", "effect": "better", "behaviour_kept": True,
+            "note": "Now calls helper(n) once."}}, {"catalogue": CATALOGUE})
+        self.assertEqual(cleaned["move_review"],
+                         {"refactoring": "Extract Function", "effect": "better", "behaviour_kept": True, "note": ""})
+        nothing = coach._clean_steps({"steps": [], "move_review": {"refactoring": "Rename", "effect": "none",
+                                                                   "behaviour_kept": True, "note": ""}},
+                                     {"catalogue": CATALOGUE})
+        self.assertEqual(nothing["move_review"]["refactoring"], "")  # nothing changed: no name
+        self.assertNotIn("move_review", coach._clean_steps({"steps": []}, {"catalogue": CATALOGUE}))
+
+    def test_the_checkpoint_is_checked(self):
+        coach.validate(step(checkpoint={"tests": "", "code": "int f();"}))
+        for bad in ({"code": 3}, {"code": "x", "other": ""}, "int f();", {"code": "x" * 10_001}):
+            with self.assertRaises(coach.BadStep, msg=bad):
+                coach.validate(step(checkpoint=bad))
+
+
 class Struggle(unittest.TestCase):
     def test_the_struggle_signals_are_checked(self):
         good = {"runs_without_progress": 2, "minutes_on_step": 6, "holds_on_step": 1, "hints_shown": 2,

@@ -103,10 +103,26 @@ MAX_NEXT_STEPS = 4
 DETAIL_CODE_LIKE = re.compile(r"[{}]|==|!=|->|<<|\)\s*;|\b[A-Za-z_]\w*\([^)]*\)|\b(?:EXPECT|ASSERT)_[A-Z]+\b")
 
 
-def guidance_schema(catalogue):
+EFFECTS = ["better", "same", "worse", "none"]  # move_review.effect; "none": nothing changed
+MOVE_REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "refactoring": {"type": "string"},
+        "effect": {"type": "string", "enum": EFFECTS},
+        "behaviour_kept": {"type": "boolean"},
+        "note": {"type": "string"},
+    },
+    "required": ["refactoring", "effect", "behaviour_kept", "note"],
+    "additionalProperties": False,
+}
+
+
+def guidance_schema(catalogue, review=False):
     """The guidance (coach/next_steps.md): never empty, and its ids come from this
     phase's catalogue only (left free, it picks the next phase's steps after an
-    advance). The catalogue is fixed per phase, so there are few schemas."""
+    advance). The catalogue is fixed per phase, so there are few schemas. In
+    Refactor (`review`) it also reviews the change since the checkpoint
+    (DESIGN-refactor-lab.md A.3-A.4): `move_review`."""
     step = {
         "type": "object",
         "properties": {"id": {"type": "string", "enum": [c["id"] for c in catalogue]},
@@ -114,17 +130,15 @@ def guidance_schema(catalogue):
         "required": ["id", "detail"],
         "additionalProperties": False,
     }
-    return {
-        "type": "object",
-        "properties": {
-            "steps": {"type": "array", "minItems": 1, "items": step},
-            "extra": {"type": "string"},
-            "extra_needed": {"type": "boolean"},
-            "on_track": {"type": "boolean"},
-        },
-        "required": ["steps", "extra", "extra_needed", "on_track"],
-        "additionalProperties": False,
+    properties = {
+        "steps": {"type": "array", "minItems": 1, "items": step},
+        "extra": {"type": "string"},
+        "extra_needed": {"type": "boolean"},
+        "on_track": {"type": "boolean"},
     }
+    if review:
+        properties["move_review"] = MOVE_REVIEW_SCHEMA
+    return {"type": "object", "properties": properties, "required": list(properties), "additionalProperties": False}
 
 
 class BadStep(ValueError):
@@ -157,6 +171,13 @@ def validate(step):
     for field in ("tests", "code", "tests_before", "code_before", "test_result"):
         if len(step.get(field) or "") > MAX_TEXT:
             raise BadStep(f"{field} is too long")
+    # Refactor: the code at the last green run in this step, to review the change since
+    checkpoint = step.get("checkpoint")
+    if checkpoint is not None and not (
+            isinstance(checkpoint, dict) and set(checkpoint) <= {"tests", "code"}
+            and all(isinstance(checkpoint.get(k, ""), str) and len(checkpoint.get(k, "")) <= MAX_TEXT
+                    for k in ("tests", "code"))):
+        raise BadStep("checkpoint must be {tests, code} as text")
     # Who and which game, for the teacher's progress view (coach_server records
     # them), and the navigator's one-line intent for a Red.
     for field, limit in (("pair", 200), ("game_id", 64), ("intent", MAX_INTENT)):
@@ -312,6 +333,17 @@ def build_guidance_user(step, verdict):
     parts.append("Rule findings from the game's checks:\n" + (
         "\n".join(f"- {f}" for f in findings) if findings else "(none)"))
     parts.extend(_code_blocks(step))
+    if step["phase"] == "refactor":
+        checkpoint = step.get("checkpoint")
+        if checkpoint:
+            parts.append(_block("Production code at the checkpoint (the last green run in this step)",
+                                checkpoint.get("code", "")))
+            if checkpoint.get("tests", "") != step["tests"]:
+                parts.append(_block("Tests at the checkpoint", checkpoint.get("tests", "")))
+            parts.append("Review the change from the checkpoint to now in `move_review`.")
+        else:
+            parts.append("No checkpoint yet: review the change from the code before this step to now "
+                         "in `move_review`.")
     held = {"advance": "advances: the step is complete",
             "redo": "holds the step (redo)", "back_to_red": "holds the step (back to Red)"}
     parts.append(f"The coach's verdict on the step as it is now: it {held[verdict['decision']]}. "
@@ -333,8 +365,18 @@ def _clean_steps(answer, step):
         if s.get("id") in known and s["id"] not in seen:
             seen.add(s["id"])
             steps.append({"id": s["id"], "detail": no_code(s.get("detail"))})
-    return {"steps": steps[:MAX_NEXT_STEPS], "extra": no_code(answer.get("extra")),
-            "extra_needed": bool(answer.get("extra_needed")), "on_track": bool(answer.get("on_track", True))}
+    cleaned = {"steps": steps[:MAX_NEXT_STEPS], "extra": no_code(answer.get("extra")),
+               "extra_needed": bool(answer.get("extra_needed")), "on_track": bool(answer.get("on_track", True))}
+    review = answer.get("move_review")
+    if isinstance(review, dict):
+        effect = review.get("effect") if review.get("effect") in EFFECTS else "none"
+        cleaned["move_review"] = {
+            "refactoring": "" if effect == "none" else str(review.get("refactoring") or "").strip()[:60],
+            "effect": effect,
+            "behaviour_kept": bool(review.get("behaviour_kept", True)),
+            "note": no_code(review.get("note")),
+        }
+    return cleaned
 
 
 NO_GUIDANCE = {"steps": [], "extra": "", "extra_needed": False, "on_track": True}
@@ -403,6 +445,6 @@ def ask_coach(client, step, guidance=None):
     verdict, usage = _ask(client, "prompt.md", SCHEMA, build_user(step), 4000)
     if not step.get("catalogue") or not guidance:
         return {**verdict, **NO_GUIDANCE}, usage
-    picked, more = _ask(client, "next_steps.md", guidance_schema(step["catalogue"]),
+    picked, more = _ask(client, "next_steps.md", guidance_schema(step["catalogue"], review=step["phase"] == "refactor"),
                         build_guidance_user(step, verdict), 3000)
     return {**verdict, **_clean_steps(picked, step)}, Usage(usage, more)

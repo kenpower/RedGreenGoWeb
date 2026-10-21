@@ -236,6 +236,13 @@ describe("buildRequest", () => {
     });
   });
 
+  test("Refactor sends its checkpoint (the code at the last green run); other phases don't", () => {
+    const refactor = buildRequest({ phase: "refactor", problem: "", before: null, after: snapshot("v2"), checkpoint: snapshot("v1") });
+    expect(refactor.checkpoint).toEqual({ tests: "// test.cpp\nTEST(A, B) {}", code: "// lib.cpp\nv1" });
+    expect(buildRequest({ phase: "green", problem: "", before: null, after: snapshot("v2"), checkpoint: snapshot("v1") }))
+      .not.toHaveProperty("checkpoint");
+  });
+
   test("the baseline goes with every Look", () => {
     const look = buildRequest({ phase: "green", problem: "", before: snapshot("v1"), after: snapshot("v2") });
     expect(look.code_before).toEqual("// lib.cpp\nv1");
@@ -549,6 +556,7 @@ describe("sendProgress", () => {
       finished: false,
       rescues: 0,
       passed_first: 0,
+      refactorings: {},
       events: [],
     });
   });

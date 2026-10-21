@@ -191,7 +191,7 @@ export function pairKey(players) {
 // or null at the start of a game.
 export function buildRequest({
   phase, problem, before, after, ruleFindings = [], history = [], gameId = "", players = [], expected = "", rescue = false,
-  cycle = 1, catalogue = null, novice = false, done = false, struggle = null, building = "",
+  cycle = 1, catalogue = null, novice = false, done = false, struggle = null, building = "", checkpoint = null,
 }) {
   // Stale results go first: until the pair runs the tests again, nothing
   // else the coach could say about the results can be trusted.
@@ -229,6 +229,9 @@ export function buildRequest({
   if (rescue) request.rescue = true;
   if (catalogue?.length) request.catalogue = catalogue;
   if (struggle) request.struggle = struggleFields(struggle);
+  // Refactor: the code at the last green run in this step, to review the change since
+  if (phase === "refactor" && checkpoint)
+    request.checkpoint = { tests: filesOfKind(checkpoint, "test"), code: filesOfKind(checkpoint, "production") };
   // what Orient said they're building (or the pair's words): read the same way every time
   if (String(building || "").trim()) request.building = String(building).trim().slice(0, 500);
   return request;
@@ -352,6 +355,7 @@ export async function sendProgress(summary, fetchFn = fetch) {
         finished: !!summary.finished,
         rescues: count(summary.rescues),
         passed_first: count(summary.passed_first),
+        refactorings: refactoringCounts(summary.refactorings),
         events: (summary.events || []).slice(0, 10).map((e) => ({
           t: Math.floor(Number(e.t) || 0),
           kind: String(e.kind || ""),
@@ -365,6 +369,15 @@ export async function sendProgress(summary, fetchFn = fetch) {
   } catch {
     return false;
   }
+}
+
+// The refactorings the coach saw, as coach_server takes them: at most 20 names
+// of at most 60 characters, whole counts.
+function refactoringCounts(counts) {
+  const entries = Object.entries(counts && typeof counts === "object" ? counts : {})
+    .map(([name, n]) => [String(name).trim().slice(0, 60), count(n)])
+    .filter(([name]) => name);
+  return Object.fromEntries(entries.slice(0, 20));
 }
 
 // "hold": the pair stays on the step. "advice": they move on, with a

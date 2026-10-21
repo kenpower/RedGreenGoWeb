@@ -1,0 +1,26 @@
+description = "REFACTOR, stuck at rung 3: duplication left untouched for a while; the detail names the refactoring and its first step"
+mode = "look"
+phase = "refactor"
+cycle = 4
+problem = 'Write toRoman(int n) that converts a whole number from 1 to 3999 to Roman numerals.'
+struggle = { runs_without_progress = 2, minutes_on_step = 7, holds_on_step = 0, hints_shown = 2, novice = false, rung = 3 }
+tests = '''
+TEST(Roman, OneIsI) { EXPECT_EQ("I", toRoman(1)); }
+TEST(Roman, TwoIsII) { EXPECT_EQ("II", toRoman(2)); }
+TEST(Roman, ThreeIsIII) { EXPECT_EQ("III", toRoman(3)); }
+'''
+code = '''
+std::string toRoman(int n) {
+  if (n == 1) return "I";
+  if (n == 2) return "II";
+  if (n == 3) return "III";
+  return "";
+}
+'''
+test_result = "All 3 tests passed"
+
+[expect]
+decision = ["advance"]
+review_effect = ["none"]
+steps_include = ["refactor.remove_duplication"]
+detail_mentions = ["Extract", "Consolidate", "Replace", "loop", "one rule", "single", "duplicat", "repeat"]

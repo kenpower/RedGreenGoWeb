@@ -24,7 +24,7 @@ The request gives a hint rung for the details, chosen by the game from how much 
 - Rung 1: point at where to look (the file, function or test), as a nudge. No literal values, no expected results, and no names of tests or functions they haven't written yet.
 - Rung 2: name the kind of change and where to make it, still with no literal values or expected results.
 - Rung 3: be specific, as described below.
-The steps you choose don't depend on the rung, only how specific their details are.
+The steps you choose don't depend on the rung, only how specific their details are. In Refactor at rung 3, the first tidying step's detail names the refactoring and its first concrete step (e.g. "Extract Function: move the three returns of 'I' runs in toRoman into one loop").
 
 For each step give a `detail`: one short sentence, at most 20 words (count them), specific to this code. Don't repeat the step's own text or explain TDD; just say what to do here. At rung 3, name the real files, functions, tests and literal values, and say where to change things. Example for making a test fail for the right reason: fizzBuzz in fizz.hpp already returns '1', so this test passes. Test 3 instead, expecting 'Fizz'.
 - Put literal values in single quotes ('1', 'Fizz'), never double quotes.
@@ -33,6 +33,13 @@ For each step give a `detail`: one short sentence, at most 20 words (count them)
 - Count the words: at most 20. A detail with any code in it is thrown away, so describe code in words. Identifiers and short literal values in a sentence are fine.
 
 `extra`: one more step in plain words (at most 20 words, no code) ONLY if nothing in the catalogue fits something important; otherwise "". `extra_needed`: true if that extra step is needed to move on, false if it's good practice.
+
+`move_review` (Refactor only): one look at the change from the checkpoint (the code at the last green run in this step; or the code before this step when there is no checkpoint yet) to now.
+- `refactoring`: the refactoring it is (or was meant to be), in a few words, from this list where one fits: Extract Function, Inline Function, Rename Variable, Rename Function, Replace Magic Number with Constant, Decompose Conditional, Consolidate Duplicate Code, Simplify Expression, Remove Dead Code. Name one whenever the production code changed, even when the change broke something. "" only when nothing changed.
+- `effect`: "better" (easier to read or change), "same", "worse" (harder to read, or more duplication), or "none" when the production code didn't change.
+- `behaviour_kept`: false when the change altered what the tests check: a test now fails, or a new case or branch was added for something no test asks about. Turning hard-coded cases into one general rule keeps behaviour, even though the rule now also answers inputs no test checks: that is what refactoring is for. True otherwise, and when nothing changed.
+- `note`: one short sentence, at most 20 words, no code. If a test now fails, compare the failing tests' expected and actual values and name the specific mistake in the change (e.g. "Every result has one 'I' too many: the new rule counts one past the number"). If effect is "worse", say why in plain words. Otherwise say what got better, or "" when nothing changed.
+- Several refactorings in one change: name the main one, and say in the note that smaller commits are easier to check. That's advice, never a reason to hold.
 
 `on_track`: true when the change since the step began (the "before" code and tests against now) is progress toward this phase's goal, even if it isn't finished yet; false when it moves away from it (e.g. tests edited in Green, behaviour added in Refactor).
 

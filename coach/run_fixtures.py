@@ -74,6 +74,17 @@ def score_next_steps(answer, expect, step):
     for key in ("detail_mentions", "detail_suggests"):
         if key in expect:
             checks.append((key, any(w in text for w in expect[key]), text[:80] or '""'))
+    review = answer.get("move_review")
+    if "review_effect" in expect:
+        checks.append(("review_effect", bool(review) and review["effect"] in expect["review_effect"],
+                       review["effect"] if review else "no review"))
+    if "review_kept" in expect:
+        checks.append(("review_kept", bool(review) and review["behaviour_kept"] == expect["review_kept"],
+                       review["behaviour_kept"] if review else "no review"))
+    if "review_mentions" in expect:
+        said = f"{review['refactoring']} {review['note']}" if review else ""
+        checks.append(("review_mentions", any(w.lower() in said.lower() for w in expect["review_mentions"]),
+                       said[:80] or '""'))
     if "detail_avoids" in expect:  # a low hint rung: none of these specifics
         said = [w for w in expect["detail_avoids"] if w in text + " " + answer["extra"]]
         checks.append(("detail_avoids", not said, f"{said[0]!r} in: {text[:70]}" if said else "none"))
@@ -327,6 +338,9 @@ def main(prefixes):
             print(f"      rescue:    {verdict['rescue_why']}")
             print("\n".join("        | " + line for line in verdict["rescue_code"].splitlines()))
         print(f"      on track:  {verdict['on_track']}")
+        if verdict.get("move_review"):
+            r = verdict["move_review"]
+            print(f"      review:    {r['refactoring'] or '-'} / {r['effect']} / kept={r['behaviour_kept']}: {r['note']}")
         for s in verdict["steps"]:
             print(f"      [{s['id']}] {s['detail']}")
         if verdict["extra"]:

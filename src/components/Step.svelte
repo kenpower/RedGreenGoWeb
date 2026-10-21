@@ -34,6 +34,11 @@
   // Refactor: the smell the Green verdict spotted (ladder.refactorCard), or null:
   // {question, detail, showWhere, nothingToTidy: "button"|"link", none}
   export let refactorCard = null;
+  // Refactor: the coach's review of the last change since the checkpoint, or
+  // null: {refactoring, effect: "better"|"same"|"worse", behaviour_kept, note, broke}
+  // (broke: behaviour not kept AND the run is red, so: undo the last change)
+  export let moveReview = null;
+  const EFFECT_TEXT = { better: "better", same: "about the same", worse: "harder to read" };
   // rule findings [{rule, message}]: why we're held without the coach, or
   // warnings when the rules aren't enforced
   export let findings = [];
@@ -294,6 +299,21 @@
             </p>
           {/if}
         </div>
+      {/if}
+    {/if}
+
+    {#if moveReview && !start && !held}
+      {#if moveReview.broke}
+        <div class="heldBox">
+          <p class="marker">That change broke something: undo the last change</p>
+          {#if moveReview.note}<p><span class="ladderLabel">What probably broke:</span> {moveReview.note}</p>{/if}
+        </div>
+      {:else}
+        <p class="moveReview effect-{moveReview.effect}" class:changedBehaviour={!moveReview.behaviour_kept}>
+          <span class="who">Coach on your last change:</span>
+          {moveReview.refactoring}{moveReview.refactoring ? ", " : ""}{EFFECT_TEXT[moveReview.effect]}.
+          {moveReview.note}
+        </p>
       {/if}
     {/if}
 
@@ -578,8 +598,20 @@
     color: var(--tone-col, var(--text-muted));
   }
 
-  .smellBox .who {
+  .smellBox .who,
+  .moveReview .who {
     color: var(--refactoring-blue);
+  }
+
+  .moveReview {
+    margin: 0 0 0.6em 0;
+    padding-left: 0.6em;
+    border-left: 2px solid var(--refactoring-blue);
+  }
+
+  .moveReview.effect-worse,
+  .moveReview.changedBehaviour {
+    border-left-color: var(--amber);
   }
 
   .tone-red {

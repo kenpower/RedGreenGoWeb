@@ -658,6 +658,37 @@ test("the_green_verdicts_smell_goes_to_refactor_and_its_events_are_recorded_once
   expect(g.smell).toBeNull(); // no smell from the verdict, nothing to show
 });
 
+test("refactor_checkpoint_is_the_green_run_before_the_one_being_looked_at", () => {
+  let g = new GameState();
+  g.start();
+  steps(g, 3); // refactor
+  g.setBefore("start of refactor");
+  const step = g.stepNumber;
+  expect(g.checkpointFor(step, "run1")).toBe("start of refactor"); // nothing green yet: the step's start
+  g.noteGreenRun(step, "run1", "green 1");
+  expect(g.checkpointFor(step, "run1")).toBe("start of refactor"); // the Look for run 1 compares with before it
+  expect(g.checkpointFor(step, "run2")).toBe("green 1"); // a red run 2 compares with the last green
+  g.noteGreenRun(step, "run1", "green 1 again"); // the same run: no change
+  g.noteGreenRun(step, "run3", "green 3");
+  expect(g.checkpointFor(step, "run3")).toBe("green 1");
+  expect(GameState.recoverSavedGame().checkpointFor(step, "run4")).toBe("green 3");
+  expect(g.checkpointFor(step + 1, "run9")).toBe("start of refactor"); // another step: its own start
+});
+
+test("refactor_moves_are_counted_per_refactoring_and_recorded", () => {
+  let g = new GameState();
+  g.start();
+  g.noteMove({ refactoring: "Extract Function", effect: "better", behaviour_kept: true, note: "" });
+  g.noteMove({ refactoring: "Extract Function", effect: "same", behaviour_kept: true, note: "" });
+  g.noteMove({ refactoring: "", effect: "none", behaviour_kept: true, note: "" }); // nothing changed
+  g.noteMove(null);
+  expect(g.progress().refactorings).toEqual({ "Extract Function": 2 });
+  expect(g.pendingEvents.filter((e) => e.kind === "refactor_move").map((e) => e.detail)).toEqual([
+    "Extract Function | better",
+    "Extract Function | same",
+  ]);
+});
+
 test("keep_only_works_on_red", () => {
   let g = new GameState();
   g.start();
@@ -760,6 +791,7 @@ test("progress_summarises_the_game", () => {
     finished: false,
     rescues: 0,
     passed_first: 0,
+    refactorings: {},
     events: [],
   });
 

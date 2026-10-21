@@ -105,6 +105,8 @@ export class GameState {
       this.struggle = r.struggle || null;
       this.brief = r.brief || null;
       this.smell = r.smell || null;
+      this.checkpoint = r.checkpoint || null;
+      this.refactorings = r.refactorings || {};
     } else {
       this.players = ["John", "Jane"];
       this.driver = 0;
@@ -132,6 +134,8 @@ export class GameState {
       this.struggle = null; // this step's struggle signals (see struggleFor), started lazily
       this.brief = null; // the coach's Orient reading: {building, code_state, warnings, first_move}
       this.smell = null; // what the Green verdict thought worth tidying, for this cycle's Refactor
+      this.checkpoint = null; // Refactor: the code at the last green run in the step (see noteGreenRun)
+      this.refactorings = {}; // refactorings the coach saw the pair make: {name: count}
     }
     this.#save();
   }
@@ -254,6 +258,34 @@ export class GameState {
     this.#save();
   }
 
+  // Refactor's checkpoint (DESIGN-refactor-lab.md A.3): the code at the last
+  // green run in this step, which the coach reviews each change against. It
+  // starts as the code at the start of the step (`before`). A new green run
+  // becomes the checkpoint for the runs after it, so a Look for run R compares
+  // with the green run before R (checkpointFor).
+  noteGreenRun(stepNumber, run, snapshot) {
+    const cp = this.checkpoint?.step === stepNumber ? this.checkpoint : { step: stepNumber, run: null, snapshot: this.before, prev: null };
+    if (cp.run === run) return;
+    this.checkpoint = { step: stepNumber, run, snapshot, prev: cp.snapshot };
+    this.#save();
+  }
+
+  checkpointFor(stepNumber, run) {
+    const cp = this.checkpoint;
+    if (cp?.step !== stepNumber) return this.before;
+    return cp.run === run ? cp.prev : cp.snapshot;
+  }
+
+  // The coach reviewed a refactoring move (move_review). Counted per refactoring
+  // for the teacher, and recorded as a `refactor_move` event.
+  noteMove(review) {
+    if (!review || review.effect === "none" || !review.refactoring) return;
+    const name = String(review.refactoring).slice(0, 60);
+    this.refactorings = { ...this.refactorings, [name]: (this.refactorings[name] || 0) + 1 };
+    this.addEvent("refactor_move", `${name} | ${review.effect}`);
+    this.#save();
+  }
+
   // "Re-check from here": start this step afresh without restarting the game.
   // Red goes back to its start check, which takes the baseline again as at
   // Red's start; Green and Refactor take the code as it is now as their
@@ -330,6 +362,7 @@ export class GameState {
       steps: answer.steps || [],
       extra: answer.extra || "",
       extra_needed: !!answer.extra_needed,
+      move_review: answer.move_review || null, // Refactor: the coach's review of the last change
       verdict: answer.decision ? answer : null,
       key,
       used,
@@ -458,6 +491,7 @@ export class GameState {
     finished: this.finished,
     rescues: this.rescues,
     passed_first: this.passedFirst,
+    refactorings: this.refactorings, // running totals, {name: count}
     events: this.pendingEvents.slice(0, 10), // acknowledged with ackEvents once sent
   });
 

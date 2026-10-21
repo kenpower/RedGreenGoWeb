@@ -1,0 +1,33 @@
+description = "REFACTOR REVIEW, good: three hard-coded branches in toRoman became one rule since the last green run"
+mode = "look"
+phase = "refactor"
+cycle = 4
+problem = 'Write toRoman(int n) that converts a whole number from 1 to 3999 to Roman numerals.'
+checkpoint = { tests = '''
+TEST(Roman, OneIsI) { EXPECT_EQ("I", toRoman(1)); }
+TEST(Roman, TwoIsII) { EXPECT_EQ("II", toRoman(2)); }
+TEST(Roman, ThreeIsIII) { EXPECT_EQ("III", toRoman(3)); }
+''', code = '''
+std::string toRoman(int n) {
+  if (n == 1) return "I";
+  if (n == 2) return "II";
+  if (n == 3) return "III";
+  return "";
+}
+''' }
+tests = '''
+TEST(Roman, OneIsI) { EXPECT_EQ("I", toRoman(1)); }
+TEST(Roman, TwoIsII) { EXPECT_EQ("II", toRoman(2)); }
+TEST(Roman, ThreeIsIII) { EXPECT_EQ("III", toRoman(3)); }
+'''
+code = '''
+std::string toRoman(int n) {
+  return std::string(n, 'I');
+}
+'''
+test_result = "All 3 tests passed"
+
+[expect]
+decision = ["advance"]
+review_effect = ["better"]
+review_kept = true
