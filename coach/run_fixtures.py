@@ -207,6 +207,30 @@ def score(verdict, expect, step):
     return checks
 
 
+def score_orient(brief, expect):
+    """Orient fixtures: the brief's code_state and what its fields name, plus the
+    checks for every brief (no code, short)."""
+    checks = []
+    if "code_state" in expect:
+        checks.append(("code_state", brief["code_state"] in expect["code_state"], brief["code_state"]))
+    warnings = " ".join(brief["warnings"])
+    for key, text in (("building_mentions", brief["building"]), ("first_move_mentions", brief["first_move"]),
+                      ("warnings_mention", warnings)):
+        if key in expect:
+            checks.append((key, any(w.lower() in text.lower() for w in expect[key]), text[:80] or '""'))
+    if "warnings_avoid" in expect:
+        said = [w for w in expect["warnings_avoid"] if w.lower() in warnings.lower()]
+        checks.append(("warnings_avoid", not said, said[0] if said else "none"))
+    if expect.get("no_warnings"):
+        checks.append(("no_warnings", not brief["warnings"], warnings[:80] or "none"))
+    fields = [brief["building"], brief["first_move"], *brief["warnings"]]
+    coded = [t for t in fields if CODE_LIKE.search(t)]
+    checks.append(("orient_no_code", not coded, coded[0][:60] if coded else "none"))
+    checks.append(("first_move_short", len(brief["first_move"].split()) <= 24, brief["first_move"][:60]))
+    checks.append(("building_short", len(brief["building"].split()) <= 45, brief["building"][:60]))
+    return checks
+
+
 def main(prefixes):
     files = sorted((HERE / "fixtures").glob("*.toml"))
     if prefixes:
@@ -221,7 +245,35 @@ def main(prefixes):
         fx = tomllib.loads(f.read_text(encoding="utf-8"))
         expect = fx.pop("expect")
         description = fx.pop("description")
-        # every fixture is a Look: the guidance from the phase's catalogue, and the verdict.
+        if fx.get("mode") == "orient":
+            fx.setdefault("phase", "red")
+            validate(fx)
+            try:
+                brief, usage = ask_coach(client, fx)
+            except (anthropic.APIError, RuntimeError, json.JSONDecodeError) as e:
+                print(f"ERROR {f.stem}: {e}\n")
+                results.append({"fixture": f.stem, "error": str(e)})
+                continue
+            input_tokens += usage.input_tokens
+            output_tokens += usage.output_tokens
+            cache_written += usage.cache_creation_input_tokens or 0
+            cache_read += usage.cache_read_input_tokens or 0
+            checks = score_orient(brief, expect)
+            ok = all(c[1] for c in checks)
+            passed += ok
+            print(f"{'PASS' if ok else 'FAIL'} {f.stem}  ({description})")
+            for field, field_ok, got in checks:
+                if field_ok and field in ("orient_no_code", "first_move_short", "building_short"):
+                    continue
+                print(f"   {'  ' if field_ok else '!!'} {field}: {got}   expected {expect.get(field, 'ok')}")
+            print(f"      building:   {brief['building']}")
+            print(f"      code:       {brief['code_state']}")
+            for w in brief["warnings"]:
+                print(f"      watch out:  {w}")
+            print(f"      first move: {brief['first_move']}\n")
+            results.append({"fixture": f.stem, "pass": ok, "checks": checks, "brief": brief})
+            continue
+        # every other fixture is a Look: the guidance from the phase's catalogue, and the verdict.
         # The guidance fixtures (mode = "look") follow a fresh run; the rest are a Done.
         fx.setdefault("done", fx.get("mode") != "look")
         fx["mode"] = "look"

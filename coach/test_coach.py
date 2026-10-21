@@ -76,6 +76,37 @@ class AskCoach(unittest.TestCase):
         self.assertEqual(answer["steps"], [])
 
 
+class Orient(unittest.TestCase):
+    BRIEF = {"building": "FizzBuzz: numbers as text, Fizz for 3s.", "code_state": "scaffold",
+             "warnings": [" A placeholder test is still there. ", "", "a", "b", "c"], "first_move": "Test that 1 gives '1'."}
+
+    def test_orient_is_one_call_with_its_own_prompt_and_schema(self):
+        client = FakeClient()
+        original = client.create  # records the call; the answer is the brief
+
+        def create(**kwargs):
+            original(**kwargs)
+            return SimpleNamespace(stop_reason="end_turn", usage=SimpleNamespace(input_tokens=1, output_tokens=1),
+                                   content=[SimpleNamespace(type="text", text=json.dumps(self.BRIEF))])
+        client.messages = SimpleNamespace(create=create)
+        brief, _ = coach.ask_coach(client, step(mode="orient", phase="red", catalogue=None))
+        self.assertEqual(len(client.calls), 1)
+        self.assertEqual(client.calls[0]["system"][0]["text"], coach.build_system("orient.md"))
+        self.assertEqual(client.calls[0]["output_config"]["format"]["schema"], coach.ORIENT_SCHEMA)
+        self.assertEqual(brief["warnings"], ["A placeholder test is still there.", "a", "b"])  # trimmed, at most 3
+        self.assertEqual(brief["code_state"], "scaffold")
+
+    def test_building_goes_with_every_later_call(self):
+        later = step(building="A word counter for sentences.")
+        self.assertIn("What the pair is building (agreed at the start of the game): A word counter",
+                      coach.build_user(later))
+        self.assertIn("A word counter", coach.build_guidance_user(later, VERDICT))
+        self.assertNotIn("agreed at the start", coach.build_user(step()))
+        with self.assertRaises(coach.BadStep):
+            coach.validate(step(building="x" * 501))
+        coach.validate(step(mode="orient", catalogue=None))
+
+
 class Struggle(unittest.TestCase):
     def test_the_struggle_signals_are_checked(self):
         good = {"runs_without_progress": 2, "minutes_on_step": 6, "holds_on_step": 1, "hints_shown": 2,

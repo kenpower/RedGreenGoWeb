@@ -586,6 +586,23 @@ test("more_help_and_the_rungs_shown_are_per_step_and_rungs_2_and_3_are_recorded"
   expect(g.struggleFor(g.stepNumber)).toMatchObject({ moreHelp: 0, shown: 0, runs: 0 });
 });
 
+test("the_orient_brief_is_kept_and_edits_and_rereads_are_events_for_the_teacher", () => {
+  let g = new GameState();
+  g.start();
+  g.setBrief({ building: " FizzBuzz. ", code_state: "scaffold", warnings: ["A placeholder test."], first_move: "Test 1." });
+  expect(g.brief).toEqual({ building: "FizzBuzz.", code_state: "scaffold", warnings: ["A placeholder test."], first_move: "Test 1." });
+  expect(g.pendingEvents.filter((e) => e.kind === "orient")).toEqual([]); // the first reading isn't an event
+  g.editBuilding("  A FizzBuzz printer for 1 to 100 ");
+  expect(g.brief).toMatchObject({ building: "A FizzBuzz printer for 1 to 100", edited: true, code_state: "scaffold" });
+  g.editBuilding("   "); // nothing to save
+  g.setBrief({ building: "FizzBuzz, read again.", code_state: "partial", warnings: [], first_move: "" }, { reread: true });
+  expect(g.pendingEvents.filter((e) => e.kind === "orient").map((e) => e.detail)).toEqual([
+    "A FizzBuzz printer for 1 to 100",
+    "FizzBuzz, read again.",
+  ]);
+  expect(GameState.recoverSavedGame().brief.code_state).toBe("partial");
+});
+
 test("keep_only_works_on_red", () => {
   let g = new GameState();
   g.start();

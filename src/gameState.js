@@ -103,6 +103,7 @@ export class GameState {
       this.passedFirst = r.passedFirst || 0;
       this.skipGreen = r.skipGreen || false;
       this.struggle = r.struggle || null;
+      this.brief = r.brief || null;
     } else {
       this.players = ["John", "Jane"];
       this.driver = 0;
@@ -128,6 +129,7 @@ export class GameState {
       this.passedFirst = 0; // Red tests kept although they passed straight away
       this.skipGreen = false; // this cycle's Red test passed first time and was kept: no Green
       this.struggle = null; // this step's struggle signals (see struggleFor), started lazily
+      this.brief = null; // the coach's Orient reading: {building, code_state, warnings, first_move}
     }
     this.#save();
   }
@@ -310,6 +312,29 @@ export class GameState {
     this.passedFirst++;
     this.skipGreen = true;
     this.addEvent("passed_first_time", name);
+  }
+
+  // The coach's Orient reading of the code (DESIGN-coach-flow.md 3A), kept for
+  // the game: its `building` goes with every later call. A re-read ("Read my
+  // code again") is an `orient` event for the teacher; the first reading isn't.
+  setBrief(brief, { reread = false } = {}) {
+    this.brief = {
+      building: String(brief?.building || "").trim(),
+      code_state: brief?.code_state || "",
+      warnings: Array.isArray(brief?.warnings) ? brief.warnings : [],
+      first_move: String(brief?.first_move || "").trim(),
+    };
+    if (reread) this.addEvent("orient", this.brief.building);
+    this.#save();
+  }
+
+  // "Not quite": the pair's own words replace what the coach thought they're building.
+  editBuilding(text) {
+    const building = String(text || "").trim();
+    if (!building) return;
+    this.brief = { ...(this.brief || { code_state: "", warnings: [], first_move: "" }), building, edited: true };
+    this.addEvent("orient", building);
+    this.#save();
   }
 
   // The pair asked to be shown the code for this step.

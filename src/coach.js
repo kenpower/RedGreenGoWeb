@@ -191,7 +191,7 @@ export function pairKey(players) {
 // or null at the start of a game.
 export function buildRequest({
   phase, problem, before, after, ruleFindings = [], history = [], gameId = "", players = [], expected = "", rescue = false,
-  cycle = 1, catalogue = null, novice = false, done = false, struggle = null,
+  cycle = 1, catalogue = null, novice = false, done = false, struggle = null, building = "",
 }) {
   // Stale results go first: until the pair runs the tests again, nothing
   // else the coach could say about the results can be trusted.
@@ -229,6 +229,8 @@ export function buildRequest({
   if (rescue) request.rescue = true;
   if (catalogue?.length) request.catalogue = catalogue;
   if (struggle) request.struggle = struggleFields(struggle);
+  // what Orient said they're building (or the pair's words): read the same way every time
+  if (String(building || "").trim()) request.building = String(building).trim().slice(0, 500);
   return request;
 }
 
@@ -255,21 +257,48 @@ const ERROR_MESSAGES = {
 // { verdict, error, stale }, where verdict is null when error is set, and
 // stale is true when a new game started while waiting (ignore the result).
 export async function askCoach(step, fetchFn = fetch) {
+  const { answer, error, stale } = await postCoach(buildRequest(step), fetchFn, "The coach couldn't look at this step.");
+  return { verdict: answer, error, stale };
+}
+
+// Orient (DESIGN-coach-flow.md 3A): the coach reads the code once as the game
+// starts (or as the helper connects) and says what the pair is building.
+// Never throws: { brief, error, stale } like askCoach.
+export async function askOrient(step, fetchFn = fetch) {
+  const { answer, error, stale } = await postCoach(buildOrientRequest(step), fetchFn, "The coach couldn't read your code.");
+  return { brief: answer, error, stale };
+}
+
+export function buildOrientRequest({ problem, after, ruleFindings = [], gameId = "", players = [] }) {
+  return {
+    mode: "orient",
+    phase: "red",
+    pair: pairKey(players),
+    game_id: String(gameId || "").slice(0, 64),
+    problem: problem || "",
+    tests: filesOfKind(after, "test"),
+    code: filesOfKind(after, "production"),
+    test_result: summariseResult(currentSnapshot(after)),
+    rule_findings: ruleFindings.slice(0, 20).map((f) => String(f).slice(0, 500)),
+  };
+}
+
+async function postCoach(body, fetchFn, failed) {
   const gen = generation;
-  let verdict = null;
+  let answer = null;
   let error = "";
   try {
     const response = await fetchFn(coachUrl() + "/coach", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Class-Code": getClassCode() },
-      body: JSON.stringify(buildRequest(step)),
+      body: JSON.stringify(body),
     });
-    if (response.ok) verdict = await response.json();
-    else error = ERROR_MESSAGES[response.status] || "The coach couldn't look at this step.";
+    if (response.ok) answer = await response.json();
+    else error = ERROR_MESSAGES[response.status] || failed;
   } catch {
     error = "Can't reach the coach right now.";
   }
-  return { verdict, error, stale: gen !== generation };
+  return { answer, error, stale: gen !== generation };
 }
 
 // Whole numbers in the 0..10000 range coach_server accepts.

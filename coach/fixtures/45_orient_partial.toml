@@ -1,0 +1,35 @@
+description = "ORIENT, partial: no problem text; a stack with push and isEmpty tested, the first move is the next behaviour"
+mode = "orient"
+problem = ""
+tests = '''
+// StackTests.cpp
+#include "Stack.h"
+
+TEST(Stack, NewStackIsEmpty) {
+  Stack s;
+  EXPECT_TRUE(s.isEmpty());
+}
+
+TEST(Stack, NotEmptyAfterPush) {
+  Stack s;
+  s.push(3);
+  EXPECT_FALSE(s.isEmpty());
+}
+'''
+code = '''
+// Stack.h
+#include <vector>
+class Stack {
+  std::vector<int> items;
+public:
+  bool isEmpty() const { return items.empty(); }
+  void push(int value) { items.push_back(value); }
+};
+'''
+test_result = "All 2 tests passed"
+
+[expect]
+code_state = ["partial"]
+building_mentions = ["stack", "Stack"]
+first_move_mentions = ["pop", "top", "peek", "size", "last"]
+no_warnings = true

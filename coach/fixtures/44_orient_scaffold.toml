@@ -1,0 +1,27 @@
+description = "ORIENT, scaffold: the user's case. A placeholder test, and fizzBuzz already has a body no test calls"
+mode = "orient"
+problem = 'Write fizzBuzz(int n) that returns the number as a string, but "Fizz" for multiples of 3, "Buzz" for multiples of 5 and "FizzBuzz" for multiples of both.'
+rule_findings = ["Advice (not a broken rule): fizzBuzz in fizz.hpp was written before any test calls it."]
+tests = '''
+// test.cpp
+#include "pch.h"
+#include "fizz.hpp"
+
+TEST(TestCaseName, TestName) {
+  EXPECT_EQ(1, 1);
+}
+'''
+code = '''
+// fizz.hpp
+#include <string>
+inline std::string fizzBuzz(int n) {
+  return std::to_string(n);
+}
+'''
+test_result = "All 1 tests passed"
+
+[expect]
+code_state = ["scaffold"]
+building_mentions = ["Fizz"]
+warnings_mention = ["fizzBuzz", "placeholder", "TestName"]
+first_move_mentions = ["1", "'1'"]

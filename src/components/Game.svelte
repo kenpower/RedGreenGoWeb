@@ -1,6 +1,8 @@
 <script>
   import Step from "./Step.svelte";
   import CycleLine from "./CycleLine.svelte";
+  import OrientCard from "./OrientCard.svelte";
+  import OrientLine from "./OrientLine.svelte";
   import { fade, fly } from "svelte/transition";
   import { createEventDispatcher, onDestroy, tick } from "svelte";
   import { helper, refreshHelper, BLOCKED_HELP, HELPER_PAGE, onGithubPages } from "../helper.js";
@@ -13,7 +15,7 @@
   import { guideFor, unlockAction, GUIDE_CYCLES } from "../guide.js";
   import { rescueOffer } from "../gameState.js";
   import { catalogueFor, cardSteps, hasGuidance, nextStepsDue, runMark, codeKey } from "../content/steps.js";
-  import { reuseLook, lookKey } from "../coach.js";
+  import { reuseLook, lookKey, askOrient } from "../coach.js";
   import { hintRung, detailRung, ladderFor, progressKey } from "../ladder.js";
 
   const dispatch = createEventDispatcher();
@@ -73,6 +75,53 @@
   $: passedFirst = passedName
     ? { test: passedName, fn: calledFunction(testBodies(snapshot)[passedName]), picking: pickingNew }
     : null;
+
+  // Orient (DESIGN-coach-flow.md 3A): once the coach can see the code (after
+  // Start, or when the helper connects mid-game), it reads it and says what the
+  // pair is building. The card opens on the game's first step; later it's the
+  // header line, which reopens it. `building` then goes with every Look.
+  let brief = gameState.brief;
+  let orientLoading = false;
+  let orientError = null;
+  let orientOpen = false;
+  let orientAsked = !!brief; // one automatic reading per game; "Read my code again" for more
+  $: if (isCoached($helper) && snapshot && !orientAsked && !gameState.finished) orient(false);
+  const orient = async (reread) => {
+    orientAsked = true;
+    orientLoading = true;
+    orientError = null;
+    if (!reread && gameState.stepNumber === 1) orientOpen = true;
+    if (reread) await refreshSnapshot();
+    const dirty = snapshot ? uncommittedFiles(snapshot) : [];
+    const { brief: b, error, stale } = await askOrient({
+      problem: resolveProblem(gameState.problem, $helper.data),
+      after: snapshot,
+      // the app's own advice (vague names, code before tests) and uncommitted work, as facts
+      ruleFindings: [
+        ...liveAdvice.map((a) => "Advice (not a broken rule): " + a),
+        ...(dirty.length ? [`Uncommitted work: ${dirty.length} source file(s) not committed.`] : []),
+      ],
+      gameId: gameState.gameId,
+      players: gameState.players,
+    });
+    orientLoading = false;
+    if (stale) return;
+    if (!b) {
+      orientError = error;
+      // the automatic reading failed (e.g. a coach server without Orient yet):
+      // no card, the game carries on as before; a re-read keeps the card to show why
+      if (!reread) orientOpen = false;
+      return;
+    }
+    gameState.setBrief(b, { reread });
+    brief = gameState.brief;
+    if (reread) report();
+  };
+  const editBuilding = (text) => {
+    gameState.editBuilding(text);
+    brief = gameState.brief;
+    report();
+  };
 
   // The hint ladder (ladder.js): how much of a hold the pair sees, from how
   // much they're struggling on this step. gameState keeps the signals; these
@@ -372,6 +421,7 @@
       novice: (step?.cycle || 1) <= GUIDE_CYCLES,
       // how much they're struggling, and how specific the step details should be
       struggle: phase === "finish" ? null : gameState.struggleSignals(gameState.stepNumber, { novice, rung: detailRung(rung, novice) }),
+      building: brief?.building || "",
     });
 
   // Only one test may fail in Red. When the rules are enforced or the coach
@@ -549,7 +599,18 @@
   $: backToRedCount = gameState.backToRedCount();
 </script>
 
+<OrientLine {brief} loading={orientLoading && !orientOpen} on:open={() => (orientOpen = true)} />
 <CycleLine iterations={gameState.iterations} stateName={step?.stateName || ""} finished={gameState.finished} />
+{#if orientOpen}
+  <OrientCard
+    {brief}
+    loading={orientLoading}
+    error={orientError}
+    on:confirm={() => (orientOpen = false)}
+    on:editProblem={(e) => editBuilding(e.detail)}
+    on:reread={() => orient(true)}
+  />
+{/if}
 <div>
   {#if step}
     <div transition:fade>

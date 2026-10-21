@@ -1,0 +1,20 @@
+description = "ORIENT, empty: Visual Studio's untouched template and no problem text"
+mode = "orient"
+problem = ""
+tests = '''
+// test.cpp
+#include "pch.h"
+
+TEST(TestCaseName, TestName) {
+  EXPECT_EQ(1, 1);
+  EXPECT_TRUE(true);
+}
+'''
+code = ""
+test_result = "All 1 tests passed"
+
+[expect]
+code_state = ["empty", "scaffold"]
+building_mentions = ["Unclear", "unclear", "simplest"]
+first_move_mentions = ["simplest", "first", "one", "empty", "zero"]
+warnings_avoid = ["uncommitted", "commit"]

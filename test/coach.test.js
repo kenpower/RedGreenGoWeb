@@ -1,5 +1,7 @@
 import {
   askCoach,
+  askOrient,
+  buildOrientRequest,
   coachUrl,
   reuseLook,
   lookKey,
@@ -210,6 +212,23 @@ describe("buildRequest", () => {
     expect(buildRequest({ phase: "finish", problem: "", before: null, after: snapshot("v1") })).not.toHaveProperty("struggle");
   });
 
+  test("what Orient said they're building goes with every Look, trimmed", () => {
+    const look = buildRequest({ phase: "red", problem: "", before: null, after: snapshot("v1"), building: "  A word counter. " });
+    expect(look.building).toEqual("A word counter.");
+    expect(buildRequest({ phase: "red", problem: "", before: null, after: snapshot("v1") })).not.toHaveProperty("building");
+  });
+
+  test("an Orient request: the code as it is, no catalogue, no Done", () => {
+    const orient = buildOrientRequest({
+      problem: "FizzBuzz", after: snapshot("v1"), ruleFindings: ["Advice (not a broken rule): x"], gameId: "g-1", players: ["Jane", "John"],
+    });
+    expect(orient).toEqual({
+      mode: "orient", phase: "red", pair: "jane__john", game_id: "g-1", problem: "FizzBuzz",
+      tests: "// test.cpp\nTEST(A, B) {}", code: "// lib.cpp\nv1", test_result: "All 1 tests passed",
+      rule_findings: ["Advice (not a broken rule): x"],
+    });
+  });
+
   test("the baseline goes with every Look", () => {
     const look = buildRequest({ phase: "green", problem: "", before: snapshot("v1"), after: snapshot("v2") });
     expect(look.code_before).toEqual("// lib.cpp\nv1");
@@ -371,6 +390,21 @@ describe("askCoach", () => {
   ])("a %i becomes a message, never an exception", async (status, message) => {
     const result = await askCoach(step, async () => ({ ok: false, status }));
     expect(result).toEqual({ verdict: null, error: message, stale: false });
+  });
+
+  test("askOrient posts an Orient request and returns the brief, or a message", async () => {
+    const brief = { building: "FizzBuzz.", code_state: "scaffold", warnings: [], first_move: "Test 1." };
+    let body;
+    const ok = await askOrient(step, async (url, options) => {
+      body = JSON.parse(options.body);
+      return { ok: true, status: 200, json: async () => brief };
+    });
+    expect(ok).toEqual({ brief, error: "", stale: false });
+    expect(body.mode).toEqual("orient");
+    expect(await askOrient(step, async () => ({ ok: false, status: 500 }))).toEqual({
+      brief: null, error: "The coach couldn't read your code.", stale: false,
+    });
+    expect((await askOrient(step, async () => { throw new Error("offline"); })).error).toEqual("Can't reach the coach right now.");
   });
 
   test("a network error becomes a message", async () => {

@@ -19,13 +19,17 @@ A step is a dict:
     pair, game_id  who and which game, for coach_server's records (optional)
     cycle          which Red-Green-Refactor cycle, from 1 (optional; leniency depends on it)
     rescue         true when the pair is stuck and asked to see the code (optional)
-    mode           "look" (the default; "verdict"/"next_steps" are older names for it)
+    mode           "look" (the default; "verdict"/"next_steps" are older names for it) or "orient"
     catalogue      [{id, text}] for this phase: the steps the guidance picks from (optional)
     novice         true in the first cycles: a detail on every step (optional)
     done           true when the pair clicked Done (coach_server counts these) (optional)
+    struggle       {runs_without_progress, minutes_on_step, holds_on_step, hints_shown,
+                   novice, rung}: how much the pair is struggling (optional)
+    building       what Orient said they're building, or the pair's words for it (optional)
 
-Every answer is a Look: the guidance (steps, extra, extra_needed, on_track) and
-the verdict (decision, note, actions, hints, …) for the step as it is now.
+A Look's answer is the guidance (steps, extra, extra_needed, on_track) and the
+verdict (decision, note, actions, hints, …) for the step as it is now. An
+Orient's answer is the brief: {building, code_state, warnings, first_move}.
 """
 import json
 import re
@@ -75,8 +79,22 @@ SCHEMA = {
 # Every request is a "look": one request, one answer with the verdict and the
 # guidance, served by two model calls (asked together, Haiku let the catalogue
 # sway the verdict). "verdict" and "next_steps" are the older names, still
-# accepted from cached clients; they get the same answer.
-MODES = {"look", "verdict", "next_steps"}
+# accepted from cached clients; they get the same answer. "orient" is the one
+# other kind: at the start of a game, what the pair is building (coach/orient.md).
+MODES = {"look", "verdict", "next_steps", "orient"}
+CODE_STATES = ["empty", "scaffold", "partial", "looks_done"]
+MAX_BUILDING = 500  # the pair's own words (orient.js MAX_PROBLEM_EDIT) or the coach's sentence
+ORIENT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "building": {"type": "string"},
+        "code_state": {"type": "string", "enum": CODE_STATES},
+        "warnings": {"type": "array", "items": {"type": "string"}},
+        "first_move": {"type": "string"},
+    },
+    "required": ["building", "code_state", "warnings", "first_move"],
+    "additionalProperties": False,
+}
 MAX_CATALOGUE = 60
 MAX_NEXT_STEPS = 4
 # Code in a guidance detail: braces, operators, a call with brackets, a GoogleTest
@@ -163,7 +181,7 @@ def validate(step):
     if step.get("rescue") and step["phase"] == "finish":
         raise BadStep("rescue is for a Red, Green or Refactor step")
     if step.get("mode", "look") not in MODES:
-        raise BadStep("mode must be look")
+        raise BadStep("mode must be look or orient")
     catalogue = step.get("catalogue")
     if catalogue is not None and (
             not isinstance(catalogue, list) or not 0 < len(catalogue) <= MAX_CATALOGUE
@@ -173,6 +191,8 @@ def validate(step):
     for flag in ("novice", "done"):
         if not isinstance(step.get(flag, False), bool):
             raise BadStep(f"{flag} must be true or false")
+    if not isinstance(step.get("building", ""), str) or len(step.get("building", "")) > MAX_BUILDING:
+        raise BadStep(f"building must be text of at most {MAX_BUILDING} characters")
     struggle = step.get("struggle")
     if struggle is not None and not _struggle_ok(struggle):
         raise BadStep("struggle must be {runs_without_progress, minutes_on_step, holds_on_step, "
@@ -204,10 +224,18 @@ def _block(title, text):
     return f"{title}:\n```cpp\n{text.strip()}\n```" if text.strip() else f"{title}: (none)"
 
 
+def _problem(step):
+    """The problem text, and what the game's Orient said they're building (or the
+    pair's own words for it), so every call reads the problem the same way."""
+    text = f"Problem:\n{step.get('problem', '').strip() or '(not given)'}"
+    building = step.get("building", "").strip()
+    return text + (f"\n\nWhat the pair is building (agreed at the start of the game): {building}" if building else "")
+
+
 def build_user(step):
     phase = step["phase"]
     parts = [
-        f"Problem:\n{step.get('problem', '').strip() or '(not given)'}",
+        _problem(step),
         f"Cycle {step.get('cycle', 1)}.",
         (f"Step just finished: {phase.upper()}" if step.get("done")
          else f"Step in progress: {phase.upper()} (a fresh test run or build just arrived; "
@@ -268,7 +296,7 @@ RUNG_DETAILS = {
 def build_guidance_user(step, verdict):
     """The guidance call: the step plus the settled verdict, so the two agree."""
     parts = [
-        f"Problem:\n{step.get('problem', '').strip() or '(not given)'}",
+        _problem(step),
         f"Phase: {step['phase'].upper()}. Cycle {step.get('cycle', 1)}.",
     ]
     if step.get("novice"):
@@ -310,6 +338,27 @@ def _clean_steps(answer, step):
 
 
 NO_GUIDANCE = {"steps": [], "extra": "", "extra_needed": False, "on_track": True}
+MAX_WARNINGS = 3
+
+
+def build_orient_user(step):
+    """Orient: the code as the game starts (or as the helper connects), read once."""
+    findings = step.get("rule_findings", [])
+    parts = [
+        f"Problem:\n{step.get('problem', '').strip() or '(not given)'}",
+        "Notes from the game's checks:\n" + ("\n".join(f"- {f}" for f in findings) if findings else "(none)"),
+        _block("Tests", step["tests"]),
+        _block("Production code", step["code"]),
+        f"Build and test result now: {step['test_result'].strip()}",
+    ]
+    return "\n\n".join(parts)
+
+
+def _clean_brief(brief):
+    """At most MAX_WARNINGS non-empty warnings; the rest as the schema gives them."""
+    warnings = [w.strip() for w in brief.get("warnings", []) if isinstance(w, str) and w.strip()]
+    return {"building": brief.get("building", "").strip()[:MAX_BUILDING], "code_state": brief.get("code_state"),
+            "warnings": warnings[:MAX_WARNINGS], "first_move": brief.get("first_move", "").strip()}
 
 
 class Usage:
@@ -346,6 +395,9 @@ def ask_coach(client, step, guidance=None):
     held step's card falls back to the app's rule-picked steps until the next
     Look. `guidance` True asks for it anyway (run_fixtures scores it on every
     fixture). Raises anthropic.APIError, RuntimeError or json.JSONDecodeError."""
+    if step.get("mode") == "orient":
+        brief, usage = _ask(client, "orient.md", ORIENT_SCHEMA, build_orient_user(step), 3000)
+        return _clean_brief(brief), usage
     if guidance is None:
         guidance = not step.get("done")
     verdict, usage = _ask(client, "prompt.md", SCHEMA, build_user(step), 4000)
