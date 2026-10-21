@@ -11,7 +11,8 @@ finds both under the solution folder.
 
 Run from the folder that holds your solution:
   python rgg_server.py                  opens the game at http://127.0.0.1:8000/ (after the first test run, if there are tests)
-  python rgg_server.py --class CODE     the same, with your class code filled in
+  python rgg_server.py --class-code CODE   the same, with your class code filled in (--class also works);
+                                        without it, a "Class code: CODE" line in README.md is used
   python rgg_server.py --dev            opens the dev build on http://localhost:8080
   python rgg_server.py --remote         opens the game on GitHub Pages instead (Chrome may block it from the helper)
   python rgg_server.py --help           all options
@@ -95,6 +96,7 @@ TEST_MARKER = re.compile(r"\bTEST(?:_F|_P)?\s*\(")
 MAX_FILE_BYTES = 100_000
 MAX_FILES = 50
 MAX_README_CHARS = 8_000  # the problem description sent to the coach
+CLASS_CODE_LINE = re.compile(r"^\s*class code\s*:\s*([A-Za-z0-9-]{2,40})\s*$", re.IGNORECASE | re.MULTILINE)
 GIT_TIMEOUT_SECONDS = 3
 MAX_DIRTY = 200  # untracked build output can be thousands of files when there's no .gitignore
 
@@ -592,7 +594,8 @@ def main():
                         help="glob for GoogleTest XML files, if auto-detection fails (repeatable)")
     parser.add_argument("--build-log", action="append", default=[],
                         help="glob for MSBuild .log files, if auto-detection fails (repeatable)")
-    parser.add_argument("--class", dest="class_code", metavar="CODE", help="your class code, for the coach")
+    parser.add_argument("--class-code", "--class", dest="class_code", metavar="CODE",
+                        help='your class code, for the coach (default: a "Class code: X" line in README.md)')
     parser.add_argument("--dev", action="store_true", help=f"open {DEV_GAME_URL} instead of {GAME_URL}")
     parser.add_argument("--remote", action="store_true",
                         help=f"open {REMOTE_GAME_URL} instead (Chrome may block it from reaching the helper)")
@@ -628,14 +631,22 @@ def main():
         print(f"  Git: {git['error'] or 'not a git repository'}")
     if not (args.results or find_result_files(project_dir)):
         print("  No test results yet - run your tests in Visual Studio's Test Explorer.")
+    class_code, source = args.class_code, "--class-code"
+    if not class_code and state["readme"]:
+        found = CLASS_CODE_LINE.search(state["readme"]["content"])
+        class_code, source = (found.group(1), state["readme"]["path"]) if found else (None, None)
+    if class_code:
+        print(f"  Class code: {class_code} (from {source})")
+    else:
+        print("  No class code: the game will ask for one")
     print(f"Open http://127.0.0.1:{PORT}/ to play  (Ctrl+C to stop)", flush=True)
 
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     threading.Thread(target=watch, args=(args.beep,), daemon=True).start()
     if not args.no_browser:
         url = DEV_GAME_URL if args.dev else REMOTE_GAME_URL if args.remote else GAME_URL
-        if args.class_code:
-            url += "&" + urlencode({"class": args.class_code})
+        if class_code:
+            url += "&" + urlencode({"class": class_code})
         threading.Thread(target=open_game_unless_connected, args=(url,), daemon=True).start()
     try:
         server.serve_forever()
