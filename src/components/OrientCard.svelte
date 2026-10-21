@@ -7,7 +7,7 @@
   //   on:reread              run Orient again on the code as it is now
   import { createEventDispatcher, tick } from "svelte";
   import WaitingDots from "./WaitingDots.svelte";
-  import { codeStateText, warningsOf, problemEdit, MAX_PROBLEM_EDIT } from "../orient.js";
+  import { codeStateText, warningsOf, problemEdit, rereadNote, MAX_PROBLEM_EDIT } from "../orient.js";
 
   // {building, code_state: "empty"|"scaffold"|"partial"|"looks_done", warnings: string[], first_move} | null
   export let brief = null;
@@ -24,6 +24,28 @@
   $: codeText = codeStateText(brief);
   // a new reading (or a new request) closes the problem box
   $: brief, loading, (editing = false);
+
+  // "Read my code again": when the reading comes back, say so, even when it
+  // hasn't changed (otherwise the button looks like it did nothing).
+  let rereading = false;
+  let before = null;
+  let wasLoading = loading;
+  let note = "";
+  $: finishReread(loading);
+  function finishReread(now) {
+    if (wasLoading && !now && rereading) {
+      note = rereadNote(before, brief, error);
+      rereading = false;
+    }
+    wasLoading = now;
+  }
+
+  function reread() {
+    before = brief;
+    rereading = true;
+    note = "";
+    dispatch("reread");
+  }
 
   async function startEditing() {
     draft = brief?.building || "";
@@ -49,11 +71,13 @@
   <h2 id="orient-heading" class="aoc-heading">Here's what the coach sees</h2>
 
   {#if loading}
-    <p class="muted" role="status">Reading your code<WaitingDots label="Reading your code" /></p>
+    <p class="muted" role="status">The coach is reading your code<WaitingDots label="Reading your code" /></p>
   {:else if error}
     <p class="error" role="alert">{error}</p>
   {:else if !brief}
     <p class="muted">The coach hasn't read your code yet.</p>
+  {:else if note}
+    <p class="note" role="status">{note}</p>
   {/if}
 
   {#if brief && !loading}
@@ -102,13 +126,15 @@
         <button class="quiet" on:click={() => (editing = false)}>Cancel</button>
       </div>
     </div>
-  {:else}
+  {:else if !loading}
+    <!-- no buttons while the coach is reading: the line above says why, rather
+         than [bracketed] buttons that look clickable but aren't -->
     <div class="actions">
-      {#if brief && !loading}
+      {#if brief}
         <button on:click={() => dispatch("confirm")}>That's right</button>
         <button on:click={startEditing}>Not quite: edit the problem</button>
       {/if}
-      <button on:click={() => dispatch("reread")} disabled={loading}>Read my code again</button>
+      <button on:click={reread}>Read my code again</button>
     </div>
   {/if}
 </section>
@@ -156,6 +182,10 @@
 
   .error {
     color: var(--testing-red);
+  }
+
+  .note {
+    color: var(--coding-green);
   }
 
   .muted {

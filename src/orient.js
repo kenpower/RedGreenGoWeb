@@ -25,6 +25,19 @@ export function warningsOf(brief) {
     .filter(Boolean);
 }
 
+// After "Read my code again" finishes: say what happened, so a re-read that
+// comes back with the same reading doesn't look like a button that did nothing.
+export function rereadNote(before, after, error) {
+  if (error) return "";
+  if (!after) return "";
+  const same = (a, b) => (a?.building || "") === (b?.building || "") && a?.code_state === b?.code_state
+    && (a?.first_move || "") === (b?.first_move || "")
+    && warningsOf(a).join("\n") === warningsOf(b).join("\n");
+  return before && same(before, after)
+    ? "Read your code again: the coach sees the same as before."
+    : "Read your code again: updated below.";
+}
+
 // What "Save" sends: trimmed and cut to fit. "" means nothing to save.
 export function problemEdit(text) {
   return String(text ?? "").trim().slice(0, MAX_PROBLEM_EDIT);

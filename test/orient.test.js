@@ -1,4 +1,24 @@
-import { codeStateText, warningsOf, problemEdit, MAX_PROBLEM_EDIT, CODE_STATE_TEXT } from "../src/orient.js";
+import { codeStateText, warningsOf, problemEdit, rereadNote, MAX_PROBLEM_EDIT, CODE_STATE_TEXT } from "../src/orient.js";
+
+describe("rereadNote", () => {
+  const brief = { building: "FizzBuzz", code_state: "partial", warnings: ["Uncommitted work"], first_move: "test 3" };
+
+  test("says so when the reading comes back unchanged, so the button doesn't look dead", () => {
+    expect(rereadNote(brief, { ...brief, warnings: [" Uncommitted work ", ""] })).toMatch(/same as before/);
+  });
+
+  test("says it was updated when anything the card shows changed", () => {
+    for (const change of [{ building: "Bowling" }, { code_state: "looks_done" }, { first_move: "test 5" }, { warnings: [] }]) {
+      expect(rereadNote(brief, { ...brief, ...change })).toMatch(/updated/);
+    }
+    expect(rereadNote(null, brief)).toMatch(/updated/);
+  });
+
+  test("says nothing on an error (the error is shown instead) or with no reading", () => {
+    expect(rereadNote(brief, brief, "Can't reach the coach right now.")).toBe("");
+    expect(rereadNote(brief, null)).toBe("");
+  });
+});
 
 describe("codeStateText", () => {
   test("has words for every code_state", () => {

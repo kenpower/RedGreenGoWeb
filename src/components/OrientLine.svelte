@@ -14,8 +14,12 @@
   <p class="line muted">The coach is reading your code<WaitingDots label="Reading your code" /></p>
 {:else if brief?.building}
   <button class="line" on:click={() => dispatch("open")} title="Open the coach's reading of your code">
-    <span class="muted">What the coach thinks you're building:</span>
-    <span class="building">{brief.building}</span>
+    <span class="text"
+      ><span class="muted">What the coach thinks you're building:</span>
+      <span class="building">{brief.building}</span></span
+    >
+    <!-- always visible, so the line reads as something to click -->
+    <span class="open">[details]</span>
   </button>
 {/if}
 
@@ -27,10 +31,31 @@
     padding: 0;
     text-align: left;
     font-size: 0.9em;
-    /* one line, cut with "…" (the whole text is on the card) */
+  }
+
+  button.line {
+    display: flex;
+    gap: 0.6em;
+    align-items: baseline;
+  }
+
+  /* one line, cut with "…" (the whole text is on the card); [details] stays */
+  .text {
+    flex: 1;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .open {
+    flex: none;
+    color: var(--link);
+  }
+
+  button.line:hover .open,
+  button.line:focus-visible .open {
+    color: var(--link-hover);
   }
 
   /* a line of text that opens the card, not a [bracketed] action */
@@ -44,12 +69,7 @@
   }
 
   .building {
-    color: var(--link);
-  }
-
-  button.line:hover .building,
-  button.line:focus-visible .building {
-    color: var(--link-hover);
+    color: var(--text-bright);
   }
 
   button.line:focus-visible {
