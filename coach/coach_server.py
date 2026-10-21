@@ -95,7 +95,8 @@ LOOK_REUSE_SECONDS = 600  # a Done can reuse a Look this recent
 REUSE_PHASES = {"red", "green", "refactor", "finish"}  # the step phases coach.py accepts
 
 EVENT_KINDS = {"advance", "hold", "release", "override", "back_to_red", "intent", "prediction",
-               "hint", "smell", "commit", "finish", "rescue", "passed_first_time", "orient"}
+               "hint", "smell", "commit", "finish", "rescue", "passed_first_time", "orient",
+               "recheck"}  # detail = the phase the pair re-checked from
 EVENT_PHASES = PROGRESS_PHASES | {"finish", ""}
 MAX_EVENTS_PER_CALL = 10
 MAX_EVENTS_PER_GAME = 3_000

@@ -129,10 +129,11 @@ class ProgressTests(unittest.TestCase):
                          [(1, "Test first", 2, 1, "127.0.0.1")])
 
     def test_resent_events_are_stored_once(self):
-        body = progress_body("p-events", events=[event("rescue"), event("orient", detail="Bowling")])
+        body = progress_body("p-events", events=[event("rescue"), event("orient", detail="Bowling"),
+                                                 event("recheck", detail="red", phase="red")])
         for _ in range(2):
             self.assertEqual(call("POST", "/progress", body, code="PROG")[0], 200)
-        self.assertEqual(rows("SELECT COUNT(*) FROM events WHERE game_id = 'p-events'"), [(2,)])
+        self.assertEqual(rows("SELECT COUNT(*) FROM events WHERE game_id = 'p-events'"), [(3,)])
 
     def test_bad_bodies_are_refused(self):
         good = progress_body("p-bad", events=[event()])
