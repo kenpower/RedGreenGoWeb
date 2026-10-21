@@ -1,5 +1,7 @@
 <script>
   import Game from "./components/Game.svelte";
+  import LabGame from "./components/LabGame.svelte";
+  import { parseLab } from "./lab.js";
   //import {gameState} from './store.js';
   //import {reStartGame, startGame} from './gameLogic.js';
   import { GameState } from "./gameState";
@@ -9,7 +11,7 @@
     helper, startHelper, resetHelper, enableHelper, BLOCKED_HELP, OFFLINE_HELP, HELPER_PAGE, onGithubPages,
     helperDownloadUrl,
   } from "./helper.js";
-  import { testNames } from "./rules.js";
+  import { testNames, snapshotOf } from "./rules.js";
   import {
     startCoach, resetCoach, getClassCode, setClassCode, linkedClassCode, classCodeFromReadme, checkClassCode,
   } from "./coach.js";
@@ -72,12 +74,16 @@
   $: helperConnected = $helper.status === "connected";
   const HELPER_URL = helperDownloadUrl();
 
+  // The starter README chooses the refactor lab ("Lab: refactor", lab.js)
+  $: labChoice = helperConnected ? parseLab($helper.data?.readme?.content) : null;
+
   const startGame = () => {
     if (thirdPlayer) gameState.players[2] = thirdPlayer;
     gameState.problem = problem.trim();
     gameState.enforceRules = enforceRules;
     setClassCode(classCode);
-    gameState.start();
+    if (labChoice) gameState.startLab(labChoice.refactorings, snapshotOf($helper.data));
+    else gameState.start();
     gameState = gameState;
   };
 
@@ -107,7 +113,11 @@
   <section>
     {#if gameState.started}
       <div in:fly={{ y: 200, duration: 2000 }}>
-        <Game {gameState} on:restart={reStartGame} />
+        {#if gameState.mode === "refactor"}
+          <LabGame {gameState} />
+        {:else}
+          <Game {gameState} on:restart={reStartGame} />
+        {/if}
       </div>
     {:else}
       <h2 class="aoc-heading">How to play</h2>
@@ -222,6 +232,13 @@
           warns you.
         </p>
 
+        {#if labChoice}
+          <p class="labNote">
+            <strong>Refactor lab:</strong> this project's README.md makes this game a refactor lab. Your code
+            already has passing tests: apply one refactoring at a time, run the tests, commit, then swap roles.
+            Refactorings: {labChoice.refactorings.join(", ")}.
+          </p>
+        {/if}
         <div class="startRow">
           <button id="startBtn" disabled={!helperConnected || needsTestRun || !classOk} on:click={startGame}
             >Start Game</button
@@ -316,6 +333,11 @@
     font-size: 0.9em;
     color: var(--text-muted);
     margin: 0.2em 0 0.6em 0;
+  }
+
+  .labNote {
+    padding: 0.3em 0.8em;
+    border-left: 2px solid var(--refactoring-blue);
   }
 
   label {

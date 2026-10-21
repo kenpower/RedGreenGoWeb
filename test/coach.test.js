@@ -557,6 +557,7 @@ describe("sendProgress", () => {
       rescues: 0,
       passed_first: 0,
       refactorings: {},
+      mode: "tdd",
       events: [],
     });
   });

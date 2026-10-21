@@ -689,6 +689,38 @@ test("refactor_moves_are_counted_per_refactoring_and_recorded", () => {
   ]);
 });
 
+test("the_refactor_lab_cycles_refactor_test_commit_and_swaps_after_each_commit", () => {
+  let g = new GameState();
+  g.startLab(["Extract Function"], { git: { repo: true, head: "aaa" } });
+  expect(g.mode).toBe("refactor");
+  expect(g.lab).toMatchObject({ phase: "refactor", round: 1, rounds: 0, refactorings: ["Extract Function"] });
+  const driver = g.driver;
+  g.labDone(null);
+  expect(g.lab.phase).toBe("test");
+  g.labRun({ red: true, green: false }); // a change broke a test...
+  g.labRun({ red: true, green: false });
+  g.labRun({ red: false, green: true }); // ...and was undone: one revert
+  g.labDone(null);
+  expect(g.lab.phase).toBe("commit");
+  g.labDone({ git: { repo: true, head: "bbb", headMessage: "Extract Function: priceFor" } });
+  expect(g.lab).toMatchObject({ phase: "refactor", round: 2, rounds: 1, commits: 1, reverts: 1 });
+  expect(g.lab.base.git.head).toBe("bbb"); // the commit is the next round's base
+  expect(g.driver).not.toBe(driver); // roles swapped
+  expect(g.pendingEvents.filter((e) => e.kind === "commit").map((e) => e.detail)).toEqual(["bbb Extract Function: priceFor"]);
+  const progress = g.progress();
+  expect(progress).toMatchObject({ mode: "refactor", rounds: 1, commits: 1, reverts: 1, phase: "refactor" });
+  expect(GameState.recoverSavedGame().lab.round).toBe(2);
+});
+
+test("a_lab_phase_is_reported_as_one_the_server_knows", () => {
+  let g = new GameState();
+  g.startLab([], null);
+  g.labDone(null); // test
+  expect(g.progress().phase).toBe("refactor");
+  g.addEvent("hint", "x");
+  expect(g.pendingEvents[g.pendingEvents.length - 1].phase).toBe("refactor");
+});
+
 test("keep_only_works_on_red", () => {
   let g = new GameState();
   g.start();
@@ -792,6 +824,7 @@ test("progress_summarises_the_game", () => {
     rescues: 0,
     passed_first: 0,
     refactorings: {},
+    mode: "tdd",
     events: [],
   });
 

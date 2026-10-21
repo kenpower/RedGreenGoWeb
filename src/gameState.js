@@ -57,6 +57,9 @@ export const rescueOffer = (attempts, coached) => (attempts < RESCUE_AFTER ? "" 
 
 const newCycle = (index) => ({ phase: TDDPhase.RED, index, backToRed: 0 });
 
+// The lab's phases as coach_server takes them (its PROGRESS_PHASES).
+const LAB_SERVER_PHASES = { refactor: "refactor", test: "refactor", commit: "refactor" };
+
 // Identifies one game in the progress records on the coach server.
 export function newGameId() {
   try {
@@ -107,6 +110,8 @@ export class GameState {
       this.smell = r.smell || null;
       this.checkpoint = r.checkpoint || null;
       this.refactorings = r.refactorings || {};
+      this.mode = r.mode || "tdd";
+      this.lab = r.lab || null;
     } else {
       this.players = ["John", "Jane"];
       this.driver = 0;
@@ -136,6 +141,8 @@ export class GameState {
       this.smell = null; // what the Green verdict thought worth tidying, for this cycle's Refactor
       this.checkpoint = null; // Refactor: the code at the last green run in the step (see noteGreenRun)
       this.refactorings = {}; // refactorings the coach saw the pair make: {name: count}
+      this.mode = "tdd"; // "tdd" | "refactor" (the refactor lab, chosen by the README: lab.js)
+      this.lab = null; // the lab's state, see startLab
     }
     this.#save();
   }
@@ -255,6 +262,53 @@ export class GameState {
       this.smell[what] = true;
       this.addEvent("smell", `${what}: ${what === "shown" ? this.smell.question : this.smell.detail}`);
     } else this.addEvent("smell", what);
+    this.#save();
+  }
+
+  // ---- The refactor lab (DESIGN-refactor-lab.md B, rules in lab.js) ----------
+  // [REFACTOR] ---> [TEST] ---> [COMMIT] --↺, one refactoring per round, roles
+  // swapped after every commit. `base` is the code at the last commit (at the
+  // start for round 1): the tests may never change from it.
+  startLab(refactorings, snapshot) {
+    this.start();
+    this.mode = "refactor";
+    this.lab = { phase: "refactor", round: 1, refactorings, rounds: 0, commits: 0, reverts: 0, base: snapshot, sawRed: false };
+    this.#save();
+  }
+
+  // Done on a lab phase: on to the next; after the commit, a new round with
+  // swapped roles, and the commit as the new base.
+  labDone(snapshot) {
+    const lab = this.lab;
+    if (!lab || this.finished) return;
+    this.stepNumber++;
+    if (lab.phase === "refactor") lab.phase = "test";
+    else if (lab.phase === "test") lab.phase = "commit";
+    else {
+      const git = snapshot?.git;
+      if (git?.repo && git.head && git.head !== lab.base?.git?.head) {
+        lab.commits++;
+        this.addEvent("commit", `${git.head.slice(0, 8)} ${git.headMessage || ""}`.trim());
+      }
+      lab.rounds++;
+      lab.round++;
+      lab.base = snapshot;
+      lab.phase = "refactor";
+      this.#swapPairRoles();
+    }
+    this.#save();
+  }
+
+  // A fresh run in the lab: a red one means a change broke a test; the next
+  // green one means they undid (or fixed) it, which the teacher sees as a revert.
+  labRun({ red, green }) {
+    const lab = this.lab;
+    if (!lab) return;
+    if (red && !lab.sawRed) lab.sawRed = true;
+    else if (green && lab.sawRed) {
+      lab.sawRed = false;
+      lab.reverts++;
+    } else return;
     this.#save();
   }
 
@@ -425,7 +479,7 @@ export class GameState {
       {
         t: Math.floor(Date.now() / 1000),
         kind,
-        phase: this.finished ? "finished" : this.state.id,
+        phase: this.#phaseForServer(),
         cycle: this.iteration + 1,
         detail: String(detail).slice(0, 500),
       },
@@ -478,6 +532,11 @@ export class GameState {
 
   backToRedCount = () => this.iterations.reduce((sum, i) => sum + (i.backToRed || 0), 0);
 
+  // The phase as the coach server records it. The lab's test and commit go as
+  // "refactor" until the server knows them (LAB_SERVER_PHASES).
+  #phaseForServer = () =>
+    this.finished ? "finished" : this.mode === "refactor" ? LAB_SERVER_PHASES[this.lab?.phase] || "refactor" : this.state.id;
+
   // What the coach server records after each step, for grading.
   progress = () => ({
     game_id: this.gameId,
@@ -485,7 +544,11 @@ export class GameState {
     problem: this.problem,
     steps: this.stepNumber - 1, // every step change: advances (Swap included) and backs to Red
     cycles: this.completedCycles(),
-    phase: this.finished ? "finished" : this.state.id,
+    phase: this.#phaseForServer(),
+    mode: this.mode,
+    ...(this.mode === "refactor" && this.lab
+      ? { rounds: this.lab.rounds, commits: this.lab.commits, reverts: this.lab.reverts }
+      : {}),
     overrides: this.overrides,
     back_to_red: this.backToRedCount(),
     finished: this.finished,

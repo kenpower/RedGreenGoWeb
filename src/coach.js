@@ -356,6 +356,11 @@ export async function sendProgress(summary, fetchFn = fetch) {
         rescues: count(summary.rescues),
         passed_first: count(summary.passed_first),
         refactorings: refactoringCounts(summary.refactorings),
+        // the refactor lab (coach_server: mode tdd | refactor; the round counts only for a lab)
+        mode: summary.mode === "refactor" ? "refactor" : "tdd",
+        ...(summary.mode === "refactor"
+          ? { rounds: count(summary.rounds), commits: count(summary.commits), reverts: count(summary.reverts) }
+          : {}),
         events: (summary.events || []).slice(0, 10).map((e) => ({
           t: Math.floor(Number(e.t) || 0),
           kind: String(e.kind || ""),
