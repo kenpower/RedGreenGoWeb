@@ -66,6 +66,13 @@
       : "No test results yet — click for details";
 
   const HELPER_URL = helperDownloadUrl();
+  // Where to type the command, and the Windows python launcher (the lab's pairs
+  // couldn't find a terminal, and `python` can open the Microsoft Store). A fixed
+  // string, so {@html} is safe; same wording as STUDENTS.md.
+  const TERMINAL_HELP =
+    "Terminal: in Visual Studio, <strong>Tools → Command Line → Developer PowerShell</strong>, " +
+    "or right-click the solution → <strong>Open in Terminal</strong>. " +
+    "If <code>python</code> opens the Microsoft Store, type <code>py rgg_server.py</code>.";
 
   const icon = (status) => (status === "passed" ? "✔" : status === "failed" ? "✖" : "–");
 </script>
@@ -105,6 +112,7 @@
           Save the helper into your solution folder, run
           <code>python rgg_server.py</code> there, then connect.
         </p>
+        <p class="muted">{@html TERMINAL_HELP}</p>
         <a class="download" href={HELPER_URL} download>Download rgg_server.py</a>
         <button on:click={enableHelper}>Connect to my code</button>
       {:else if $helper.status === "blocked"}
@@ -121,6 +129,7 @@
           <li>
             In your solution folder, run <code>python rgg_server.py</code>
             (<a href={HELPER_URL} download>download it</a> if you don't have it).
+            <span class="muted">{@html TERMINAL_HELP}</span>
           </li>
           <li>
             If the browser asks to access apps on this device, click
