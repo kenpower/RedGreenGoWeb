@@ -82,8 +82,9 @@ GAME_PAGE = f"""<!DOCTYPE html>
 POLL_SECONDS = 0.5
 SETTLE_SECONDS = 0.3  # ignore files modified more recently than this (still being written)
 RESCAN_SECONDS = 5  # how often to look for new result/log files (e.g. a new build configuration)
-BROWSER_GRACE_SECONDS = 4  # an already-open game tab reconnects within this time
-RESULTS_WAIT_SECONDS = 60  # longest the game waits for the first test run before opening anyway
+FIRST_RESCAN_SECONDS = 1  # ...and while there are none yet
+BROWSER_GRACE_SECONDS = 3  # an already-open game tab reconnects within this time (SSE retry is 2 s)
+RESULTS_WAIT_SECONDS = 10  # longest the game waits for the first test run before opening anyway
 SSE_RETRY_MS = 2000
 SSE_PING_SECONDS = 15
 
@@ -155,9 +156,11 @@ def find_result_files(project_dir):
 
 
 def check_result_files(paths, seen_mtimes):
-    """Return [(mtime, results)] for result files changed since last seen, oldest first.
+    """Return [(mtime, results, path)] for result files changed since last seen, oldest first.
 
     Visual Studio rewrites these files on every run, so they are only read, never deleted.
+    A file holds only the tests that ran: run a few tests in Test Explorer and the others
+    are left out, not reported as skipped (see publish).
     """
     runs = []
     now = time.time()
@@ -173,7 +176,7 @@ def check_result_files(paths, seen_mtimes):
         except ET.ParseError:
             continue  # probably still being written; try again next poll
         seen_mtimes[path] = mtime
-        runs.append((mtime, results))
+        runs.append((mtime, results, path))
     return sorted(runs, key=lambda run: run[0])
 
 
@@ -362,19 +365,28 @@ def beep(runs):
         import winsound
     except ImportError:
         return
-    all_passed = all(r["status"] != "failed" for _, results in runs for r in results)
+    all_passed = all(r["status"] != "failed" for _, results, _ in runs for r in results)
     winsound.MessageBeep(winsound.MB_OK if all_passed else winsound.MB_ICONHAND)
 
 
 def publish(runs, build, files, readme, git):
-    """Apply new results/build/files as one change, so the app never sees a half-updated state."""
+    """Apply new results/build/files as one change, so the app never sees a half-updated state.
+
+    Tests are kept even when a later run leaves them out, since a partial run in Test
+    Explorer leaves out the tests it didn't run. Each test says which results file it came
+    from and whether that file's latest run had it (`latest`); the app compares the names
+    with the source to tell a test that wasn't run from one that was commented out."""
     with changed:
         state["git"] = git
-        for mtime, results in runs:
+        for mtime, results, path in runs:
             state["run"] += 1
             state["runTime"] = mtime
+            file = os.path.relpath(path, config["project"]).replace("\\", "/")
+            for test in state["tests"].values():
+                if test.get("file") == file:
+                    test["latest"] = False
             for r in results:
-                state["tests"][r["name"]] = {**r, "run": state["run"]}
+                state["tests"][r["name"]] = {**r, "run": state["run"], "file": file, "latest": True}
         if build:
             state["build"] = build
         state["files"] = files
@@ -423,7 +435,9 @@ def watch(beep_on_results):
             rescan = time.time() >= next_scan
             if rescan:
                 result_files, logs = find_inputs()
-                next_scan = time.time() + RESCAN_SECONDS
+                # until the first results file appears, look every second: the game
+                # waits for it, and a 5 s gap made pairs think the run hadn't worked
+                next_scan = time.time() + (RESCAN_SECONDS if result_files else FIRST_RESCAN_SECONDS)
 
             runs = check_result_files(result_files, seen_mtimes)
             build = check_build_logs(logs, seen_mtimes)
@@ -431,7 +445,7 @@ def watch(beep_on_results):
             if runs or build:
                 publish(runs, build, read_sources(config["project"]), read_readme(config["project"]),
                         read_git(config["project"]))
-                for _, results in runs:
+                for _, results, _ in runs:
                     print("tests: " + ", ".join(f'{r["name"]}={r["status"]}' for r in results), flush=True)
                 if build:
                     print(f'build {build["status"]}: {len(build["errors"])} error(s)', flush=True)
@@ -573,9 +587,11 @@ def open_game_unless_connected(url):
     with changed:
         has_tests = any(f["kind"] == "test" for f in state["files"])
     if has_tests and not have_results.wait(timeout=1):
-        print("Waiting for your first test run in Test Explorer...", flush=True)
+        print(f"Waiting for your first test run, then the game opens. In Visual Studio: Test > Run All Tests."
+              f" (Opening anyway in {RESULTS_WAIT_SECONDS} s.)", flush=True)
         if not have_results.wait(timeout=RESULTS_WAIT_SECONDS):
-            print(f"No test results after {RESULTS_WAIT_SECONDS} s - opening the game anyway.", flush=True)
+            print("No test results yet - opening the game anyway. Run your tests and it will pick them up.",
+                  flush=True)
     time.sleep(BROWSER_GRACE_SECONDS)
     with changed:
         connected = sse_clients > 0
