@@ -104,6 +104,7 @@ export class GameState {
       this.skipGreen = r.skipGreen || false;
       this.struggle = r.struggle || null;
       this.brief = r.brief || null;
+      this.smell = r.smell || null;
     } else {
       this.players = ["John", "Jane"];
       this.driver = 0;
@@ -130,6 +131,7 @@ export class GameState {
       this.skipGreen = false; // this cycle's Red test passed first time and was kept: no Green
       this.struggle = null; // this step's struggle signals (see struggleFor), started lazily
       this.brief = null; // the coach's Orient reading: {building, code_state, warnings, first_move}
+      this.smell = null; // what the Green verdict thought worth tidying, for this cycle's Refactor
     }
     this.#save();
   }
@@ -181,6 +183,7 @@ export class GameState {
     }
     this.stepNumber++;
     this.stuckAttempts = 0; // moving on: no longer stuck
+    if (this.state.id !== "refactor") this.smell = null; // the Green verdict's smell is for Refactor only
     const cycle = this.iterations[this.iteration];
 
     if (this.state.id == "red") {
@@ -206,6 +209,7 @@ export class GameState {
     if (this.finished || !["green", "refactor"].includes(this.state.id)) return;
     this.before = this.redBefore;
     this.startChecked = true; // the failing test is theirs: no need to check where they start
+    this.smell = null;
     this.state = states[0];
     this.stepNumber++;
     const cycle = this.iterations[this.iteration];
@@ -226,6 +230,27 @@ export class GameState {
   // reset by nextStep. At RESCUE_AFTER the pair is offered the code.
   noteHeld() {
     this.stuckAttempts++;
+    this.#save();
+  }
+
+  // The smell an advancing Green verdict spotted (smell_question / smell_detail),
+  // shown on the coming Refactor card. Call before moving on to Refactor.
+  setSmell(verdict) {
+    const question = String(verdict?.smell_question || "").trim();
+    const detail = String(verdict?.smell_detail || "").trim();
+    this.smell = question || detail ? { question, detail, shown: false, revealed: false } : null;
+    this.#save();
+  }
+
+  // The Refactor card's smell, for the teacher: "shown" and "revealed" once
+  // each; "nothing to tidy" when the pair skips it.
+  noteSmell(what) {
+    if (!this.smell) return;
+    if (what === "shown" || what === "revealed") {
+      if (this.smell[what]) return;
+      this.smell[what] = true;
+      this.addEvent("smell", `${what}: ${what === "shown" ? this.smell.question : this.smell.detail}`);
+    } else this.addEvent("smell", what);
     this.#save();
   }
 

@@ -16,7 +16,7 @@
   import { rescueOffer } from "../gameState.js";
   import { catalogueFor, cardSteps, hasGuidance, nextStepsDue, runMark, codeKey } from "../content/steps.js";
   import { reuseLook, lookKey, askOrient } from "../coach.js";
-  import { hintRung, detailRung, ladderFor, progressKey } from "../ladder.js";
+  import { hintRung, detailRung, ladderFor, progressKey, refactorCard } from "../ladder.js";
 
   const dispatch = createEventDispatcher();
 
@@ -148,7 +148,31 @@
   $: rung = struggle
     ? hintRung({ moreHelp: struggle.moreHelp, runsWithoutProgress: struggle.runs, minutesOnStep: (nowSec - struggle.startedAt) / 60 })
     : 1;
-  $: ladder = held && verdict ? ladderFor(verdict, rung) : null;
+  $: ladder = held && verdict ? ladderFor(verdict, rung, step?.stateName === "refactor" ? smell : null) : null;
+
+  // The Refactor card (DESIGN-refactor-lab.md A.1-A.2): the smell the Green
+  // verdict spotted, as a question, then where it is ([Show me where], after
+  // 2 minutes, or at rung 2). Only with the coach: without it there's no smell
+  // to show, and "nothing to tidy" would be a guess.
+  let smellTick = 0; // bumped after gameState.noteSmell, which mutates in place
+  let smellClicked = false; // [Show me where]; reset on every step change (advance)
+  $: smell = (smellTick, gameState.smell);
+  $: refactorView =
+    step?.stateName === "refactor" && !held && isCoached($helper)
+      ? refactorCard({
+          smell,
+          clicked: smellClicked,
+          minutesOnStep: struggle ? (nowSec - struggle.startedAt) / 60 : 0,
+          rung,
+          novice,
+        })
+      : null;
+  $: if (refactorView?.question && smell && !smell.shown) noteSmell("shown");
+  $: if (refactorView?.detail && smell && !smell.revealed) noteSmell("revealed");
+  const noteSmell = (what) => {
+    gameState.noteSmell(what);
+    smellTick++;
+  };
   $: if (ladder && step) gameState.noteHintShown(step.stepNumber, rung);
   const moreHelp = () => {
     gameState.noteMoreHelp(step.stepNumber);
@@ -347,6 +371,7 @@
     feedback = carry.feedback || "";
     feedbackWho = carry.who || "";
     rescue = null;
+    smellClicked = false;
     attempts = gameState.stuckAttempts; // 0 after moving on, kept after a back to Red
     tone = carry.tone || "";
     advice = carry.advice || null;
@@ -388,6 +413,8 @@
     if (v.next_test) nextTest = v.next_test;
 
     if (v.decision === "redo") return hold(v, []);
+    // the smell worth tidying goes with the pair into Refactor
+    if (phase === "green" && v.decision === "advance") gameState.setSmell(v);
     if (v.decision === "back_to_red") {
       countAttempt(); // not progress: still stuck on the same behaviour
       nextTest = v.next_test || nextTest;
@@ -606,6 +633,14 @@
         return moreHelp();
       case "recheck":
         return recheck();
+      case "showWhere":
+        smellClicked = true;
+        return;
+      case "nothingToTidy":
+        // Done without changes: the same checks as Done (a fresh green run if code changed)
+        noteSmell("nothing to tidy");
+        attemptPending = true;
+        return done().finally(() => (attemptPending = false));
       case "pickNew":
         pickingNew = true; // stay in Red; the card says what to do
         return;
@@ -661,6 +696,7 @@
         {findings}
         coach={verdict}
         {ladder}
+        refactorCard={refactorView}
         {canAskAgain}
         {finishState}
         {likelyFinished}

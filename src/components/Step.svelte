@@ -31,6 +31,9 @@
   // kind, actions, more}, or null. At rung 3 the Driver/Navigator lines carry
   // the coach's actions (Game puts them there).
   export let ladder = null;
+  // Refactor: the smell the Green verdict spotted (ladder.refactorCard), or null:
+  // {question, detail, showWhere, nothingToTidy: "button"|"link", none}
+  export let refactorCard = null;
   // rule findings [{rule, message}]: why we're held without the coach, or
   // warnings when the rules aren't enforced
   export let findings = [];
@@ -262,6 +265,36 @@
         <p class="marker">Heads up: a TDD rule isn't met (you can carry on)</p>
         <p>{firstFinding.message}</p>
       </div>
+    {/if}
+
+    {#if refactorCard && !start && !held}
+      {#if refactorCard.none}
+        <p class="smellNone">Nothing worth tidying yet. Commit and move on.</p>
+      {:else}
+        <div class="smellBox">
+          <p><span class="who">Coach:</span> {refactorCard.question}</p>
+          {#if refactorCard.detail}
+            <p class="smellWhere"><span class="ladderLabel">Where:</span> {refactorCard.detail}</p>
+          {/if}
+          {#if refactorCard.showWhere || refactorCard.nothingToTidy === "button"}
+            <div class="choices">
+              {#if refactorCard.showWhere}
+                <button disabled={busy} on:click={() => interact("showWhere")}>Show me where</button>
+              {/if}
+              {#if refactorCard.nothingToTidy === "button"}
+                <button disabled={busy || helperMissing} on:click={() => interact("nothingToTidy")}>Nothing to tidy yet</button>
+              {/if}
+            </div>
+          {/if}
+          {#if refactorCard.nothingToTidy === "link"}
+            <p class="smellSkip">
+              <button class="quiet recheck" disabled={busy || helperMissing} on:click={() => interact("nothingToTidy")}
+                >Nothing to tidy yet</button
+              >
+            </p>
+          {/if}
+        </div>
+      {/if}
     {/if}
 
     {#if passedFirst && !start && !held}
@@ -543,6 +576,10 @@
 
   .feedback .who {
     color: var(--tone-col, var(--text-muted));
+  }
+
+  .smellBox .who {
+    color: var(--refactoring-blue);
   }
 
   .tone-red {
@@ -847,6 +884,31 @@
   .practiceLine {
     padding-left: 0.6em;
     border-left: 2px solid var(--amber);
+  }
+
+  .smellBox {
+    margin: 0 0 0.6em 0;
+    padding: 0.3em 0.8em;
+    border: 1px solid var(--refactoring-blue);
+    background: var(--bg-panel);
+  }
+
+  .smellBox p {
+    margin: 0.3em 0;
+  }
+
+  .smellWhere {
+    padding-left: 0.6em;
+    border-left: 2px solid var(--refactoring-blue);
+  }
+
+  .smellSkip {
+    text-align: right;
+  }
+
+  .smellNone {
+    margin: 0 0 0.6em 0;
+    color: var(--text-muted);
   }
 
   .recheckRow {

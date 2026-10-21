@@ -1,4 +1,6 @@
-import { hintRung, detailRung, ladderFor, progressKey, AUTO_RUNS, AUTO_MINUTES } from "../src/ladder.js";
+import {
+  hintRung, detailRung, ladderFor, progressKey, refactorCard, AUTO_RUNS, AUTO_MINUTES, REVEAL_MINUTES,
+} from "../src/ladder.js";
 
 const VERDICT = {
   decision: "redo",
@@ -47,5 +49,40 @@ describe("the hint rung", () => {
     expect(progressKey(live)).toEqual(progressKey({ lines: [{ text: "Exactly one test fails", ok: false }] }));
     expect(progressKey({ lines: [{ text: "Exactly one test fails", ok: true }] })).not.toEqual(progressKey(live));
     expect(progressKey(null)).toEqual("[]");
+  });
+});
+
+describe("Refactor: the smell the Green verdict spotted", () => {
+  const SMELL = { question: "There's one bit of duplication worth tidying. Can you spot it?", detail: "The three ifs in toRoman each return a run of 'I'." };
+
+  test("the question first, with [Show me where]; where it is only once asked", () => {
+    expect(refactorCard({ smell: SMELL })).toEqual({
+      question: SMELL.question, detail: "", showWhere: true, nothingToTidy: "link", none: false,
+    });
+    expect(refactorCard({ smell: SMELL, clicked: true })).toMatchObject({ detail: SMELL.detail, showWhere: false });
+  });
+
+  test("where it is shows by itself after 2 minutes, or at rung 2", () => {
+    expect(refactorCard({ smell: SMELL, minutesOnStep: REVEAL_MINUTES - 0.1 }).detail).toBe("");
+    expect(refactorCard({ smell: SMELL, minutesOnStep: REVEAL_MINUTES }).detail).toBe(SMELL.detail);
+    expect(refactorCard({ smell: SMELL, rung: 2 }).detail).toBe(SMELL.detail);
+  });
+
+  test("[Nothing to tidy yet] is a button while the guide runs, a quiet link after", () => {
+    expect(refactorCard({ smell: SMELL, novice: true }).nothingToTidy).toBe("button");
+    expect(refactorCard({ smell: SMELL, novice: false }).nothingToTidy).toBe("link");
+  });
+
+  test("no smell: one line, nothing to tidy", () => {
+    expect(refactorCard({ smell: null })).toMatchObject({ none: true, question: "", showWhere: false });
+    expect(refactorCard({ smell: { question: " ", detail: "" } }).none).toBe(true);
+  });
+
+  test("a held Refactor's ladder is about the smell: its question, then where it is", () => {
+    const verdict = { decision: "redo", hint_question: "Which line adds behaviour?", hint_kind: "added behaviour", driver_action: "Take out the Buzz branch." };
+    expect(ladderFor(verdict, 1, SMELL).question).toBe(SMELL.question);
+    expect(ladderFor(verdict, 2, SMELL).kind).toBe(SMELL.detail);
+    expect(ladderFor(verdict, 3, SMELL).actions).toBe(true);
+    expect(ladderFor(verdict, 2, null)).toMatchObject({ question: "Which line adds behaviour?", kind: "added behaviour" });
   });
 });

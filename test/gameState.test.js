@@ -635,6 +635,29 @@ test("recheck_starts_this_step_afresh_without_restarting_the_game", () => {
   ]);
 });
 
+test("the_green_verdicts_smell_goes_to_refactor_and_its_events_are_recorded_once", () => {
+  let g = new GameState();
+  g.start();
+  steps(g, 2); // green
+  g.setSmell({ smell_question: "Can you spot the duplication?", smell_detail: "Three ifs repeat 'I'." });
+  steps(g, 1); // refactor: the smell comes along
+  expect(g.smell).toMatchObject({ question: "Can you spot the duplication?", shown: false });
+  g.noteSmell("shown");
+  g.noteSmell("shown");
+  g.noteSmell("revealed");
+  g.noteSmell("nothing to tidy");
+  expect(g.pendingEvents.filter((e) => e.kind === "smell").map((e) => e.detail)).toEqual([
+    "shown: Can you spot the duplication?",
+    "revealed: Three ifs repeat 'I'.",
+    "nothing to tidy",
+  ]);
+  expect(GameState.recoverSavedGame().smell.revealed).toBe(true);
+  steps(g, 1); // the next Red: gone
+  expect(g.smell).toBeNull();
+  g.setSmell({ smell_question: "", smell_detail: "" });
+  expect(g.smell).toBeNull(); // no smell from the verdict, nothing to show
+});
+
 test("keep_only_works_on_red", () => {
   let g = new GameState();
   g.start();

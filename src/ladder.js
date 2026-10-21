@@ -23,12 +23,35 @@ export const detailRung = (rung, novice) => (novice ? TOP_RUNG : rung);
 
 // What a held step shows of the coach's verdict at a rung: the question, then
 // the kind, then (rung 3) the actions, which Game puts in the Driver/Navigator lines.
-export function ladderFor(verdict, rung) {
+// In Refactor (DESIGN-refactor-lab.md A.5) the smell the Green verdict spotted
+// is the subject: rung 1 its question, rung 2 where it is; the verdict's own
+// hints stand in when there's no smell.
+export function ladderFor(verdict, rung, smell = null) {
   if (!verdict) return { question: "", kind: "", actions: false, more: false };
-  const question = rung >= 1 ? verdict.hint_question || "" : "";
-  const kind = rung >= 2 ? verdict.hint_kind || "" : "";
+  const question = rung >= 1 ? smell?.question || verdict.hint_question || "" : "";
+  const kind = rung >= 2 ? smell?.detail || verdict.hint_kind || "" : "";
   const actions = rung >= 3 && !!(verdict.driver_action || verdict.navigator_action);
   return { question, kind, actions, more: rung < TOP_RUNG };
+}
+
+// The Refactor card (DESIGN-refactor-lab.md A.1-A.2): the smell the Green
+// verdict spotted, as a question first; where it is on [Show me where], after
+// REVEAL_MINUTES on the step, or once the ladder reaches rung 2. With no smell,
+// one line: nothing to tidy. [Nothing to tidy yet] (Done without changes) is a
+// button while the guide runs (novice), a quiet link after.
+export const REVEAL_MINUTES = 2;
+export function refactorCard({ smell, clicked = false, minutesOnStep = 0, rung = 1, novice = false } = {}) {
+  const question = (smell?.question || "").trim();
+  const detail = (smell?.detail || "").trim();
+  if (!question && !detail) return { question: "", detail: "", showWhere: false, nothingToTidy: "", none: true };
+  const revealed = clicked || minutesOnStep >= REVEAL_MINUTES || rung >= 2;
+  return {
+    question: question || "There's something worth tidying here.",
+    detail: revealed ? detail : "",
+    showWhere: !revealed && !!detail,
+    nothingToTidy: novice ? "button" : "link",
+    none: false,
+  };
 }
 
 // The live goal lines as a key: a fresh run that leaves it unchanged made no progress.
