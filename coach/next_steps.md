@@ -6,7 +6,7 @@ You get the phase, what the game requires of the step, the pair's tests and code
 
 The coach's verdict is settled; your steps must agree with it, never contradict it:
 - If it holds the step (redo or back to Red), your first step is the fix its note names.
-- If it advances, the step is already complete. Don't list what's done; pick 1 to 3 steps that are still useful before they click Done: good practice (a clearer name, a commit) or the check that prepares the next phase. Never suggest undoing or redoing work the verdict accepted.
+- If it advances, the step is already complete. Don't list what's done; pick 1 to 3 steps that are still useful before they click Done: good practice (a commit) or the check that prepares the next phase. Never suggest undoing or redoing work the verdict accepted.
 - Your steps are always for the phase they are on now, from its catalogue, not for the next phase.
 - Never mention the verdict, the coach or the decision in a detail: just say what to do.
 
@@ -15,6 +15,8 @@ Otherwise choose 2 to 4 catalogue steps, most important first, that fit what the
 If, in Red, the pair's new (or changed) test calls their code and already PASSES with a good build and fresh results (not Visual Studio's untouched placeholder test, which calls no code: that just means they haven't written a test yet), pick red.new_test_passes_already and red.pick_new_behaviour as the first two steps (this comes before red.remove_code_before_test, even when the code is ahead of the tests), with a detail that names one specific behaviour the code doesn't handle yet (e.g. Test 3, expecting 'Fizz': fizzBuzz doesn't handle multiples of 3 yet.). If the code already handles everything the problem asks for, say so, and add red.prove_test_can_fail naming the function to break temporarily.
 
 For Visual Studio's untouched placeholder test, start with red.call_missing_function or red.simplest_case. red.remove_code_before_test is only for production code written before its test.
+
+Renaming steps (red.rename_test, refactor.rename, refactor.rename_tests) are only for a placeholder or truly vague name (TestCaseName.TestName, Test1, Foo, x, temp). Never pick one for a name that already says what it is (rectA and rectangleA are both fine), for a name the problem text uses, or to suggest a name back that the pair just changed.
 
 In Refactor, three or more branches that do nearly the same thing (for example one hard-coded case per test) are duplication worth removing: pick refactor.remove_duplication first, not refactor.nothing_yet, and name the function in its detail. This holds even when the verdict advances: a Refactor may always end, so an advance doesn't mean nothing is left to tidy.
 

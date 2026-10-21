@@ -1,0 +1,43 @@
+description = "NAMES, Refactor (lab case): the pair renamed rectA to rectangleA as the coach once suggested; the name is settled, no advice back"
+phase = "refactor"
+cycle = 3
+problem = '''Rectangle overlap lab. Write a function overlaps(const Rectangle& a, const Rectangle& b) that returns true when two axis-aligned rectangles overlap. A Rectangle has x, y, width and height.'''
+expected = "Refactor: tidy the production code without changing what it does, same tests, all passing. The game has checked the tests."
+history = [
+  { phase = "refactor", decision = "advance", note = "Good tidy. The name rectA could say more: rectangleA reads more clearly." },
+  { phase = "red", decision = "advance", note = "Good Red: the test for rectangles side by side fails for the right reason." },
+  { phase = "green", decision = "advance", note = "Nice and small: the new branch only handles what the test asks." },
+]
+previous = { phase = "green", decision = "advance", note = "Nice and small: the new branch only handles what the test asks." }
+tests_before = '''
+TEST(Overlap, SameRectangleOverlaps) { Rectangle r{0, 0, 2, 2}; EXPECT_TRUE(overlaps(r, r)); }
+TEST(Overlap, SideBySideDoNotOverlap) { Rectangle a{0, 0, 2, 2}; Rectangle b{3, 0, 2, 2}; EXPECT_FALSE(overlaps(a, b)); }
+'''
+code_before = '''
+struct Rectangle { int x, y, width, height; };
+bool overlaps(const Rectangle& rectA, const Rectangle& rectB) {
+  if (rectB.x > rectA.x + rectA.width) return false;
+  return true;
+}
+'''
+tests = '''
+TEST(Overlap, SameRectangleOverlaps) { Rectangle r{0, 0, 2, 2}; EXPECT_TRUE(overlaps(r, r)); }
+TEST(Overlap, SideBySideDoNotOverlap) { Rectangle a{0, 0, 2, 2}; Rectangle b{3, 0, 2, 2}; EXPECT_FALSE(overlaps(a, b)); }
+'''
+code = '''
+struct Rectangle { int x, y, width, height; };
+bool overlaps(const Rectangle& rectangleA, const Rectangle& rectangleB) {
+  if (rectangleB.x > rectangleA.x + rectangleA.width) return false;
+  return true;
+}
+'''
+test_result = "All 2 tests passed"
+
+[expect]
+decision = ["advance"]
+advice = false
+max_problems = 0
+# Rename advice, not praise ("the renamed rectangleA reads well" is fine). Checked lower-cased, and
+# "recta" alone would match "rectanglea": so the old names with what follows them.
+not_says = ["rename it", "rename the", "renaming", "could be called", "call it", "rectA ", "rectA,", "rectA.", "rectB ", "rectB,", "rectB."]
+steps_exclude = ["refactor.rename", "refactor.rename_tests"]

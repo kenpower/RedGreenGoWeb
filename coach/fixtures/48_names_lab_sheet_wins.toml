@@ -1,0 +1,42 @@
+description = "NAMES, Red (lab case): the test is named as the lab sheet says; an earlier verdict suggested another name. The sheet wins: advance, no name advice"
+phase = "red"
+cycle = 2
+problem = '''Rectangle overlap lab. Write a function overlaps(const Rectangle& a, const Rectangle& b) that returns true when two axis-aligned rectangles overlap.
+Step 2: write a test called RectanglesTouchingAtACornerOverlap for two rectangles that share only a corner point.'''
+expected = "Red: one new test that fails for the right reason."
+intent = "two rectangles touching at a corner overlap"
+history = [
+  { phase = "red", decision = "advance", note = "Good Red. A name like CornerTouchCounts would say it more briefly than the long name." },
+  { phase = "green", decision = "advance", note = "Good: the smallest change makes it pass." },
+  { phase = "refactor", decision = "advance", note = "Nothing to tidy yet, and that's fine." },
+]
+previous = { phase = "refactor", decision = "advance", note = "Nothing to tidy yet, and that's fine." }
+tests_before = '''
+TEST(Overlap, SameRectangleOverlaps) { Rectangle r{0, 0, 2, 2}; EXPECT_TRUE(overlaps(r, r)); }
+'''
+code_before = '''
+struct Rectangle { int x, y, width, height; };
+bool overlaps(const Rectangle& a, const Rectangle& b) {
+  if (b.x >= a.x + a.width) return false;
+  return true;
+}
+'''
+tests = '''
+TEST(Overlap, SameRectangleOverlaps) { Rectangle r{0, 0, 2, 2}; EXPECT_TRUE(overlaps(r, r)); }
+TEST(Overlap, RectanglesTouchingAtACornerOverlap) { Rectangle a{0, 0, 2, 2}; Rectangle b{2, 2, 2, 2}; EXPECT_TRUE(overlaps(a, b)); }
+'''
+code = '''
+struct Rectangle { int x, y, width, height; };
+bool overlaps(const Rectangle& a, const Rectangle& b) {
+  if (b.x >= a.x + a.width) return false;
+  return true;
+}
+'''
+test_result = "1 of 2 tests failed: Overlap.RectanglesTouchingAtACornerOverlap (Value of: overlaps(a, b) Actual: false Expected: true)"
+
+[expect]
+decision = ["advance"]
+advice = false
+max_problems = 0
+not_says = ["renam", "CornerTouchCounts", "shorter name", "long name"]
+steps_exclude = ["red.rename_test"]
