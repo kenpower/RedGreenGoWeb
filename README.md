@@ -4,6 +4,11 @@ Web implementation of the [RedGreenGo coaching game](https://github.com/redgreen
 
 # Play https://kenpower.github.io/RedGreenGoWeb/
 
+# Teachers
+
+- [TEACHERS.md](TEACHERS.md): running a class (class codes, what's stored, progress, limits)
+- [STUDENTS.md](STUDENTS.md): a one-page quick start to hand to students
+
 Todo:
 
 - [] fizbuzz solution
