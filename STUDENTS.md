@@ -42,6 +42,24 @@ passes it, then tidy up. A coach watches each step and helps when you get stuck.
   doesn't check what you think (pick a behaviour the code doesn't do yet).
 - **Finished?** When you think the problem is solved, ask the coach. It may suggest a missing case.
 
+## Refactor lab
+
+If your project's README.md has a line `Lab: refactor`, the game is a refactor lab instead: you
+start with messy code whose tests all pass, and you tidy it up.
+
+- **The smell board.** After Start, the coach lists what's worth tidying and which refactoring
+  fits each one, using only the refactorings in your README's `Refactorings:` line. You pick the
+  order.
+- **Each round is refactor → run tests → commit:**
+  1. **Refactor.** One refactoring at a time, e.g. one Extract Function.
+  2. **Run tests.** Run All Tests. Everything must still pass. If a test fails, undo your last
+     change and try a smaller step.
+  3. **Commit.** Commit in Visual Studio with a message naming the refactoring
+     (e.g. "Extract Function: totalPrice"). Then swap driver and navigator.
+- **Don't change the tests.** They prove the code still does the same thing. Editing a test, or
+  changing what the code does, holds you until you put it back.
+- **Done** when the board is clear, or click **Finish** if you run out of time.
+
 ## When the coach holds you
 
 The coach may say **Stay on this step** with a question to think about. That's the hint:

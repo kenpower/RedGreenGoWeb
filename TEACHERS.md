@@ -101,7 +101,41 @@ When the module is over, delete the class's records (it asks you to type the cod
 ssh -t ken@compucore3.setu.ie rgg-coach-admin clear-progress SD2-2026
 ```
 
-## 6. Not ready yet: the live class view
+## 6. A refactor lab
+
+Instead of building code test-first, pairs get messy code whose tests all pass and apply the
+refactorings from your lecture.
+
+**Prepare the starter project:** a Visual Studio solution with working (but messy) code and
+GoogleTest tests that cover it and all pass, committed to git. Its README.md says what the code
+does and has these lines:
+
+```
+Class code: SD2-2026
+Lab: refactor
+Refactorings: Extract Function, Rename Variable, Replace Magic Number with Constant, Decompose Conditional
+```
+
+`Lab: refactor` switches the game to the lab. `Refactorings:` lists the ones the coach may
+suggest; without it the coach uses a basic list. Students set up as in section 3.
+
+**How it runs:**
+
+- The coach reads the code and shows a smell board: up to 8 things worth tidying, each with a
+  refactoring from your list. Pairs pick the order.
+- Each round is **refactor → run tests → commit**: one refactoring, Run All Tests (all must still
+  pass), then a commit naming the refactoring. They swap driver and navigator after each commit.
+- **The tests may not change.** Editing a test, or changing what the code does, holds the pair
+  until they put it back. Mixing two refactorings in one commit, or making the code worse, is
+  only advice.
+- A failing test locks the step until they undo the last change.
+- The lab ends when the coach agrees the board is clear, or the pair clicks Finish.
+
+During and after the lab, `progress` shows each pair's **rounds** and **revert** (changes undone
+after breaking a test). The `--csv` export adds their commits and how many of each refactoring
+they applied, e.g. `Extract Function:3; Rename Variable:1`.
+
+## 7. Not ready yet: the live class view
 
 `rgg-coach-admin teacher-link SD2-2026` already prints a secret link for a live view of the class
 (a tile per pair, refreshed every 15 seconds, with stuck pairs flagged, timelines and rubric
