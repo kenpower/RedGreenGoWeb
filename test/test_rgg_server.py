@@ -87,5 +87,30 @@ class WaitTests(unittest.TestCase):
         self.assertLess(h.FIRST_RESCAN_SECONDS, h.RESCAN_SECONDS)
 
 
+class GamePageTests(unittest.TestCase):
+    def test_the_page_keeps_its_base_and_fonts(self):
+        self.assertIn(f'<base href="{h.PUBLISHED_URL}">', h.GAME_PAGE)
+        self.assertIn("fonts.googleapis.com/css2?family=Source+Code+Pro", h.GAME_PAGE)
+        self.assertIn("href='global.css'", h.GAME_PAGE)
+
+    def test_the_bundle_is_loaded_by_the_version_script_only(self):
+        # not by a static tag, which the browser could serve from its 10-minute cache
+        self.assertNotIn("<script defer", h.GAME_PAGE)
+        self.assertNotIn("<link rel='stylesheet' href='build/bundle.css'>", h.GAME_PAGE)
+        self.assertIn("fetch('build/version.txt', { cache: 'no-store' })", h.GAME_PAGE)
+        self.assertIn("'build/bundle.js' + q", h.GAME_PAGE)
+        self.assertIn("'build/bundle.css' + q", h.GAME_PAGE)
+
+    def test_the_bundle_still_loads_if_the_version_cannot_be_fetched(self):
+        self.assertIn("function () { load(''); }", h.GAME_PAGE)  # fetch rejected
+        self.assertIn("r.ok ? r.text() : ''", h.GAME_PAGE)  # 404 and the like
+
+    def test_the_script_is_valid_javascript_text(self):
+        # the f-string must not leave doubled braces behind
+        self.assertNotIn("{{", h.GAME_PAGE)
+        self.assertNotIn("}}", h.GAME_PAGE)
+        self.assertIn(r"/^[\w.-]{1,40}$/", h.GAME_PAGE)
+
+
 if __name__ == "__main__":
     unittest.main()
