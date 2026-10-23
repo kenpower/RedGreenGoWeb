@@ -52,7 +52,7 @@ echo "[3/5] Pushing main..."
 git push
 
 echo "[4/5] Deploying the coach..."
-./deploy.sh "${DEPLOY_ARGS[@]}"
+bash ./deploy.sh "${DEPLOY_ARGS[@]}"  # through bash: deploy.sh isn't executable on every checkout
 
 echo "[5/5] Publishing the web app to GitHub Pages..."
 npm run build
