@@ -16,6 +16,8 @@
   import MessGuide from "./MessGuide.svelte";
   import { outcomeOf } from "../predict.js";
   import Reflection from "./Reflection.svelte";
+  import HowTo from "./HowTo.svelte";
+  import Glossary from "./Glossary.svelte";
 
   export let gameState;
   const dispatch = createEventDispatcher();
@@ -203,14 +205,16 @@
     <p class="title aoc-heading">Round {lab.round}: {card.title}</p>
     <dl class="roles">
       <dt>Driver ({driver})</dt>
-      <dd>{card.driver}</dd>
+      <dd>{card.driver} <HowTo item={card} /></dd>
       <dt>Navigator{navigators.length > 1 ? "s" : ""} ({navigators.join(", ")})</dt>
       <dd>{card.navigator}</dd>
     </dl>
 
     <!-- once there's a board, it names each smell's refactoring itself -->
     {#if phase === "refactor" && lab.refactorings?.length && !board.length}
-      <p class="muted">Refactorings for this lab: {lab.refactorings.join(", ")}</p>
+      <p class="muted">
+        Refactorings for this lab: {#each lab.refactorings as name, i}{#if i}, {/if}<Glossary {name} />{/each}
+      </p>
     {/if}
 
     {#if orientLoading}
@@ -222,7 +226,7 @@
           {#each shownSmells as smell}
             <li class:resolved={smell.resolved}>
               <span class="box">{smell.resolved ? "[✓]" : "[ ]"}</span>
-              <span><strong>{smell.where}:</strong> {smell.what} <span class="muted">({smell.refactoring}{smell.from_readme ? "" : ", extra"})</span></span>
+              <span><strong>{smell.where}:</strong> {smell.what} <span class="muted">(<Glossary name={smell.refactoring} />{smell.from_readme ? "" : ", extra"})</span></span>
             </li>
           {/each}
         </ul>
@@ -238,11 +242,12 @@
       <div class="brokeBox">
         <p class="marker">That change broke something: undo the last change</p>
         {#if review.note}<p>What probably broke: {review.note}</p>{/if}
+        <HowTo item={{ howto: "undo" }} />
       </div>
     {:else if review}
       <p class="review effect-{review.effect}">
         <span class="who">Coach on your change:</span>
-        {review.refactoring}{review.refactoring ? ", " : ""}{({ better: "better", same: "about the same", worse: "harder to read" })[review.effect]}.
+        <Glossary name={review.refactoring} />{review.refactoring ? ", " : ""}{({ better: "better", same: "about the same", worse: "harder to read" })[review.effect]}.
         {review.note}
       </p>
     {/if}
@@ -282,6 +287,7 @@
             <span>
               {line.text}
               {#if line.reason}<span class="reason">{line.reason}</span>{/if}
+              <HowTo item={line} />
             </span>
           </li>
         {/each}

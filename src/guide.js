@@ -55,13 +55,14 @@ function redGuide(before, now, live) {
   else if (red.reason && red.problem !== "none") Object.assign(write, { done: false, reason: red.reason });
   else write.done = red.written ? true : null; // not written yet isn't a problem, just not done
 
-  const run = { text: "Run all tests: Test → Run All Tests (Ctrl+R, A)", short: "run all tests" };
+  const run = { text: "Run all tests: Test → Run All Tests (Ctrl+R, A)", short: "run all tests", howto: "run_tests" };
   run.done = red.written && red.problem !== "several" ? (ran ? true : null) : null;
   if (red.written && !ran) run.reason = stale ? RUN_AGAIN : name ? `${shortName(name)} hasn't run yet` : "";
 
   const fails = {
     text: "Check it fails. 'Doesn't compile' counts, because the function doesn't exist yet",
     short: "check it fails",
+    howto: "run_tests",
     why: "The failing test proves it really checks something.",
   };
   if (!ran) fails.done = null;
@@ -88,7 +89,7 @@ function greenGuide(before, now, live) {
   const keep = { text: "Don't change the tests in this step", short: "leave the tests alone", done: now ? !testChange : null };
   if (testChange) keep.reason = testChange;
 
-  const green = { text: "Run all tests and see everything green", short: "run all tests" };
+  const green = { text: "Run all tests and see everything green", short: "run all tests", howto: "run_tests" };
   const otherFailing = live?.lines?.find((l) => l.ok === false && !l.testsChanged && !/^Make /.test(l.text));
   if (!live) green.done = null;
   else if (live.goalMet) green.done = true;
@@ -102,7 +103,7 @@ function greenGuide(before, now, live) {
 function refactorGuide(before, now, live) {
   const broken = live?.lines?.find((l) => l.ok === false);
   const waiting = live?.lines?.find((l) => l.ok === null);
-  const still = { text: "Run the tests: still green?", short: "run the tests" };
+  const still = { text: "Run the tests: still green?", short: "run the tests", howto: "run_tests" };
   if (!live) still.done = null;
   else if (broken) Object.assign(still, { done: false, reason: broken.text });
   else if (waiting) Object.assign(still, { done: null, reason: waiting.text });
@@ -111,7 +112,7 @@ function refactorGuide(before, now, live) {
     { text: "Look for duplication or unclear names, in the code AND the tests", short: "look for duplication", done: null },
     { text: "Changing nothing is fine this early", short: "", done: null },
     still,
-    { text: "Click Done, then commit", short: "click Done", done: null },
+    { text: "Click Done, then commit", short: "click Done", howto: "commit", done: null },
   ];
 }
 
@@ -152,6 +153,7 @@ export function guideFor(phase, cycle, before, now, live, { locked = false } = {
 const RUN_ACTION = {
   driver: "Run all tests: Test → Run All Tests (Ctrl+R, A).",
   navigator: "Watch the results come in, and say whether they're what you expected.",
+  howto: "run_tests",
 };
 
 // While Done is locked (or the rules hold the step): the one action that
@@ -161,6 +163,7 @@ const RUN_ACTION = {
 const RERUN_ACTION = {
   driver: "Run all tests (Test → Run All Tests, Ctrl+R, A).",
   navigator: "Check every test is green before moving on.",
+  howto: "run_tests",
 };
 
 export function unlockAction(phase, before, now, live) {
@@ -177,7 +180,11 @@ export function unlockAction(phase, before, now, live) {
       };
     }
     if (red.problem === "several")
-      return { driver: "Comment out all but one of the new tests.", navigator: "Agree which one is the smallest next step." };
+      return {
+        driver: "Comment out all but one of the new tests.",
+        navigator: "Agree which one is the smallest next step.",
+        howto: "comment_out",
+      };
     if (red.problem === "unchanged")
       return {
         driver: `Change ${shortName(red.name)}, or write a new test, so this Red has its own failing test.`,
@@ -224,7 +231,7 @@ export function unlockAction(phase, before, now, live) {
     if (changes?.added.length)
       return { driver: `Remove ${shortName(changes.added[0])} for now: it belongs in the next Red.`, navigator: "Check the same tests still run." };
     if (buildFailed(now) || failing.length)
-      return { driver: "Undo the last change so all tests pass again.", navigator: "Suggest a smaller change to try next." };
+      return { driver: "Undo the last change so all tests pass again.", navigator: "Suggest a smaller change to try next.", howto: "undo" };
     if (live.lines.some((l) => l.ok === null)) return RUN_ACTION;
   }
   return null;

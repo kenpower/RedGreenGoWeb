@@ -181,6 +181,7 @@ describe("refactor", () => {
     expect(unlockAction("refactor", green, now, live("refactor", green, now))).toEqual({
       driver: "Run all tests (Test → Run All Tests, Ctrl+R, A).",
       navigator: "Check every test is green before moving on.",
+      howto: "run_tests",
     });
   });
 

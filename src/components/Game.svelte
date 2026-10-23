@@ -350,7 +350,8 @@
       const unlock = unlockAction(step.stateName, gameState.before, snapshot, live);
       if (unlock) return unlock;
     }
-    if (current) return { driver: current.detail || current.text, navigator: current.navigator || step.navigatorPrompt };
+    if (current)
+      return { driver: current.detail || current.text, navigator: current.navigator || step.navigatorPrompt, id: current.id, howto: current.howto };
     if (locked) {
       const unlock = unlockAction(step.stateName, gameState.before, snapshot, live);
       if (unlock) return unlock;

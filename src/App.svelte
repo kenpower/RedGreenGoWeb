@@ -87,7 +87,9 @@
     gameState = gameState;
   };
 
+  // Restart throws the game away (the lab's smell board too): ask while one is under way
   const reStartGame = () => {
+    if (gameState.started && !gameState.finished && !confirm("Restart? This throws away your current game.")) return;
     gameState = new GameState();
     resetHelper();
     resetCoach();

@@ -123,7 +123,7 @@ export function labStatus(phase, base, now) {
     lines.push(testsLine);
   } else if (phase === "test") {
     lines.push(testsLine);
-    const run = { text: "Run all the tests (Ctrl+R, A): every test passes", ok: true };
+    const run = { text: "Run all the tests (Ctrl+R, A): every test passes", ok: true, howto: "run_tests" };
     if (buildFailed(now)) Object.assign(run, { ok: false, reason: "The code doesn't build: fix it, or undo the last change" });
     else if (staleResults(now) || !currentTests(now).length) run.ok = null;
     else if (failingTests(now).length)
@@ -134,7 +134,7 @@ export function labStatus(phase, base, now) {
     if (!git?.repo) lines.push({ text: "Commit if you can (no git repository, so it can't be checked)", ok: true });
     else {
       const moved = !!git.head && git.head !== base?.git?.head;
-      lines.push({ text: "Commit, with a message that names the refactoring", ok: moved || null });
+      lines.push({ text: "Commit, with a message that names the refactoring", ok: moved || null, howto: "commit" });
       const dirty = uncommittedFiles(now);
       const left = { text: "Leave nothing uncommitted", ok: !dirty.length || (moved ? false : null) };
       if (dirty.length) left.reason = `Not committed yet: ${dirty.slice(0, 3).join(", ")}${dirty.length > 3 ? "…" : ""}`;
@@ -156,12 +156,14 @@ export const LAB_CARDS = {
     title: "Test",
     driver: "Build and run all the tests (Ctrl+R, A).",
     navigator: "Check every test is still green. If one fails, say: undo the last change.",
+    howto: "run_tests",
     done: "Done: every test passes",
   },
   commit: {
     title: "Commit",
     driver: "Commit, with a message that names the refactoring (e.g. 'Extract Function: priceFor').",
     navigator: "Check nothing else slipped into the commit. Then you swap roles.",
+    howto: "commit",
     done: "Done: committed",
   },
 };
