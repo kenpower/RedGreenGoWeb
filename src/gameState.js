@@ -299,6 +299,24 @@ export class GameState {
     this.#save();
   }
 
+  // Change of hat: the code is clean enough, so the rest of this game adds
+  // features with Red, Green, Refactor. Same game, players and driver; the
+  // lab's counts stay in the progress report. Only between rounds, with the
+  // last refactoring committed (LabGame checks).
+  switchToTdd() {
+    if (this.mode !== "refactor" || this.finished) return;
+    this.mode = "tdd";
+    this.lab.phase = "switched";
+    this.state = states[0];
+    this.stepNumber++;
+    this.iteration = 0;
+    this.iterations = [newCycle(1)];
+    this.startChecked = false; // the first Red takes its baseline from the code as it is
+    this.before = this.redBefore = null;
+    this.brief = null; // the coach reads the code again, now for what to build
+    this.#save();
+  }
+
   // The lab's smell board, from the coach's Orient: [{id, where, what, refactoring, resolved}].
   setBoard(smells) {
     if (!this.lab) return;
@@ -567,7 +585,7 @@ export class GameState {
     cycles: this.completedCycles(),
     phase: this.#phaseForServer(),
     mode: this.mode,
-    ...(this.mode === "refactor" && this.lab
+    ...(this.lab // kept after a switch to TDD
       ? { rounds: this.lab.rounds, commits: this.lab.commits, reverts: this.lab.reverts }
       : {}),
     overrides: this.overrides,

@@ -276,7 +276,7 @@ export function buildOrientRequest({ problem, after, ruleFindings = [], gameId =
   return {
     mode: "orient",
     phase: refactorings ? "refactor" : "red",
-    // the refactor lab: Orient also lists the smell board, each fixed by one of these
+    // the refactor lab: Orient also lists the smell board, the README's steps first, these preferred for extras
     ...(refactorings ? { lab: "refactor", refactorings: refactorings.slice(0, 20).map((r) => String(r).slice(0, 60)) } : {}),
     pair: pairKey(players),
     game_id: String(gameId || "").slice(0, 64),
@@ -305,9 +305,9 @@ export function buildLabRequest({
     lab_phase: labPhase,
     cycle: Math.max(1, Math.floor(Number(round) || 1)),
     refactorings: refactorings.slice(0, 20).map((r) => String(r).slice(0, 60)),
-    board: board.slice(0, 8).map((s) => ({
+    board: board.slice(0, 12).map((s) => ({
       id: String(s.id).slice(0, 64), where: String(s.where).slice(0, 200), what: String(s.what).slice(0, 300),
-      refactoring: String(s.refactoring).slice(0, 60), resolved: !!s.resolved,
+      refactoring: String(s.refactoring).slice(0, 60), resolved: !!s.resolved, from_readme: !!s.from_readme,
     })),
     pair: pairKey(players),
     game_id: String(gameId || "").slice(0, 64),

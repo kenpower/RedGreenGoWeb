@@ -5,7 +5,7 @@
 //   Lab: refactor
 //   Refactorings: Extract Function, Rename Variable, Replace Magic Number with Constant
 // Everything here is the app's own rules: the lab works without the coach.
-import { testChanges, buildFailed, staleResults, failingTests, currentTests, uncommittedFiles } from "./rules.js";
+import { testChanges, testBodies, buildFailed, staleResults, failingTests, currentTests, uncommittedFiles } from "./rules.js";
 
 export const LAB_PHASES = ["refactor", "test", "commit"];
 // when the README lists none
@@ -37,47 +37,106 @@ const productionCode = (snapshot) =>
     .map((f) => `${f.path}\n${f.content}`)
     .join("\n");
 
-const testsUnchanged = (base, now) => {
+// A test edit that only follows the production code is still the same test:
+// a renamed name (Ctrl+R, Ctrl+R renames in test.cpp too), or a literal
+// replaced by a new constant with that value (`-1` → `ConnectFour::NoMove`).
+const TOKEN = /'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|[A-Za-z_]\w*|\d[\w.]*|::|\S/g;
+const tokens = (text) => text.match(TOKEN) || [];
+const NAME = /^[A-Za-z_]\w*$/;
+const LITERAL = /^(?:'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|\d[\w.]*)$/;
+const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// [{was: [tokens], is: [tokens]}]: the runs of tokens that differ, from an LCS (test bodies are short).
+function hunks(a, b) {
+  const lcs = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--)
+      lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+  const out = [];
+  let i = 0, j = 0, hunk = null;
+  const flush = () => hunk && (out.push(hunk), (hunk = null));
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      flush();
+      i++, j++;
+    } else {
+      hunk ||= { was: [], is: [] };
+      if (j < b.length && (i === a.length || lcs[i][j + 1] >= lcs[i + 1][j])) hunk.is.push(b[j++]);
+      else hunk.was.push(a[i++]);
+    }
+  }
+  flush();
+  return out;
+}
+
+// Whether every difference between a test's old and new body follows the production code.
+function followsCode(was, is, oldNames, newNames, code) {
+  return hunks(tokens(was), tokens(is)).every(({ was, is }) => {
+    // the new side: one name, maybe qualified (ConnectFour::NoMove), that the production code just gained
+    const name = is[is.length - 1];
+    const qualified = is.every((t, k) => (k % 2 ? t === "::" : NAME.test(t))) && is.length % 2 === 1;
+    if (!qualified || !newNames.has(name)) return false;
+    // renamed: the old name is gone from the production code
+    if (was.length === 1 && oldNames.has(was[0])) return true;
+    // a magic number made a constant: the constant has the literal's value
+    const literal = was.join("");
+    if (!LITERAL.test(was[was.length - 1]) || !(was.length === 1 || (was.length === 2 && was[0] === "-"))) return false;
+    return new RegExp(`\\b${escape(name)}\\s*(?:=|\\{|\\()\\s*${escape(literal)}(?![\\w.])`).test(code);
+  });
+}
+
+const namesIn = (code) => new Set(tokens(code).filter((t) => NAME.test(t)));
+
+// The tests the pair changed beyond following the code: {added, removed, changed}.
+export function labTestChanges(base, now) {
   const c = testChanges(base, now);
+  if (!c.changed.length) return c;
+  const was = namesIn(productionCode(base));
+  const code = productionCode(now);
+  const is = namesIn(code);
+  const oldNames = new Set([...was].filter((n) => !is.has(n)));
+  const newNames = new Set([...is].filter((n) => !was.has(n)));
+  const before = testBodies(base);
+  const after = testBodies(now);
+  return { ...c, changed: c.changed.filter((name) => !followsCode(before[name], after[name], oldNames, newNames, code)) };
+}
+
+const testsUnchanged = (base, now) => {
+  const c = labTestChanges(base, now);
   return !c.added.length && !c.removed.length && !c.changed.length;
 };
 
-// The live lines for a lab phase, against `base` (the code at the last commit,
-// or at the start): [{text, ok}] (ok true met, false a problem, null not yet),
-// and goalMet when Done may be clicked.
+// A lab phase's to-do list, against `base` (the code at the last commit, or at
+// the start): [{text, ok, reason?}]. The text is the task and never changes;
+// ok true = done, false = a problem (reason says what), null = not done yet.
+// goalMet when every item is done, so Done may be clicked.
 export function labStatus(phase, base, now) {
   if (!now) return null;
   const lines = [];
-  const unchanged = testsUnchanged(base, now);
-  const testsLine = unchanged
-    ? { text: "Tests unchanged ✓", ok: true }
-    : { text: "You changed the tests: put them back, the lab only changes production code", ok: false };
+  const testsLine = { text: "Keep the tests the same (renames are fine)", ok: true };
+  if (!testsUnchanged(base, now))
+    Object.assign(testsLine, { ok: false, reason: "You changed what a test checks: put it back" });
   if (phase === "refactor") {
-    lines.push(
-      productionCode(now) !== productionCode(base)
-        ? { text: "One refactoring made in the production code ✓", ok: true }
-        : { text: "Make one refactoring in the production code", ok: null }
-    );
+    lines.push({ text: "Make one refactoring in the production code", ok: productionCode(now) !== productionCode(base) || null });
     lines.push(testsLine);
   } else if (phase === "test") {
     lines.push(testsLine);
-    if (buildFailed(now)) lines.push({ text: "The code doesn't build: fix it, or undo the last change", ok: false });
-    else if (staleResults(now) || !currentTests(now).length) lines.push({ text: "Run all the tests (Ctrl+R, A)", ok: null });
+    const run = { text: "Run all the tests (Ctrl+R, A): every test passes", ok: true };
+    if (buildFailed(now)) Object.assign(run, { ok: false, reason: "The code doesn't build: fix it, or undo the last change" });
+    else if (staleResults(now) || !currentTests(now).length) run.ok = null;
     else if (failingTests(now).length)
-      lines.push({ text: `${failingTests(now).join(", ")} fails: undo the last change, then run the tests again`, ok: false });
-    else lines.push({ text: "Every test passes on a fresh run ✓", ok: true });
+      Object.assign(run, { ok: false, reason: `${failingTests(now).join(", ")} fails: undo the last change, then run the tests again` });
+    lines.push(run);
   } else if (phase === "commit") {
     const git = now.git;
-    if (!git?.repo) lines.push({ text: "No git repository, so the commit can't be checked: commit if you can", ok: true });
+    if (!git?.repo) lines.push({ text: "Commit if you can (no git repository, so it can't be checked)", ok: true });
     else {
       const moved = !!git.head && git.head !== base?.git?.head;
-      lines.push(moved ? { text: "Committed ✓", ok: true } : { text: "Commit, with a message that names the refactoring", ok: null });
+      lines.push({ text: "Commit, with a message that names the refactoring", ok: moved || null });
       const dirty = uncommittedFiles(now);
-      lines.push(
-        dirty.length
-          ? { text: `Not committed yet: ${dirty.slice(0, 3).join(", ")}${dirty.length > 3 ? "…" : ""}`, ok: moved ? false : null }
-          : { text: "Nothing left uncommitted ✓", ok: true }
-      );
+      const left = { text: "Leave nothing uncommitted", ok: !dirty.length || (moved ? false : null) };
+      if (dirty.length) left.reason = `Not committed yet: ${dirty.slice(0, 3).join(", ")}${dirty.length > 3 ? "…" : ""}`;
+      lines.push(left);
     }
   }
   return { lines, goalMet: lines.length > 0 && lines.every((l) => l.ok === true) };

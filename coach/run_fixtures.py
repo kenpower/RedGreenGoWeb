@@ -251,14 +251,25 @@ def score_orient(brief, expect):
 
 
 def score_board(brief, expect, step):
-    """A lab Orient: the smell board, each smell fixed by one of the lab's refactorings."""
+    """A lab Orient: the smell board, the README's steps first, then a few extras
+    (preferably the lab's refactorings)."""
     smells = brief.get("smells", [])
-    checks = [("smell_count", expect.get("min_smells", 3) <= len(smells) <= 8, len(smells)),
-              ("smells_from_lab", all(s["refactoring"] in step["refactorings"] for s in smells), "ok")]
+    extras = [s for s in smells if not s.get("from_readme")]
+    checks = [("smell_count", expect.get("min_smells", 3) <= len(smells) <= 12, len(smells)),
+              ("readme_first", all(s.get("from_readme") for s in smells[:len(smells) - len(extras)]), "ok"),
+              ("extras_from_lab", sum(s["refactoring"] in step["refactorings"] for s in extras) * 2 >= len(extras),
+               ", ".join(s["refactoring"] for s in extras) or "none")]
+    if "readme_refactorings" in expect:  # each of these named by a README smell
+        named = " ".join(f"{s['refactoring']} {s['what']}" for s in smells if s.get("from_readme")).lower()
+        missing = [w for w in expect["readme_refactorings"] if w.lower() not in named]
+        checks.append(("readme_refactorings", not missing, ", ".join(missing) or "all"))
     text = " ".join(f"{s['where']} {s['what']}" for s in smells)
     if "smells_mention" in expect:
         missing = [w for w in expect["smells_mention"] if w.lower() not in text.lower()]
         checks.append(("smells_mention", not missing, ", ".join(missing) or "all"))
+    if "smells_avoid" in expect:  # e.g. the README's development work, which is never a smell
+        said = [w for w in expect["smells_avoid"] if w.lower() in text.lower()]
+        checks.append(("smells_avoid", not said, ", ".join(said) or "none"))
     coded = [s["what"] for s in smells if CODE_LIKE.search(s["what"])]
     checks.append(("smell_no_code", not coded, coded[0][:60] if coded else "none"))
     return checks

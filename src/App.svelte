@@ -114,7 +114,7 @@
     {#if gameState.started}
       <div in:fly={{ y: 200, duration: 2000 }}>
         {#if gameState.mode === "refactor"}
-          <LabGame {gameState} />
+          <LabGame {gameState} on:switched={() => (gameState = gameState)} />
         {:else}
           <Game {gameState} on:restart={reStartGame} />
         {/if}
@@ -236,7 +236,7 @@
           <p class="labNote">
             <strong>Refactor lab:</strong> this project's README.md makes this game a refactor lab. Your code
             already has passing tests: apply one refactoring at a time, run the tests, commit, then swap roles.
-            Refactorings: {labChoice.refactorings.join(", ")}.
+            When the code is clean enough, switch to TDD to add features. Refactorings: {labChoice.refactorings.join(", ")}.
           </p>
         {/if}
         <div class="startRow">

@@ -156,17 +156,32 @@ class Lab(unittest.TestCase):
         client.messages = SimpleNamespace(create=create)
         return client
 
-    def test_lab_orient_lists_a_smell_board_from_the_labs_refactorings(self):
+    def test_lab_orient_lists_the_readmes_smells_first_then_a_few_extras(self):
+        extra = lambda i: {"id": f"extra-{i}", "where": "x", "what": "obvious", "refactoring": "Inline Function",
+                           "from_readme": False}
         client = self.answering({**Orient.BRIEF, "smells": [
-            {"id": "Long Price!", "where": "priceFor", "what": "Too long.", "refactoring": "Extract Function"},
-            {"id": "long-price", "where": "x", "what": "dup id", "refactoring": "Extract Function"},
-            {"id": "other", "where": "x", "what": "not this lab's", "refactoring": "Inline Function"}]})
+            extra(1),
+            {"id": "Long Price!", "where": "priceFor", "what": "Too long.", "refactoring": "Extract Function",
+             "from_readme": True},
+            {"id": "long-price", "where": "x", "what": "dup id", "refactoring": "Extract Function", "from_readme": True},
+            {"id": "no-name", "where": "x", "what": "no refactoring named", "refactoring": " ", "from_readme": True},
+            extra(2), extra(3), extra(4)]})
         brief, _ = coach.ask_coach(client, step(mode="orient", catalogue=None, lab="refactor",
                                                 refactorings=self.REFACTORINGS))
         self.assertEqual(client.calls[0]["system"][0]["text"], coach.build_system("lab_orient.md"))
-        enum = client.calls[0]["output_config"]["format"]["schema"]["properties"]["smells"]["items"]["properties"]["refactoring"]["enum"]
-        self.assertEqual(enum, self.REFACTORINGS)
-        self.assertEqual([s["id"] for s in brief["smells"]], ["long-price"])  # cleaned, unique, the lab's only
+        refactoring = client.calls[0]["output_config"]["format"]["schema"]["properties"]["smells"]["items"]["properties"]["refactoring"]
+        self.assertNotIn("enum", refactoring)  # any refactoring the README asks for, or an obvious one
+        # cleaned and unique; the README's first, then at most 3 extras
+        self.assertEqual([s["id"] for s in brief["smells"]], ["long-price", "extra-1", "extra-2", "extra-3"])
+        self.assertEqual([s["from_readme"] for s in brief["smells"]], [True, False, False, False])
+
+    def test_the_look_sees_which_smells_are_extras(self):
+        board = [{**self.BOARD[0], "from_readme": True},
+                 {"id": "dup", "where": "winner", "what": "X and O checks repeat.", "refactoring": "Extract Function"}]
+        user = coach.build_lab_user(step(lab="refactor", refactorings=self.REFACTORINGS, board=board, catalogue=None))
+        self.assertIn("[long-price] priceFor: Too long. (Extract Function)\n", user)
+        self.assertIn("[dup] winner: X and O checks repeat. (Extract Function) EXTRA", user)
+        coach.validate(step(lab="refactor", refactorings=self.REFACTORINGS, board=board))
 
     def test_a_lab_look_is_one_call_reviewing_the_change_against_the_board(self):
         client = self.answering({"decision": "advance", "note": "Good.", "smells_resolved": ["long-price", "nope"],
@@ -184,6 +199,21 @@ class Lab(unittest.TestCase):
         self.assertEqual(answer["smells_resolved"], ["long-price"])  # board ids only
         self.assertEqual(answer["move_review"]["refactoring"], "Extract Function")
         self.assertEqual((answer["rescue_code"], answer["rescue_why"]), ("", ""))  # no RESCUE asked
+
+    def test_no_change_since_the_last_commit_gets_no_review_and_no_note(self):
+        client = self.answering({"decision": "advance", "note": "All green, so the refactor kept behaviour.",
+                                 "smells_resolved": ["long-price"],
+                                 "move_review": {"refactoring": "Rename Variable", "effect": "same",
+                                                 "behaviour_kept": True, "note": "Kept behaviour."},
+                                 "hint_question": "Which name makes you guess?", "hint_kind": "a poor name",
+                                 "driver_action": "a", "commit_message": "", "rescue_code": "", "rescue_why": ""})
+        code = "std::string fizzBuzz(int n);"
+        answer, _ = coach.ask_coach(client, step(lab="refactor", refactorings=self.REFACTORINGS, board=self.BOARD,
+                                                 catalogue=None, code_before=code, code=code))
+        self.assertEqual(answer["note"], "")
+        self.assertEqual(answer["move_review"]["effect"], "none")
+        self.assertEqual(answer["smells_resolved"], [])
+        self.assertEqual(answer["hint_question"], "Which name makes you guess?")  # the hint stays
 
     def test_lab_fields_are_checked(self):
         coach.validate(step(lab="refactor", refactorings=self.REFACTORINGS, board=self.BOARD, lab_phase="commit"))

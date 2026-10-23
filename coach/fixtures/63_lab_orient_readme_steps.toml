@@ -1,0 +1,42 @@
+description = "LAB ORIENT: the README lists its own refactoring steps (and a development section); the board follows them in order, with no feature work, extras last"
+mode = "orient"
+lab = "refactor"
+refactorings = ["Extract Function", "Rename Variable", "Replace Magic Number with Constant", "Decompose Conditional"]
+problem = '''Lab: refactor
+
+# Refactoring Lab: cart prices
+
+It works, but it is hard to read. Also it has no VAT for children's items (a missing feature).
+
+## 2. Easy changes
+- [ ] 2.1 Rename the parameters q -> quantity, u -> unitPrice, m -> member.
+- [ ] 2.2 The 0.2 is the tax rate: add a constant TaxRate and use it.
+- [ ] 2.3 Extract the bulk discount line into a function bulkDiscount.
+
+## 5. New features (development)
+Write a test that goes red for children's items being VAT free, then make it pass.
+'''
+tests = '''
+// CartTests.cpp
+#include "cart.h"
+TEST(Cart, OneItem) { EXPECT_DOUBLE_EQ(12.0, priceFor(1, 10.0, false)); }
+TEST(Cart, BulkDiscount) { EXPECT_DOUBLE_EQ(118.8, priceFor(11, 10.0, false)); }
+TEST(Cart, MemberOver100) { EXPECT_DOUBLE_EQ(112.8, priceFor(11, 10.0, true)); }
+'''
+code = '''
+// cart.h
+inline double priceFor(int q, double u, bool m) {
+  double t = q * u;
+  if (q > 10) t = t - t * 0.1;
+  if (m == true) { if (t > 100) { t = t - 5; } }
+  double x = t * 0.2;
+  return t + x;
+}
+'''
+test_result = "All 3 tests passed"
+
+[expect]
+code_state = ["partial", "looks_done"]
+min_smells = 3
+readme_refactorings = ["Rename", "TaxRate", "bulkDiscount"]
+smells_avoid = ["child", "VAT free"]

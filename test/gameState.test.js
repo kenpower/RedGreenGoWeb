@@ -726,6 +726,27 @@ test("the_lab_board_ticks_smells_the_coach_saw_resolved", () => {
   expect(GameState.recoverSavedGame().lab.board[0].resolved).toBe(true);
 });
 
+test("switching_from_the_lab_to_tdd_keeps_the_game_and_its_lab_counts", () => {
+  let g = new GameState();
+  g.startLab(["Extract Function"], { git: { repo: true, head: "aaa" } });
+  const gameId = g.gameId;
+  g.labDone(null);
+  g.labDone(null);
+  g.labDone({ git: { repo: true, head: "bbb" } }); // round 1 committed
+  const driver = g.driver;
+  g.switchToTdd();
+  expect(g.mode).toBe("tdd");
+  expect(g.gameId).toBe(gameId);
+  expect(g.driver).toBe(driver); // whoever drives the next round writes the first test
+  expect(g.getStep().stateName).toBe("red");
+  expect(g.getStep().cycle).toBe(1);
+  expect(g.startChecked).toBe(false);
+  expect(g.progress()).toMatchObject({ mode: "tdd", phase: "red", rounds: 1, commits: 1 });
+  expect(GameState.recoverSavedGame().mode).toBe("tdd");
+  g.switchToTdd(); // only once
+  expect(g.getStep().cycle).toBe(1);
+});
+
 test("a_lab_phase_is_reported_as_one_the_server_knows", () => {
   let g = new GameState();
   g.startLab([], null);

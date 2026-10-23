@@ -103,17 +103,19 @@ MAX_NEXT_STEPS = 4
 # call with coach/lab.md (no catalogue): the review against the last commit,
 # the smells it resolved, and the next smell's hint ladder.
 MAX_REFACTORINGS = 20
-MAX_SMELLS = 8
+MAX_SMELLS = 12  # a lab README can list a dozen refactoring steps
 LAB_LOOK_FIELDS = ["decision", "note", "move_review", "smells_resolved", "hint_question", "hint_kind",
                    "driver_action", "commit_message", "rescue_code", "rescue_why"]
 
 
-def lab_orient_schema(refactorings):
+def lab_orient_schema():
+    """The board's refactorings are free names: the README's own steps come first
+    (from_readme), then a few obvious extras (coach/lab_orient.md)."""
     smell = {
         "type": "object",
         "properties": {"id": {"type": "string"}, "where": {"type": "string"}, "what": {"type": "string"},
-                       "refactoring": {"type": "string", "enum": list(refactorings)}},
-        "required": ["id", "where", "what", "refactoring"],
+                       "refactoring": {"type": "string"}, "from_readme": {"type": "boolean"}},
+        "required": ["id", "where", "what", "refactoring", "from_readme"],
         "additionalProperties": False,
     }
     properties = {**ORIENT_SCHEMA["properties"], "smells": {"type": "array", "items": smell}}
@@ -275,10 +277,11 @@ def _validate_lab(step):
         raise BadStep("lab_phase must be refactor, test or commit")
     board = step.get("board", [])
     if not isinstance(board, list) or len(board) > MAX_SMELLS or not all(
-            isinstance(s, dict) and set(s) <= {"id", "where", "what", "refactoring", "resolved"}
+            isinstance(s, dict) and set(s) <= {"id", "where", "what", "refactoring", "resolved", "from_readme"}
             and all(isinstance(s.get(k), str) and 0 < len(s[k]) <= top
                     for k, top in (("id", 64), ("where", 200), ("what", 300), ("refactoring", 60)))
-            and isinstance(s.get("resolved", False), bool) for s in board):
+            and isinstance(s.get("resolved", False), bool)
+            and isinstance(s.get("from_readme", False), bool) for s in board):
         raise BadStep(f"board must be at most {MAX_SMELLS} smells {{id, where, what, refactoring, resolved}}")
 
 
@@ -463,7 +466,8 @@ def build_lab_user(step):
     board = step.get("board", [])
     struggle = step.get("struggle") or {}
     rung = struggle.get("rung", 1)
-    lines = [f"- [{s['id']}] {s['where']}: {s['what']} ({s['refactoring']})" + (" RESOLVED" if s.get("resolved") else "")
+    lines = [f"- [{s['id']}] {s['where']}: {s['what']} ({s['refactoring']})"
+             + ("" if s.get("from_readme") else " EXTRA") + (" RESOLVED" if s.get("resolved") else "")
              for s in board]
     parts = [
         _problem(step),
@@ -501,21 +505,35 @@ def _clean_lab_look(answer, step):
     cleaned["decision"] = answer.get("decision") if answer.get("decision") in ("advance", "redo") else "advance"
     cleaned["move_review"] = review
     cleaned["smells_resolved"] = [i for i in dict.fromkeys(answer.get("smells_resolved") or []) if i in board_ids]
+    # No change since the last commit: nothing to review, so no note either
+    # (the model praised a refactor that hadn't happened). The hint still stands.
+    if step.get("code_before") is not None and step["code_before"] == step["code"]:
+        cleaned["move_review"] = {"refactoring": "", "effect": "none", "behaviour_kept": True, "note": ""}
+        cleaned["note"] = ""
+        cleaned["smells_resolved"] = []
     if not step.get("rescue"):
         cleaned["rescue_code"] = cleaned["rescue_why"] = ""
     return cleaned
 
 
-def _clean_board(smells, refactorings):
-    seen, board = set(), []
+MAX_EXTRA_SMELLS = 3  # smells the README doesn't ask for
+
+
+def _clean_board(smells):
+    """Unique ids, a named refactoring each; the README's smells first, in its order,
+    then at most MAX_EXTRA_SMELLS others."""
+    seen, readme, extra = set(), [], []
     for s in smells or []:
         sid = re.sub(r"[^a-z0-9-]+", "-", str(s.get("id", "")).lower()).strip("-")[:64]
-        if not sid or sid in seen or s.get("refactoring") not in refactorings:
+        name = str(s.get("refactoring", "")).strip()[:60]
+        if not sid or sid in seen or not name:
             continue
         seen.add(sid)
-        board.append({"id": sid, "where": str(s.get("where", "")).strip()[:200],
-                      "what": str(s.get("what", "")).strip()[:300], "refactoring": s["refactoring"]})
-    return board[:MAX_SMELLS]
+        smell = {"id": sid, "where": str(s.get("where", "")).strip()[:200],
+                 "what": str(s.get("what", "")).strip()[:300], "refactoring": name,
+                 "from_readme": s.get("from_readme") is True}
+        (readme if smell["from_readme"] else extra).append(smell)
+    return (readme + extra[:MAX_EXTRA_SMELLS])[:MAX_SMELLS]
 
 
 def _clean_brief(brief):
@@ -561,9 +579,9 @@ def ask_coach(client, step, guidance=None):
     fixture). Raises anthropic.APIError, RuntimeError or json.JSONDecodeError."""
     lab = step.get("lab") == "refactor"
     if step.get("mode") == "orient" and lab:
-        brief, usage = _ask(client, "lab_orient.md", lab_orient_schema(step["refactorings"]),
+        brief, usage = _ask(client, "lab_orient.md", lab_orient_schema(),
                             build_lab_orient_user(step), 4000)
-        return {**_clean_brief(brief), "smells": _clean_board(brief.get("smells"), step["refactorings"])}, usage
+        return {**_clean_brief(brief), "smells": _clean_board(brief.get("smells"))}, usage
     if step.get("mode") == "orient":
         brief, usage = _ask(client, "orient.md", ORIENT_SCHEMA, build_orient_user(step), 3000)
         return _clean_brief(brief), usage

@@ -3,18 +3,18 @@
   // One refactoring per round, the tests never change, roles swap after every
   // commit. The app's own rules (lab.js) gate each Done, so it works without
   // the coach; the coach's smell board and reviews come later (build item 4).
-  import { onDestroy, tick } from "svelte";
+  import { createEventDispatcher, onDestroy, tick } from "svelte";
   import { fade } from "svelte/transition";
   import { helper, refreshHelper } from "../helper.js";
   import { snapshotOf, buildFailed, staleResults, failingTests, currentTests } from "../rules.js";
   import { sendProgress, isCoached, askOrient, askLab, resolveProblem } from "../coach.js";
   import { labStatus, LAB_CARDS, LAB_PHASES } from "../lab.js";
-  import { lockReason } from "../lock.js";
   import { nextStepsDue, runMark, codeKey } from "../content/steps.js";
   import { hintRung, TOP_RUNG } from "../ladder.js";
   import WaitingDots from "./WaitingDots.svelte";
 
   export let gameState;
+  const dispatch = createEventDispatcher();
 
   // ---- The coach (DESIGN-refactor-lab.md B.1, B.3-B.5): the smell board, a
   // review of each change since the last commit, the next smell's hint ladder.
@@ -71,7 +71,7 @@
       round,
       refactorings: lab.refactorings,
       board: lab.board || [],
-      ruleFindings: (status?.lines || []).filter((l) => l.ok === false).map((l) => l.text),
+      ruleFindings: (status?.lines || []).filter((l) => l.ok === false).map((l) => l.reason || l.text),
       gameId: gameState.gameId,
       players: gameState.players,
       rung,
@@ -123,7 +123,6 @@
   $: status = snapshot && lab ? labStatus(phase, lab.base, snapshot) : null;
   $: helperMissing = $helper.status !== "connected";
   $: locked = helperMissing || !status?.goalMet;
-  $: reason = lockReason({ helperMissing, liveLines: status?.lines || [] });
   $: driver = gameState.players[gameState.driver];
   $: navigators = gameState.players.filter((p, i) => p && i !== gameState.driver);
 
@@ -149,6 +148,16 @@
     gameState.labDone(snapshot);
     tickN++;
     report();
+  };
+
+  // Change of hat (README: "never wear both hats at once"): only between
+  // rounds, so the last refactoring is committed and nothing is half done.
+  $: canSwitch = phase === "refactor" && !helperMissing && status?.lines[0]?.ok !== true;
+  const switchToTdd = () => {
+    if (!canSwitch || !confirm("Switch to TDD? From now on you add features with Red, Green, Refactor.")) return;
+    gameState.switchToTdd();
+    report();
+    dispatch("switched");
   };
 
   const finish = () => {
@@ -182,7 +191,8 @@
       <dd>{card.navigator}</dd>
     </dl>
 
-    {#if phase === "refactor" && lab.refactorings?.length}
+    <!-- once there's a board, it names each smell's refactoring itself -->
+    {#if phase === "refactor" && lab.refactorings?.length && !board.length}
       <p class="muted">Refactorings for this lab: {lab.refactorings.join(", ")}</p>
     {/if}
 
@@ -195,7 +205,7 @@
           {#each board as smell}
             <li class:resolved={smell.resolved}>
               <span class="box">{smell.resolved ? "[✓]" : "[ ]"}</span>
-              <span><strong>{smell.where}:</strong> {smell.what} <span class="muted">({smell.refactoring})</span></span>
+              <span><strong>{smell.where}:</strong> {smell.what} <span class="muted">({smell.refactoring}{smell.from_readme ? "" : ", extra"})</span></span>
             </li>
           {/each}
         </ul>
@@ -240,16 +250,20 @@
       </div>
     {/if}
 
-    {#if status?.lines.length}
-      <ul class="live">
+    {#if helperMissing}
+      <p class="doneHint locked">Waiting for the helper</p>
+    {:else if status?.lines.length}
+      <ul class="todo">
         {#each status.lines as line}
-          <li class="ok-{line.ok}">{line.text}</li>
+          <li class:done={line.ok === true}>
+            <span class="box" aria-label={line.ok === true ? "done" : "not done"}>{line.ok === true ? "[✓]" : "[✖]"}</span>
+            <span>
+              {line.text}
+              {#if line.reason}<span class="reason">{line.reason}</span>{/if}
+            </span>
+          </li>
         {/each}
       </ul>
-    {/if}
-
-    {#if locked && !waiting}
-      <p class="doneHint locked">Not yet: {reason}</p>
     {/if}
     <div class="actions">
       {#if waiting}
@@ -258,9 +272,18 @@
         <button class:lockedDone={locked} aria-disabled={locked} on:click={done}>{card.done}</button>
       {/if}
     </div>
+    <div class="switchRow">
+      <p>
+        {#if board.length && !smellsLeft}<span class="clear">The board is clear. </span>{/if}
+        {lab.rounds} refactoring{lab.rounds === 1 ? "" : "s"} committed.
+        {#if !canSwitch}<span class="muted">Commit this round's refactoring before switching.</span>{/if}
+      </p>
+      <button class:ready={board.length && !smellsLeft} disabled={!canSwitch} on:click={switchToTdd}
+        >Ready for new features: switch to TDD</button
+      >
+    </div>
     <p class="finishRow">
-      {#if board.length && !smellsLeft}<span class="clear">The board is clear. </span>{/if}
-      <button class:quiet={!board.length || smellsLeft} on:click={finish}>Finish the lab</button>
+      <button class="quiet" on:click={finish}>Finish the lab</button>
     </p>
   </div>
 {/if}
@@ -309,21 +332,30 @@
     margin: 0;
   }
 
-  .live {
+  /* the phase's to-do list: [✓] green when done, [✖] red until then */
+  .todo {
     list-style: none;
     padding-left: 0;
   }
 
-  .live .ok-true {
-    color: var(--coding-green);
-  }
-
-  .live .ok-false {
+  .todo li {
+    display: flex;
+    gap: 0.5em;
+    margin: 0.2em 0;
     color: var(--testing-red);
   }
 
-  .live .ok-null {
-    color: var(--text-muted);
+  .todo li.done {
+    color: var(--coding-green);
+  }
+
+  .todo .box {
+    flex: none;
+  }
+
+  .reason {
+    display: block;
+    font-size: 0.9em;
   }
 
   .doneHint {
@@ -358,6 +390,27 @@
 
   .clear {
     color: var(--coding-green);
+  }
+
+  .switchRow {
+    margin-top: 0.8em;
+    padding-top: 0.4em;
+    border-top: 1px solid var(--opacity-50);
+    text-align: center;
+  }
+
+  .switchRow p {
+    margin: 0.3em 0;
+  }
+
+  .switchRow .muted {
+    display: block;
+    font-size: 0.9em;
+  }
+
+  .ready {
+    color: var(--star);
+    text-shadow: 0 0 5px var(--star);
   }
 
   .board summary {
