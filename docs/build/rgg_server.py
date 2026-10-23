@@ -69,12 +69,30 @@ GAME_PAGE = f"""<!DOCTYPE html>
 \t<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 \t<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@300;400;500;700&display=swap'>
 \t<link rel='stylesheet' href='global.css'>
-\t<link rel='stylesheet' href='build/bundle.css'>
 
-\t<script defer src='build/bundle.js'></script>
 </head>
 
 <body>
+\t<script>
+\t\t// GitHub Pages lets browsers cache files for 10 minutes, so ask for the current
+\t\t// release (build/version.txt, never cached) and load the bundle as ?v=<release>.
+\t\t// If that fails, load it plain so the game still works.
+\t\t(function () {{
+\t\t\tfunction load(v) {{
+\t\t\t\tvar q = v ? '?v=' + encodeURIComponent(v) : '';
+\t\t\t\tvar css = document.createElement('link');
+\t\t\t\tcss.rel = 'stylesheet';
+\t\t\t\tcss.href = 'build/bundle.css' + q;
+\t\t\t\tdocument.head.appendChild(css);
+\t\t\t\tvar js = document.createElement('script');
+\t\t\t\tjs.src = 'build/bundle.js' + q;
+\t\t\t\tdocument.body.appendChild(js);
+\t\t\t}}
+\t\t\tfetch('build/version.txt', {{ cache: 'no-store' }})
+\t\t\t\t.then(function (r) {{ return r.ok ? r.text() : ''; }})
+\t\t\t\t.then(function (t) {{ t = t.trim(); load(/^[\\w.-]{{1,40}}$/.test(t) ? t : ''); }}, function () {{ load(''); }});
+\t\t}})();
+\t</script>
 </body>
 </html>
 """
@@ -103,6 +121,7 @@ MAX_DIRTY = 200  # untracked build output can be thousands of files when there's
 
 changed = threading.Condition()  # guards state and sse_clients; notified on every change
 sse_clients = 0
+browser_lost = False  # every game tab has gone: say so when one connects again
 have_results = threading.Event()  # set once any GoogleTest XML has been read; the game opens then
 config = {"project": ".", "results": [], "build_logs": []}  # set by main() from the command line
 state = {
@@ -525,8 +544,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
 
+        global browser_lost
         with changed:
             sse_clients += 1
+            back, browser_lost = browser_lost, False
+        if back:
+            print("Browser reconnected.", flush=True)
         try:
             self.wfile.write(f"retry: {SSE_RETRY_MS}\n\n".encode())
             last_version = None
@@ -545,6 +568,10 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             with changed:
                 sse_clients -= 1
+                lost = browser_lost = sse_clients == 0
+            if lost:
+                print("Lost the browser connection (game tab closed or reloaded). "
+                      "Waiting for it to reconnect...", flush=True)
 
     def send_json(self, data):
         self.send_body(json.dumps(data).encode("utf-8"), "application/json")
@@ -557,8 +584,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         for name, value in (headers or {}).items():
             self.send_header(name, value)
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass  # the tab was reloaded or closed mid-reply: nobody is waiting for it
 
     def allowed(self, require_origin=False):
         # Host check blocks DNS-rebinding; Origin check blocks other websites.
