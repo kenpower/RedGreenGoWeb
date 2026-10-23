@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -79,6 +80,44 @@ class MergeTests(unittest.TestCase):
         test = h.snapshot()["tests"][0]
         self.assertEqual({k: test[k] for k in ("name", "status", "file", "latest")},
                          {"name": "S.A", "status": "passed", "file": "Debug/XMLGoogleTestResults.xml", "latest": True})
+
+
+class BrowserConnectionTests(unittest.TestCase):
+    class ClosedTab:
+        """The event stream's socket, for a tab that has already gone."""
+
+        def write(self, _):
+            raise ConnectionAbortedError("tab closed")
+
+        def flush(self):
+            pass
+
+    def open_tab(self):
+        """One game tab's event stream, from connect until the helper sees it closed."""
+        handler = h.Handler.__new__(h.Handler)
+        handler.send_response = handler.send_header = handler.end_headers = lambda *a: None
+        handler.send_cors_headers = lambda: None
+        handler.wfile = self.ClosedTab()
+        handler.stream_events()
+
+    def test_a_lost_tab_and_its_reconnect_are_both_reported(self):
+        h.sse_clients, h.browser_lost = 0, False
+        with unittest.mock.patch("builtins.print") as said:
+            self.open_tab()  # the first tab: no "reconnected"
+            self.open_tab()  # reloaded
+        lines = [c.args[0] for c in said.call_args_list]
+        self.assertEqual(len(lines), 3)
+        self.assertTrue(lines[0].startswith("Lost the browser connection"))
+        self.assertEqual(lines[1], "Browser reconnected.")
+        self.assertTrue(lines[2].startswith("Lost the browser connection"))
+        self.assertEqual(h.sse_clients, 0)
+
+    def test_one_of_two_tabs_closing_is_not_a_lost_connection(self):
+        h.sse_clients, h.browser_lost = 1, False  # another tab stays open
+        with unittest.mock.patch("builtins.print") as said:
+            self.open_tab()
+        said.assert_not_called()
+        self.assertEqual(h.sse_clients, 1)
 
 
 class WaitTests(unittest.TestCase):

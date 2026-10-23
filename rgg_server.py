@@ -103,6 +103,7 @@ MAX_DIRTY = 200  # untracked build output can be thousands of files when there's
 
 changed = threading.Condition()  # guards state and sse_clients; notified on every change
 sse_clients = 0
+browser_lost = False  # every game tab has gone: say so when one connects again
 have_results = threading.Event()  # set once any GoogleTest XML has been read; the game opens then
 config = {"project": ".", "results": [], "build_logs": []}  # set by main() from the command line
 state = {
@@ -525,8 +526,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
 
+        global browser_lost
         with changed:
             sse_clients += 1
+            back, browser_lost = browser_lost, False
+        if back:
+            print("Browser reconnected.", flush=True)
         try:
             self.wfile.write(f"retry: {SSE_RETRY_MS}\n\n".encode())
             last_version = None
@@ -545,6 +550,10 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             with changed:
                 sse_clients -= 1
+                lost = browser_lost = sse_clients == 0
+            if lost:
+                print("Lost the browser connection (game tab closed or reloaded). "
+                      "Waiting for it to reconnect...", flush=True)
 
     def send_json(self, data):
         self.send_body(json.dumps(data).encode("utf-8"), "application/json")
