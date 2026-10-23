@@ -13,6 +13,7 @@
   import { hintRung, TOP_RUNG } from "../ladder.js";
   import WaitingDots from "./WaitingDots.svelte";
   import HowTo from "./HowTo.svelte";
+  import Glossary from "./Glossary.svelte";
 
   export let gameState;
   const dispatch = createEventDispatcher();
@@ -199,7 +200,9 @@
 
     <!-- once there's a board, it names each smell's refactoring itself -->
     {#if phase === "refactor" && lab.refactorings?.length && !board.length}
-      <p class="muted">Refactorings for this lab: {lab.refactorings.join(", ")}</p>
+      <p class="muted">
+        Refactorings for this lab: {#each lab.refactorings as name, i}{#if i}, {/if}<Glossary {name} />{/each}
+      </p>
     {/if}
 
     {#if orientLoading}
@@ -211,7 +214,7 @@
           {#each shownSmells as smell}
             <li class:resolved={smell.resolved}>
               <span class="box">{smell.resolved ? "[✓]" : "[ ]"}</span>
-              <span><strong>{smell.where}:</strong> {smell.what} <span class="muted">({smell.refactoring}{smell.from_readme ? "" : ", extra"})</span></span>
+              <span><strong>{smell.where}:</strong> {smell.what} <span class="muted">(<Glossary name={smell.refactoring} />{smell.from_readme ? "" : ", extra"})</span></span>
             </li>
           {/each}
         </ul>
@@ -232,7 +235,7 @@
     {:else if review}
       <p class="review effect-{review.effect}">
         <span class="who">Coach on your change:</span>
-        {review.refactoring}{review.refactoring ? ", " : ""}{({ better: "better", same: "about the same", worse: "harder to read" })[review.effect]}.
+        <Glossary name={review.refactoring} />{review.refactoring ? ", " : ""}{({ better: "better", same: "about the same", worse: "harder to read" })[review.effect]}.
         {review.note}
       </p>
     {/if}

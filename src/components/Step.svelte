@@ -5,6 +5,7 @@
   import Icon from "./Icon.svelte";
   import WaitingDots from "./WaitingDots.svelte";
   import HowTo from "./HowTo.svelte";
+  import Glossary from "./Glossary.svelte";
   import { helper } from "../helper.js";
   import { lockReason as lockReasonFor } from "../lock.js";
 
@@ -316,7 +317,7 @@
       {:else}
         <p class="moveReview effect-{moveReview.effect}" class:changedBehaviour={!moveReview.behaviour_kept}>
           <span class="who">Coach on your last change:</span>
-          {moveReview.refactoring}{moveReview.refactoring ? ", " : ""}{EFFECT_TEXT[moveReview.effect]}.
+          <Glossary name={moveReview.refactoring} />{moveReview.refactoring ? ", " : ""}{EFFECT_TEXT[moveReview.effect]}.
           {moveReview.note}
         </p>
       {/if}
