@@ -19,8 +19,7 @@ const MUST_RETURN = "This function doesn't return a value on every path: add a r
 export const BUILD_ERRORS = {
   // names the compiler hasn't seen
   C2065: "You used a name the compiler hasn't seen: a typo, or a missing #include or declaration.",
-  C3861:
-    "You called a function the compiler hasn't seen: check the spelling, and that its header is #included. In Red that's fine if the function doesn't exist yet.",
+  C3861: "You called a function the compiler hasn't seen: check the spelling, and that its header is #included.",
   C2039: "You used a member the class (or namespace) doesn't have: check the spelling, or declare it in the class.",
   C2061: MISSING_TYPE,
   C4430: MISSING_TYPE,

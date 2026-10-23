@@ -8,9 +8,11 @@
   export let errors = []; // the helper's build.errors lines
   export let heading = "The code doesn't build";
   export let coachHelp = ""; // the coach's build_help for this build, or ""
+  export let note = ""; // a line for this phase, e.g. why a compile error is fine in Red
 
   $: first = firstBuildError(errors);
   $: place = errorPlace(first);
+  $: others = errors.length - 1;
 </script>
 
 {#if errors.length}
@@ -23,9 +25,12 @@
       <p class="compiler">{errors[0]}</p>
     {/if}
     {#if coachHelp}<p class="coachHelp"><span class="who">Coach:</span> {coachHelp}</p>{/if}
-    {#if errors.length > 1}
+    {#if note}<p class="compiler">{note}</p>{/if}
+    {#if others > 0}
       <details>
-        <summary>Fix this one first: the other {errors.length - 1} often go away with it</summary>
+        <summary>
+          Fix this one first: {others > 1 ? `the other ${others} errors often go` : "the other error often goes"} away with it
+        </summary>
         <ul>
           {#each errors.slice(1, 10) as line}<li>{line}</li>{/each}
         </ul>
