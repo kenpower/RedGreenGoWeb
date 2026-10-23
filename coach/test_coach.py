@@ -224,6 +224,53 @@ class Lab(unittest.TestCase):
                 coach.validate(step(**bad))
 
 
+class BuildHelp(unittest.TestCase):
+    FAILED = "Build failed: test.cpp(5,3): error C3861: 'fizzBuzz': identifier not found"
+    HELP = "Line 5 of test.cpp uses fizzBuzz, but test.cpp doesn't include fizz.hpp."
+
+    def verdict_with(self, help_text):
+        client = FakeClient()
+        original = client.create
+
+        def create(**kwargs):
+            original(**kwargs)
+            return SimpleNamespace(stop_reason="end_turn", usage=SimpleNamespace(input_tokens=1, output_tokens=1),
+                                   content=[SimpleNamespace(type="text", text=json.dumps({**VERDICT, "build_help": help_text}))])
+        client.messages = SimpleNamespace(create=create)
+        return client
+
+    def test_both_schemas_ask_for_it(self):
+        self.assertIn("build_help", coach.SCHEMA["required"])
+        self.assertIn("build_help", coach.lab_look_schema([])["required"])
+
+    def test_a_failed_build_keeps_the_coachs_sentence(self):
+        answer, _ = coach.ask_coach(self.verdict_with(f"  {self.HELP} "), step(done=True, test_result=self.FAILED))
+        self.assertEqual(answer["build_help"], self.HELP)
+
+    def test_a_passing_build_has_nothing_to_explain(self):
+        answer, _ = coach.ask_coach(self.verdict_with(self.HELP), step(done=True))
+        self.assertEqual(answer["build_help"], "")
+
+    def test_code_is_blanked_like_a_guidance_detail(self):
+        for coded in ("Line 5 calls fizzBuzz(1) before it exists.", "Add a } after line 7.", None, 3):
+            answer, _ = coach.ask_coach(self.verdict_with(coded), step(done=True, test_result=self.FAILED))
+            self.assertEqual(answer["build_help"], "", msg=coded)
+
+    def test_the_lab_look_cleans_it_too(self):
+        lab = dict(lab="refactor", refactorings=Lab.REFACTORINGS, board=Lab.BOARD, catalogue=None)
+        answer = {"decision": "advance", "note": "", "smells_resolved": [],
+                  "move_review": {"refactoring": "Rename Variable", "effect": "same", "behaviour_kept": True, "note": ""},
+                  "hint_question": "", "hint_kind": "", "driver_action": "", "commit_message": "",
+                  "rescue_code": "", "rescue_why": "", "build_help": "Line 12 of cart.h still uses the old name t."}
+        failed, _ = coach.ask_coach(Lab().answering(answer), step(**lab, test_result=self.FAILED))
+        self.assertEqual(failed["build_help"], "Line 12 of cart.h still uses the old name t.")
+        passed, _ = coach.ask_coach(Lab().answering(answer), step(**lab))
+        self.assertEqual(passed["build_help"], "")
+        coded, _ = coach.ask_coach(Lab().answering({**answer, "build_help": "Write total == 0 on line 3."}),
+                                   step(**lab, test_result=self.FAILED))
+        self.assertEqual(coded["build_help"], "")
+
+
 class Struggle(unittest.TestCase):
     def test_the_struggle_signals_are_checked(self):
         good = {"runs_without_progress": 2, "minutes_on_step": 6, "holds_on_step": 1, "hints_shown": 2,

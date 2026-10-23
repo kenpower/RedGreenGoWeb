@@ -34,6 +34,7 @@ Never "redo" for a failing test, edited tests or a broken build: the game alread
   - `hint_kind`: a few words naming the kind of smell (e.g. "a magic number").
   - `driver_action`: one explicit action, at most 24 words: the refactoring by name, where, and its first step (e.g. "Replace Magic Number with Constant: name the '0.2' in priceFor DISCOUNT_RATE.").
   When every smell is resolved, say the board is clear in the note and leave the three hint fields "".
+- `build_help`: only when the build and test result starts with "Build failed"; otherwise "". The game already shows the first error's file, line and a fixed explanation of its error code, so add what only you can see: one plain sentence, at most 30 words, about THEIR change. Name the file and line the first error points at, and the likely cause in words, usually something the refactoring missed (e.g. "Line 12 of cart.h still uses the old name t, which the rename changed to total."). Plain words, no error codes, no code, never quote a line.
 - `commit_message`: in the COMMIT phase (and when the change is ready to commit), a short message naming the refactoring and where (e.g. "Extract Function: lineTotal from priceFor"), else "".
 
 ## Rescue (only when the request says RESCUE)

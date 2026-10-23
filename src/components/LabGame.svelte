@@ -18,6 +18,9 @@
   import Reflection from "./Reflection.svelte";
   import HowTo from "./HowTo.svelte";
   import Glossary from "./Glossary.svelte";
+  import BuildError from "./BuildError.svelte";
+  import DoNow from "./DoNow.svelte";
+  import Fold from "./Fold.svelte";
 
   export let gameState;
   const dispatch = createEventDispatcher();
@@ -91,10 +94,16 @@
     if (!answer || gameState.lab?.round !== round) return;
     if (rescue) return (rescueShown = { code: answer.rescue_code, why: answer.rescue_why });
     look = answer;
+    lookBuildTime = buildFailed(current) ? current.build.time : null;
     gameState.labReview(answer);
     tickN++;
     report();
   };
+  // A failed build, explained (BuildError); the coach's sentence about it only
+  // while it's the build that Look saw.
+  let lookBuildTime = null;
+  $: buildErrors = snapshot && buildFailed(snapshot) ? snapshot.build.errors || [] : [];
+  $: buildHelp = buildErrors.length && look?.build_help && snapshot.build.time === lookBuildTime ? look.build_help : "";
   $: review = look?.move_review && look.move_review.effect !== "none" ? look.move_review : null;
   $: broke = !!review && !review.behaviour_kept && !!snapshot && (buildFailed(snapshot) || failingTests(snapshot).length > 0);
 
@@ -144,6 +153,21 @@
     gameState.labRestartRound();
     tickN++;
   };
+
+  // ---- The card's one "do this now" (DoNow): the first problem on the
+  // to-do list, else the phase's task, else (all ticked) Done.
+  $: problem = status?.lines.find((l) => l.ok === false);
+  $: doNow = problem
+    ? phase === "commit" && problem.reason
+      ? `${problem.text}. ${problem.reason}`
+      : problem.reason || problem.text
+    : status?.goalMet
+    ? "Everything is ticked: click Done below."
+    : card.driver;
+  $: navigatorNumber = gameState.players.findIndex((p, i) => p && i !== gameState.driver) + 1;
+  $: nextSmell = board.find((s) => !s.resolved);
+  $: boardClear = board.length > 0 && !smellsLeft;
+  const EFFECT_TEXT = { better: "better", same: "about the same", worse: "harder to read" };
 
   // a broken change, then a fixed one, is a revert for the teacher
   $: if (snapshot && lab && !staleResults(snapshot)) {
@@ -203,40 +227,28 @@
 {:else if lab}
   <div class="labCard phase-{phase}" transition:fade>
     <p class="title aoc-heading">Round {lab.round}: {card.title}</p>
-    <dl class="roles">
-      <dt>Driver ({driver})</dt>
-      <dd>{card.driver} <HowTo item={card} /></dd>
-      <dt>Navigator{navigators.length > 1 ? "s" : ""} ({navigators.join(", ")})</dt>
-      <dd>{card.navigator}</dd>
-    </dl>
-
-    <!-- once there's a board, it names each smell's refactoring itself -->
-    {#if phase === "refactor" && lab.refactorings?.length && !board.length}
-      <p class="muted">
-        Refactorings for this lab: {#each lab.refactorings as name, i}{#if i}, {/if}<Glossary {name} />{/each}
-      </p>
-    {/if}
-
-    {#if orientLoading}
-      <p class="muted">The coach is reading your code for smells<WaitingDots label="Reading your code" /></p>
-    {:else if board.length}
-      <details class="board" open={phase === "refactor"}>
-        <summary>Smell board: {smellsLeft ? `${smellsLeft} of ${board.length} left` : "clear ✓"}</summary>
-        <ul>
-          {#each shownSmells as smell}
-            <li class:resolved={smell.resolved}>
-              <span class="box">{smell.resolved ? "[✓]" : "[ ]"}</span>
-              <span><strong>{smell.where}:</strong> {smell.what} <span class="muted">(<Glossary name={smell.refactoring} />{smell.from_readme ? "" : ", extra"})</span></span>
-            </li>
-          {/each}
-        </ul>
-        {#if hiddenSmells > 0}
-          <button class="quiet more" on:click={() => (showAllSmells = true)}>… {hiddenSmells} more: show all</button>
-        {:else if showAllSmells && board.length > BOARD_PREVIEW}
-          <button class="quiet more" on:click={() => (showAllSmells = false)}>Show fewer</button>
-        {/if}
-      </details>
-    {/if}
+    <!-- One card, one thing to do now: this line, then what blocks it, the
+         to-do list and Done. Everything else is folded away at the bottom. -->
+    <DoNow
+      {driver}
+      driverNumber={gameState.driver + 1}
+      action={doNow}
+      {navigators}
+      {navigatorNumber}
+      navigatorAction={card.navigator}
+      held={!!problem || broke}
+    >
+      <HowTo item={problem || card} />
+      {#if phase === "refactor" && nextSmell}
+        <p class="nextSmell">
+          Next on the smell board: <strong>{nextSmell.where}:</strong> {nextSmell.what}
+          <span class="muted">(<Glossary name={nextSmell.refactoring} />)</span>
+        </p>
+      {/if}
+      {#if phase === "commit" && look?.commit_message}
+        <p class="muted">Suggested commit message: <strong>{look.commit_message}</strong></p>
+      {/if}
+    </DoNow>
 
     {#if broke}
       <div class="brokeBox">
@@ -244,39 +256,11 @@
         {#if review.note}<p>What probably broke: {review.note}</p>{/if}
         <HowTo item={{ howto: "undo" }} />
       </div>
-    {:else if review}
-      <p class="review effect-{review.effect}">
-        <span class="who">Coach on your change:</span>
-        <Glossary name={review.refactoring} />{review.refactoring ? ", " : ""}{({ better: "better", same: "about the same", worse: "harder to read" })[review.effect]}.
-        {review.note}
-      </p>
-    {/if}
-    {#if look?.note && !broke}
-      <p><span class="who">Coach:</span> {look.note}</p>
-    {/if}
-    {#if phase === "commit" && look?.commit_message}
-      <p class="muted">Suggested commit message: <strong>{look.commit_message}</strong></p>
-    {/if}
-    {#if phase === "refactor" && hintText?.question}
-      <div class="ladder">
-        <p><span class="label">Think:</span> {hintText.question}</p>
-        {#if hintText.kind}<p><span class="label">Look for:</span> {hintText.kind}</p>{/if}
-        {#if hintText.action}<p><span class="label">Try:</span> {hintText.action}</p>{/if}
-        {#if rung < TOP_RUNG}
-          <button class="quiet" on:click={moreHelp}>More help</button>
-        {:else if !rescueShown}
-          <button class="quiet" disabled={rescueWaiting} on:click={askRescue}
-            >{rescueWaiting ? "Asking the coach…" : "Show me the code"}</button
-          >
-        {/if}
-        {#if rescueShown}
-          {#if rescueShown.why}<p>{rescueShown.why}</p>{/if}
-          {#if rescueShown.code}<pre class="rescueCode">{rescueShown.code}</pre>
-            <p class="muted">Type it in yourself, then run the tests.</p>{/if}
-        {/if}
-      </div>
     {/if}
 
+    {#if !helperMissing}
+      <BuildError errors={buildErrors} coachHelp={buildHelp} />
+    {/if}
     {#if helperMissing}
       <p class="doneHint locked">Waiting for the helper</p>
     {:else if status?.lines.length}
@@ -304,19 +288,95 @@
         <button class:lockedDone={locked} aria-disabled={locked} on:click={done}>{card.done}</button>
       {/if}
     </div>
-    <div class="switchRow">
-      <p>
-        {#if board.length && !smellsLeft}<span class="clear">The board is clear. </span>{/if}
-        {lab.rounds} refactoring{lab.rounds === 1 ? "" : "s"} committed.
-        {#if !canSwitch}<span class="muted">Commit this round's refactoring before switching.</span>{/if}
+    <!-- a clear board makes switching to TDD the next thing to do; until then it waits under More -->
+    {#if boardClear}
+      <div class="switchRow">
+        <p>
+          <span class="clear">The board is clear. </span>
+          {lab.rounds} refactoring{lab.rounds === 1 ? "" : "s"} committed.
+          {#if !canSwitch}<span class="muted">Commit this round's refactoring before switching.</span>{/if}
+        </p>
+        <button class="ready" disabled={!canSwitch} on:click={switchToTdd}>Ready for new features: switch to TDD</button>
+      </div>
+    {/if}
+
+    <!-- Everything else, folded: secondary, and only when there's something in it -->
+    {#if orientLoading}
+      <p class="muted">The coach is reading your code for smells<WaitingDots label="Reading your code" /></p>
+    {:else if board.length}
+      <Fold title="Smell board" note={smellsLeft ? `${smellsLeft} of ${board.length} left` : "clear ✓"}>
+        <ul class="board">
+          {#each shownSmells as smell}
+            <li class:resolved={smell.resolved}>
+              <span class="box">{smell.resolved ? "[✓]" : "[ ]"}</span>
+              <span><strong>{smell.where}:</strong> {smell.what} <span class="muted">(<Glossary name={smell.refactoring} />{smell.from_readme ? "" : ", extra"})</span></span>
+            </li>
+          {/each}
+        </ul>
+        {#if hiddenSmells > 0}
+          <button class="quiet more" on:click={() => (showAllSmells = true)}>… {hiddenSmells} more: show all</button>
+        {:else if showAllSmells && board.length > BOARD_PREVIEW}
+          <button class="quiet more" on:click={() => (showAllSmells = false)}>Show fewer</button>
+        {/if}
+      </Fold>
+    {/if}
+
+    {#if phase === "refactor" && hintText?.question}
+      <Fold title="Hints" note={rescueShown ? "the code for one move" : rung >= 3 ? "Think, Look for, Try" : rung >= 2 ? "Think, Look for" : "Think"}>
+        <div class="ladder">
+          <p><span class="label">Think:</span> {hintText.question}</p>
+          {#if hintText.kind}<p><span class="label">Look for:</span> {hintText.kind}</p>{/if}
+          {#if hintText.action}<p><span class="label">Try:</span> {hintText.action}</p>{/if}
+          {#if rung < TOP_RUNG}
+            <button class="quiet" on:click={moreHelp}>More help</button>
+          {:else if !rescueShown}
+            <button class="quiet" disabled={rescueWaiting} on:click={askRescue}
+              >{rescueWaiting ? "Asking the coach…" : "Show me the code"}</button
+            >
+          {/if}
+          {#if rescueShown}
+            {#if rescueShown.why}<p>{rescueShown.why}</p>{/if}
+            {#if rescueShown.code}<pre class="rescueCode">{rescueShown.code}</pre>
+              <p class="muted">Type it in yourself, then run the tests.</p>{/if}
+          {/if}
+        </div>
+      </Fold>
+    {/if}
+
+    {#if (review && !broke) || (look?.note && !broke)}
+      <Fold title="Coach on your change" note={review && !broke ? EFFECT_TEXT[review.effect] : ""}>
+        {#if review}
+          <p class="review effect-{review.effect}">
+            <Glossary name={review.refactoring} />{review.refactoring ? ", " : ""}{EFFECT_TEXT[review.effect]}.
+            {review.note}
+          </p>
+        {/if}
+        {#if look?.note}
+          <p><span class="who">Coach:</span> {look.note}</p>
+        {/if}
+      </Fold>
+    {/if}
+
+    <Fold title="More">
+      <!-- once there's a board, it names each smell's refactoring itself -->
+      {#if lab.refactorings?.length && !board.length}
+        <p class="muted">
+          Refactorings for this lab: {#each lab.refactorings as name, i}{#if i}, {/if}<Glossary {name} />{/each}
+        </p>
+      {/if}
+      {#if !boardClear}
+        <div class="switchRow">
+          <p>
+            {lab.rounds} refactoring{lab.rounds === 1 ? "" : "s"} committed.
+            {#if !canSwitch}<span class="muted">Commit this round's refactoring before switching.</span>{/if}
+          </p>
+          <button disabled={!canSwitch} on:click={switchToTdd}>Ready for new features: switch to TDD</button>
+        </div>
+      {/if}
+      <p class="finishRow">
+        <button class="quiet" on:click={finish}>Finish the lab</button>
       </p>
-      <button class:ready={board.length && !smellsLeft} disabled={!canSwitch} on:click={switchToTdd}
-        >Ready for new features: switch to TDD</button
-      >
-    </div>
-    <p class="finishRow">
-      <button class="quiet" on:click={finish}>Finish the lab</button>
-    </p>
+    </Fold>
   </div>
 {/if}
 
@@ -348,20 +408,12 @@
     padding: 0.6em 1em;
     border: 1px solid var(--refactoring-blue);
     background: var(--bg-panel);
+    --phase-col: var(--refactoring-blue); /* DoNow's edge */
   }
 
-  .roles {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 0.3em 1em;
-  }
-
-  dt {
-    color: var(--text-muted);
-  }
-
-  dd {
-    margin: 0;
+  .nextSmell {
+    margin: 0.3em 0;
+    font-size: 0.9em;
   }
 
   /* the phase's to-do list: [✓] green when done, [✖] red until then */
@@ -445,11 +497,7 @@
     text-shadow: 0 0 5px var(--star);
   }
 
-  .board summary {
-    cursor: pointer;
-  }
-
-  .board ul {
+  ul.board {
     list-style: none;
     padding-left: 0.4em;
   }
@@ -465,7 +513,7 @@
     white-space: pre; /* "[ ]" stays on one line, as wide as "[✓]" */
   }
 
-  .board .more {
+  .more {
     margin: 0 0 0.3em 0.4em;
     font-size: 0.9em;
   }
@@ -508,11 +556,5 @@
     overflow-x: auto;
     padding: 0.4em;
     background: var(--bg);
-  }
-
-  @media (max-width: 480px) {
-    .roles {
-      grid-template-columns: 1fr;
-    }
   }
 </style>
