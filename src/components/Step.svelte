@@ -1,6 +1,8 @@
 <script>
   import HintLabel from "./HintLabel.svelte";
   import BuildError from "./BuildError.svelte";
+  import DoNow from "./DoNow.svelte";
+  import Fold from "./Fold.svelte";
   import { fade, fly } from "svelte/transition";
   import { createEventDispatcher } from "svelte";
   import Icon from "./Icon.svelte";
@@ -15,7 +17,7 @@
   // Kept out of `step` so values that change mid-step (when a coach verdict
   // arrives) update in place instead of re-keying the card and the hint timer.
   export let hint = "";
-  // The "What to do now" lines, already chosen by Game: {driver, navigator}.
+  // The "Do this now" lines, already chosen by Game: {driver, navigator}.
   export let instructions = { driver: "", navigator: "" };
   // "red" | "amber" | "green" | "", computed by Game
   export let tone = "";
@@ -192,7 +194,8 @@
   };
   $: start = startCard(startState, failingTests, freshStart, uncommittedFiles);
   // In Red a compile error can be the failing test, so it's not called broken there.
-  $: buildHeading = step.stateName == "red" && !start ? "It doesn't compile yet" : "The code doesn't build";
+  $: redBuild = step.stateName == "red" && !start;
+  $: buildHeading = redBuild ? "It doesn't compile yet" : "The code doesn't build";
   $: isRed = step.stateName == "red";
   // not enforced: warn, but Red carries on
   $: commitWarning = isRed && !start && uncommittedFiles.length > 0;
@@ -211,6 +214,40 @@
   $: firstFinding = findings.find((f) => f.rule == "one_failing") || findings[0];
   $: reason = heldByCoach ? coach.rule_problems?.[0] : firstFinding?.message;
   $: canFinish = step.stateName == "refactor" && !held && !waiting && !helperMissing;
+  // Finish sits with Done only when the coach thinks they may be done (or is
+  // answering about it); otherwise it waits under More.
+  $: finishShown = likelyFinished || finishState != "idle";
+
+  // ---- The folds under Done (Fold), each shown only with something in it.
+  // The list on the card: the coach's or the rules' steps, else the guide.
+  $: listed = start ? [] : nextSteps && (nextSteps.needed.length || nextSteps.practice.length) ? nextSteps.needed : guide;
+  // Why?: the reason behind each step, kept out of the list's way
+  $: whys = (isCycleStep ? listed : guide).filter((item) => item.why);
+  $: practice = !start && nextSteps ? nextSteps.practice : [];
+  // Heads up: warnings the pair may carry on past (the rules aren't enforced)
+  $: warnings = [
+    ...(!start && !held && findings.length ? [{ heading: "A TDD rule isn't met", text: firstFinding.message }] : []),
+    ...(entryProblem && !start && !held ? [{ heading: "", text: entryProblem.message }] : []),
+    ...(commitWarning && !held
+      ? [{ heading: "Commit first", text: "Commit your work before writing the next test.", list: uncommittedFiles }]
+      : []),
+  ];
+  // Hints: the coach's question and kind when it holds them, the smell it
+  // spotted for Refactor, advice, the timed hint, and "Show me the code"
+  $: ladderHints = heldByCoach && ladder && (ladder.question || ladder.kind || ladder.more);
+  $: smellHint = !!refactorCard && !refactorCard.none && !start && !held;
+  $: showHint = isCycleStep && !held && !start && !!hint;
+  $: hasHints = isCycleStep && (ladderHints || smellHint || showHint || liveAdvice.length > 0 || !!rescueOffer);
+  $: hintNote = ladderHints
+    ? "the coach's question"
+    : smellHint
+    ? "the coach spotted something to tidy"
+    : rescueOffer == "show"
+    ? "Show me the code"
+    : "";
+  // "Nothing to tidy yet" is a way to finish Refactor, so it goes next to Done
+  $: nothingToTidy = smellHint ? refactorCard.nothingToTidy || "" : "";
+  $: shownReview = !!moveReview && !moveReview.broke && !start && !held;
 
   //TODO move into game
   function scrollIntoView() {
@@ -242,6 +279,24 @@
       </p>
     {/if}
 
+    <!-- One card, one thing to do now: this line, then what blocks it, the
+         to-do list and Done. Everything else is folded away at the bottom. -->
+    {#if isCycleStep}
+      <DoNow
+        driver={step.driver}
+        driverNumber={step.driverNumber}
+        action={(start || instructions).driver}
+        navigators={step.navigators}
+        navigatorNumber={step.navigatorNumbers[0]}
+        navigatorAction={(start || instructions).navigator}
+        held={held && !start}
+      >
+        {#if refactorCard?.none && !start && !held}
+          <p class="smellNone">Nothing worth tidying yet. Commit and move on.</p>
+        {/if}
+      </DoNow>
+    {/if}
+
     {#if start}
       <div class={start.box}>
         <p class="marker">{start.heading}</p>
@@ -261,69 +316,26 @@
         {#if reason}
           <p>{reason}</p>
         {/if}
-        {#if heldByCoach && ladder}
-          {#if ladder.question}<p class="ladderLine"><span class="ladderLabel">Think:</span> {ladder.question}</p>{/if}
-          {#if ladder.kind}<p class="ladderLine"><span class="ladderLabel">Look for:</span> {ladder.kind}</p>{/if}
-          {#if ladder.actions}<p class="ladderLine">The Driver and Navigator lines below now say exactly what to do.</p>{/if}
-          {#if ladder.more}
-            <button class="moreHelp" disabled={busy} on:click={() => interact("moreHelp")}>More help</button>
-          {/if}
+        {#if heldByCoach && ladder?.actions}
+          <p class="ladderLine">The "Do this now" lines above now say exactly what to do.</p>
         {/if}
-      </div>
-    {:else if findings.length}
-      <div class="warnBox">
-        <p class="marker">Heads up: a TDD rule isn't met (you can carry on)</p>
-        <p>{firstFinding.message}</p>
       </div>
     {/if}
 
     {#if isCycleStep && !helperMissing}
-      <BuildError errors={buildErrors} coachHelp={buildHelp} heading={buildHeading} />
+      <BuildError
+        errors={buildErrors}
+        coachHelp={buildHelp}
+        heading={buildHeading}
+        note={redBuild ? "In Red that's fine if your new test calls a function that doesn't exist yet." : ""}
+      />
     {/if}
 
-    {#if refactorCard && !start && !held}
-      {#if refactorCard.none}
-        <p class="smellNone">Nothing worth tidying yet. Commit and move on.</p>
-      {:else}
-        <div class="smellBox">
-          <p><span class="who">Coach:</span> {refactorCard.question}</p>
-          {#if refactorCard.detail}
-            <p class="smellWhere"><span class="ladderLabel">Where:</span> {refactorCard.detail}</p>
-          {/if}
-          {#if refactorCard.showWhere || refactorCard.nothingToTidy === "button"}
-            <div class="choices">
-              {#if refactorCard.showWhere}
-                <button disabled={busy} on:click={() => interact("showWhere")}>Show me where</button>
-              {/if}
-              {#if refactorCard.nothingToTidy === "button"}
-                <button disabled={busy || helperMissing} on:click={() => interact("nothingToTidy")}>Nothing to tidy yet</button>
-              {/if}
-            </div>
-          {/if}
-          {#if refactorCard.nothingToTidy === "link"}
-            <p class="smellSkip">
-              <button class="quiet recheck" disabled={busy || helperMissing} on:click={() => interact("nothingToTidy")}
-                >Nothing to tidy yet</button
-              >
-            </p>
-          {/if}
-        </div>
-      {/if}
-    {/if}
-
-    {#if moveReview && !start && !held}
-      {#if moveReview.broke}
-        <div class="heldBox">
-          <p class="marker">That change broke something: undo the last change</p>
-          {#if moveReview.note}<p><span class="ladderLabel">What probably broke:</span> {moveReview.note}</p>{/if}
-        </div>
-      {:else}
-        <p class="moveReview effect-{moveReview.effect}" class:changedBehaviour={!moveReview.behaviour_kept}>
-          <span class="who">Coach on your last change:</span>
-          {moveReview.refactoring}{moveReview.refactoring ? ", " : ""}{EFFECT_TEXT[moveReview.effect]}.
-          {moveReview.note}
-        </p>
-      {/if}
+    {#if moveReview?.broke && !start && !held}
+      <div class="heldBox">
+        <p class="marker">That change broke something: undo the last change</p>
+        {#if moveReview.note}<p><span class="ladderLabel">What probably broke:</span> {moveReview.note}</p>{/if}
+      </div>
     {/if}
 
     {#if passedFirst && !start && !held}
@@ -354,82 +366,36 @@
       </div>
     {/if}
 
-    {#if entryProblem && !start && !held}
-      <div class="warnBox">
-        <p class="marker">Heads up</p>
-        <p>{entryProblem.message}</p>
-      </div>
-    {/if}
-
-    {#if commitWarning && !held}
-      <div class="warnBox">
-        <p class="marker">Heads up: commit first (you can carry on)</p>
-        <p>Commit your work before writing the next test.</p>
-        <ul>
-          {#each uncommittedFiles as file}<li>{file}</li>{/each}
-        </ul>
-      </div>
-    {/if}
-
     <div class="stepBody">
       {#if step.stateName == "swap"}
         <div class="handover" style="--player-col: var(--player-{step.driverNumber})">
           <Icon icon="swap" size="40px" />
           <p class="handoverText">Hand the keyboard to {step.driver}</p>
           <p>{step.bodyText}</p>
-          {#if guide[0]?.why}<p class="why">{guide[0].why}</p>{/if}
         </div>
       {:else}
-        <div class="driverBanner" style="--player-col: var(--player-{step.driverNumber})">
-          <Icon icon="keyboard" />
-          <span>{step.driver} is driving</span>
-        </div>
-        {#each step.navigators as navigator, i}
-          <div class="navigatorLine" style="--player-col: var(--player-{step.navigatorNumbers[i]})">
-            <Icon icon="navigation" />
-            <span><strong class="playerName">{navigator}</strong> is navigating</span>
-          </div>
-        {/each}
-
-        <h3 class="todoHeading">What to do now</h3>
-        <dl class="todo" class:heldTodo={held && !start}>
-          {#if (start || instructions).driver}
-            <dt style="--player-col: var(--player-{step.driverNumber})">Driver</dt>
-            <dd>{(start || instructions).driver}</dd>
-          {/if}
-          {#if (start || instructions).navigator}
-            <dt style="--player-col: var(--player-{step.navigatorNumbers[0]})">
-              Navigator{step.navigators.length > 1 ? "s" : ""}
-            </dt>
-            <dd>{(start || instructions).navigator}</dd>
-          {/if}
-        </dl>
-
         {#if !start && nextSteps && (nextSteps.needed.length || nextSteps.practice.length)}
-          {#each [["Needed to move on", nextSteps.needed, true], ["Good practice", nextSteps.practice, false]] as [heading, items, needed]}
-            {#if items.length}
-              <h3 class="todoHeading">{heading}</h3>
-              <ul class="guide" class:practice={!needed}>
-                {#each items as item}
-                  <li
-                    class:current={item.current}
-                    class:ticked={item.done === true}
-                    class:wrong={item.done === false}
-                    class:pulse={pulse && item.current}
+          {#if nextSteps.needed.length}
+            <h3 class="todoHeading">Needed to move on</h3>
+            <ul class="guide">
+              {#each nextSteps.needed as item}
+                <li
+                  class:current={item.current}
+                  class:ticked={item.done === true}
+                  class:wrong={item.done === false}
+                  class:pulse={pulse && item.current}
+                >
+                  <span class="box" aria-label={item.done === true ? "done" : item.done === false ? "problem" : "not done yet"}
+                    >{item.extra ? "   " : BOX[item.done]}</span
                   >
-                    <span class="box" aria-label={item.done === true ? "done" : item.done === false ? "problem" : "not done yet"}
-                      >{item.extra ? "   " : BOX[item.done]}</span
-                    >
-                    <span class="itemText">
-                      {item.text}
-                      {#if item.detail}<span class="detail">{item.detail}</span>{/if}
-                      {#if item.why}<span class="why">{item.why}</span>{/if}
-                    </span>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
-          {/each}
+                  <span class="itemText">
+                    {item.text}
+                    {#if item.detail}<span class="detail">{item.detail}</span>{/if}
+                  </span>
+                </li>
+              {/each}
+            </ul>
+          {/if}
         {:else if !start && guide.length}
           <h3 class="todoHeading">Step by step</h3>
           <ul class="guide">
@@ -446,7 +412,6 @@
                 <span class="itemText">
                   {item.text}
                   {#if item.reason}<span class="reason">{item.reason}</span>{/if}
-                  {#if item.why}<span class="why">{item.why}</span>{/if}
                 </span>
               </li>
             {/each}
@@ -457,22 +422,6 @@
               <li class="ok-{line.ok}">{line.text}</li>
             {/each}
           </ul>
-        {/if}
-        {#each liveAdvice as text}
-          <p class="advice"><span class="adviceLabel">Advice:</span> {text}</p>
-        {/each}
-
-        {#if !held && !start}
-          <div><HintLabel text={hint} /></div>
-        {/if}
-        {#if isRed && noRepo}
-          <p class="muted tip">
-            {#if gitError}
-              The helper couldn't run git, so commits aren't checked.
-            {:else}
-              Tip: put your project in git; the game will remind you to commit each cycle.
-            {/if}
-          </p>
         {/if}
       {/if}
 
@@ -510,30 +459,15 @@
             disabled={busy}
             on:click={onDone}>{doneLabel}</button
           >
+          {#if nothingToTidy}
+            <!-- Done without changes: the same checks as Done -->
+            <button class:quiet={nothingToTidy === "link"} disabled={busy || helperMissing} on:click={() => interact("nothingToTidy")}
+              >Nothing to tidy yet</button
+            >
+          {/if}
         {/if}
       </div>
 
-      {#if isCycleStep && !helperMissing}
-        <!-- stuck or out of step with the code: start this step's checks afresh, not the whole game -->
-        <p class="recheckRow">
-          <button
-            class="quiet recheck"
-            disabled={busy}
-            title="Re-read your code and start this step's checks afresh (the game keeps your progress)"
-            on:click={() => interact("recheck")}>Re-check from here</button
-          >
-        </p>
-      {/if}
-      {#if rescueOffer && isCycleStep}
-        <div class="rescueRow">
-          {#if rescueOffer == "show"}
-            <button disabled={busy || helperMissing} on:click={() => interact("rescue")}>Show me the code</button>
-          {:else}
-            <!-- no coach: nothing to fetch; it only points them to their teacher -->
-            <button class="quiet">Stuck? Ask your teacher</button>
-          {/if}
-        </div>
-      {/if}
       {#if rescue && isCycleStep}
         <div class="rescueBox">
           <p class="marker">The code for this step</p>
@@ -545,7 +479,8 @@
         </div>
       {/if}
 
-      {#if canFinish}
+      <!-- the coach thinks they may be done: then Finish is a "do this now" too; otherwise it's under More -->
+      {#if canFinish && finishShown}
         <div class="finish" class:likely={likelyFinished || finishState == "disagreed"}>
           {#if finishState == "asking"}
             <p class="muted">Asking the coach if you're finished<WaitingDots /></p>
@@ -557,45 +492,138 @@
             {/if}
             <button class="quiet" on:click={() => interact("finishAnyway")}>Finish anyway</button>
           {:else}
-            {#if likelyFinished}
-              <p>The coach thinks you may have solved the problem.</p>
-            {/if}
-            <button class:quiet={!likelyFinished} on:click={() => interact("finish")}
-              >Finished</button
-            >
+            <p>The coach thinks you may have solved the problem.</p>
+            <button on:click={() => interact("finish")}>Finished</button>
           {/if}
         </div>
+      {/if}
+
+      <!-- Everything else, folded: secondary, and only when there's something in it -->
+      {#if warnings.length}
+        <Fold title="Heads up" note="{warnings.length} thing{warnings.length > 1 ? 's' : ''} to check (you can carry on)" tone="amber">
+          {#each warnings as warning}
+            <div class="warnBox">
+              {#if warning.heading}<p class="marker">{warning.heading}</p>{/if}
+              <p>{warning.text}</p>
+              {#if warning.list?.length}
+                <ul>
+                  {#each warning.list as file}<li>{file}</li>{/each}
+                </ul>
+              {/if}
+            </div>
+          {/each}
+        </Fold>
+      {/if}
+
+      {#if hasHints}
+        <Fold title="Hints" note={hintNote} tone={hintNote ? "amber" : ""}>
+          {#if ladderHints}
+            {#if ladder.question}<p class="ladderLine"><span class="ladderLabel">Think:</span> {ladder.question}</p>{/if}
+            {#if ladder.kind}<p class="ladderLine"><span class="ladderLabel">Look for:</span> {ladder.kind}</p>{/if}
+            {#if ladder.more}
+              <button class="moreHelp" disabled={busy} on:click={() => interact("moreHelp")}>More help</button>
+            {/if}
+          {/if}
+          {#if smellHint}
+            <div class="smellBox">
+              <p><span class="who">Coach:</span> {refactorCard.question}</p>
+              {#if refactorCard.detail}
+                <p class="smellWhere"><span class="ladderLabel">Where:</span> {refactorCard.detail}</p>
+              {/if}
+              {#if refactorCard.showWhere}
+                <button disabled={busy} on:click={() => interact("showWhere")}>Show me where</button>
+              {/if}
+            </div>
+          {/if}
+          {#each liveAdvice as text}
+            <p class="advice"><span class="adviceLabel">Advice:</span> {text}</p>
+          {/each}
+          {#if showHint}
+            <div><HintLabel text={hint} /></div>
+          {/if}
+          {#if rescueOffer}
+            <div class="rescueRow">
+              {#if rescueOffer == "show"}
+                <button disabled={busy || helperMissing} on:click={() => interact("rescue")}>Show me the code</button>
+              {:else}
+                <!-- no coach: nothing to fetch; it only points them to their teacher -->
+                <button class="quiet">Stuck? Ask your teacher</button>
+              {/if}
+            </div>
+          {/if}
+        </Fold>
+      {/if}
+
+      {#if whys.length}
+        <Fold title="Why?">
+          {#each whys as item}
+            <p class="whyLine"><span class="whyFor">{item.short || item.text}:</span> {item.why}</p>
+          {/each}
+        </Fold>
+      {/if}
+
+      {#if practice.length}
+        <Fold title="Good practice" note="{practice.length} more, not needed to move on">
+          <ul class="guide practice">
+            {#each practice as item}
+              <li class:ticked={item.done === true} class:wrong={item.done === false}>
+                <span class="box" aria-label={item.done === true ? "done" : item.done === false ? "problem" : "not done yet"}
+                  >{item.extra ? "   " : BOX[item.done]}</span
+                >
+                <span class="itemText">
+                  {item.text}
+                  {#if item.detail}<span class="detail">{item.detail}</span>{/if}
+                  {#if item.why}<span class="why">{item.why}</span>{/if}
+                </span>
+              </li>
+            {/each}
+          </ul>
+        </Fold>
+      {/if}
+
+      {#if shownReview}
+        <Fold title="Coach on your last change" note={EFFECT_TEXT[moveReview.effect]}>
+          <p class="moveReview effect-{moveReview.effect}" class:changedBehaviour={!moveReview.behaviour_kept}>
+            {moveReview.refactoring}{moveReview.refactoring ? ", " : ""}{EFFECT_TEXT[moveReview.effect]}.
+            {moveReview.note}
+          </p>
+        </Fold>
+      {/if}
+
+      {#if isCycleStep && (!helperMissing || (isRed && noRepo) || (canFinish && !finishShown))}
+        <Fold title="More">
+          {#if !helperMissing}
+            <!-- stuck or out of step with the code: start this step's checks afresh, not the whole game -->
+            <p class="recheckRow">
+              <button
+                class="quiet recheck"
+                disabled={busy}
+                title="Re-read your code and start this step's checks afresh (the game keeps your progress)"
+                on:click={() => interact("recheck")}>Re-check from here</button
+              >
+            </p>
+          {/if}
+          {#if canFinish && !finishShown}
+            <p class="recheckRow">
+              <button class="quiet recheck" on:click={() => interact("finish")}>Finished: we've solved the problem</button>
+            </p>
+          {/if}
+          {#if isRed && noRepo}
+            <p class="muted tip">
+              {#if gitError}
+                The helper couldn't run git, so commits aren't checked.
+              {:else}
+                Tip: put your project in git; the game will remind you to commit each cycle.
+              {/if}
+            </p>
+          {/if}
+        </Fold>
       {/if}
     </div>
   </div>
 {/key}
 
 <style>
-  .driverBanner {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5em;
-    margin: 0.5em 0;
-    padding: 0.35em;
-    border: 1px solid var(--player-col);
-    color: var(--player-col);
-    text-shadow: 0 0 4px var(--player-col);
-    font-size: 1.2em;
-    font-weight: 500;
-  }
-
-  .navigatorLine {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.4em;
-  }
-
-  .playerName {
-    color: var(--player-col);
-  }
-
   .feedback {
     margin: 0 0 0.6em 0;
     padding: 0.2em 0.6em;
@@ -738,11 +766,6 @@
     text-shadow: none;
   }
 
-  .guide.practice li.current {
-    border-left-color: transparent;
-    background: none;
-  }
-
   .pulse {
     animation: pulse 0.4s ease-in-out 3;
   }
@@ -860,24 +883,15 @@
     color: var(--text-bright);
   }
 
-  .todo {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 0.3em 0.8em;
-    margin: 0 0 0.5em 0;
+  /* Why?: each step's reason, named by the step */
+  .whyLine {
+    margin: 0.3em 0;
+    font-size: 0.9em;
   }
 
-  .todo dt {
-    color: var(--player-col);
-  }
-
-  .todo dd {
-    margin: 0;
-  }
-
-  .heldTodo {
-    padding-left: 0.6em;
-    border-left: 2px solid var(--testing-red);
+  .whyFor {
+    padding-left: 0;
+    color: var(--text-bright);
   }
 
   .handover {
@@ -943,10 +957,6 @@
     border-left: 2px solid var(--refactoring-blue);
   }
 
-  .smellSkip {
-    text-align: right;
-  }
-
   .smellNone {
     margin: 0 0 0.6em 0;
     color: var(--text-muted);
@@ -964,7 +974,7 @@
 
   .ladderLine {
     padding-left: 0.6em;
-    border-left: 2px solid var(--box-col);
+    border-left: 2px solid var(--box-col, var(--amber)); /* amber in the Hints fold, outside a box */
   }
 
   .ladderLabel {
