@@ -1,0 +1,41 @@
+description = "LAB BUILD HELP: Rename Variable t to total missed one use; build_help names the line and the old name, in words (the game holds the broken build)"
+lab = "refactor"
+phase = "refactor"
+lab_phase = "test"
+cycle = 2
+refactorings = ["Extract Function", "Rename Variable", "Replace Magic Number with Constant", "Decompose Conditional"]
+problem = '''Refactor lab: shopping cart prices. The tests are complete and pass. Improve the code one refactoring at a time.'''
+rule_findings = ["The code doesn't build."]
+board = [
+  { id = "short-names", where = "priceFor in cart.h", what = "The names q, u, m and t don't say what they hold.", refactoring = "Rename Variable" },
+  { id = "magic-tax", where = "priceFor in cart.h", what = "The tax rate 0.2 is a bare number.", refactoring = "Replace Magic Number with Constant" },
+]
+tests_before = '''
+TEST(Cart, OneItem) { EXPECT_DOUBLE_EQ(12.0, priceFor(1, 10.0, false)); }
+TEST(Cart, BulkDiscount) { EXPECT_DOUBLE_EQ(118.8, priceFor(11, 10.0, false)); }
+'''
+code_before = '''
+// cart.h
+inline double priceFor(int q, double u, bool m) {
+  double t = q * u;
+  if (q > 10) t = t - t * 0.1;
+  return t + t * 0.2;
+}
+'''
+tests = '''
+TEST(Cart, OneItem) { EXPECT_DOUBLE_EQ(12.0, priceFor(1, 10.0, false)); }
+TEST(Cart, BulkDiscount) { EXPECT_DOUBLE_EQ(118.8, priceFor(11, 10.0, false)); }
+'''
+code = '''
+// cart.h
+inline double priceFor(int q, double u, bool m) {
+  double total = q * u;
+  if (q > 10) total = total - total * 0.1;
+  return total + t * 0.2;
+}
+'''
+test_result = "Build failed: C:\\Users\\pair\\Cart\\cart.h(5,18): error C2065: 't': undeclared identifier"
+
+[expect]
+decision = ["advance"]  # the game holds a broken build itself
+build_help_mentions = [["line 5", "5", "return"], ["total", "rename", "old name"]]

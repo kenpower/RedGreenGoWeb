@@ -113,6 +113,7 @@ When a Green step advances, look at the production code for the one thing most w
 - `likely_finished`: true if the tests already seem to cover everything the problem asks for.
 - `advice`: true if you advance but have a suggestion worth reading (a better next test, a smaller step next time, an intent that drifted); false otherwise.
 - `intent_match`, `hint_question`, `hint_kind`, `smell_question`, `smell_detail`: as described above.
+- `build_help`: only when the build and test result starts with "Build failed"; otherwise "". The game already shows the first error's file, line and a fixed explanation of its error code, so add what only you can see: one plain sentence, at most 30 words, about THEIR code. Name the file and line the first error points at, and the likely cause there in words (e.g. "Line 5 of test.cpp uses fizzBuzz, but test.cpp doesn't include the header that declares it." or "The class in stack.h has no semicolon after its closing brace."). The students are beginners who can't read compiler errors yet: plain words, no error codes, no code, no calls with brackets, never quote a line. In Red, a compile error because the function the new test calls doesn't exist yet is the right reason to fail: then say so ("That's the right failure: fizzBuzz doesn't exist yet.").
 
 ## Rescue: showing the code (only when the request says RESCUE)
 

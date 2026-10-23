@@ -1,5 +1,6 @@
 <script>
   import HintLabel from "./HintLabel.svelte";
+  import BuildError from "./BuildError.svelte";
   import { fade, fly } from "svelte/transition";
   import { createEventDispatcher } from "svelte";
   import Icon from "./Icon.svelte";
@@ -50,7 +51,10 @@
   // (or no check): the normal Red card. Game re-checks on every helper update.
   export let startState = ""; // "unknown" | "build_failed" | "one_failing" | "many_failing"
   export let failingTests = [];
+  // the latest build's errors when it failed (in any phase), and the coach's
+  // sentence about them (build_help), or ""
   export let buildErrors = [];
+  export let buildHelp = "";
   // true after [No, start fresh] on one_failing
   export let freshStart = false;
   // Source files not yet committed. Held ("uncommitted"): the live list. Not
@@ -123,7 +127,7 @@
 
   // What the start card says for each state. `box` picks the box colour,
   // `wait` is what the game is waiting to see before carrying on.
-  const startCard = (state, failing, errors, fresh, uncommitted) => {
+  const startCard = (state, failing, fresh, uncommitted) => {
     const name = failing[0] || "a test";
     switch (state) {
       case "uncommitted":
@@ -150,7 +154,6 @@
           box: "heldBox",
           heading: "Fix the build first",
           message: "Your code doesn't build, so the game can't tell which tests pass.",
-          list: errors.slice(0, 5),
           driver: "Fix the compile errors, then build and run the tests.",
           navigator: "Read the first error aloud and find the line it points to.",
           wait: "Waiting for a clean build",
@@ -187,7 +190,9 @@
         return null;
     }
   };
-  $: start = startCard(startState, failingTests, buildErrors, freshStart, uncommittedFiles);
+  $: start = startCard(startState, failingTests, freshStart, uncommittedFiles);
+  // In Red a compile error can be the failing test, so it's not called broken there.
+  $: buildHeading = step.stateName == "red" && !start ? "It doesn't compile yet" : "The code doesn't build";
   $: isRed = step.stateName == "red";
   // not enforced: warn, but Red carries on
   $: commitWarning = isRed && !start && uncommittedFiles.length > 0;
@@ -270,6 +275,10 @@
         <p class="marker">Heads up: a TDD rule isn't met (you can carry on)</p>
         <p>{firstFinding.message}</p>
       </div>
+    {/if}
+
+    {#if isCycleStep && !helperMissing}
+      <BuildError errors={buildErrors} coachHelp={buildHelp} heading={buildHeading} />
     {/if}
 
     {#if refactorCard && !start && !held}

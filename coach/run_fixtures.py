@@ -40,7 +40,8 @@ CODE_LIKE = re.compile(
     r"[{}]|==|!=|->|<<|#include|\)\s*;|\breturn\s+[^\s.,;]+\s*;"
     r"|\b[A-Za-z_]\w*\([^)]*\)|\b(?:EXPECT|ASSERT)_[A-Z]+\b|\bTEST(?:_F|_P)?\b")
 SHOWN = ("note", "driver_action", "navigator_action", "next_test", "hint_question", "hint_kind",
-         "smell_question", "smell_detail")
+         "smell_question", "smell_detail", "build_help")
+MAX_BUILD_HELP_WORDS = 30
 # A second instruction joined on: "... and make ...", "...; then run ...".
 SECOND_TASK = re.compile(
     r";|\b(and|then)\s+(then\s+)?(make|write|add|run|fix|change|check|uncomment|comment|remove|rename|delete|"
@@ -102,6 +103,22 @@ def score_next_steps(answer, expect, step):
     checks.append(("detail_short", not too_long, too_long[0][:60] if too_long else "ok"))
     coded = [d for d in details + [answer["extra"]] if DETAIL_CODE_LIKE.search(d)]
     checks.append(("detail_no_code", not coded, coded[0][:60] if coded else "none"))
+    return checks
+
+
+def score_build_help(answer, expect, step):
+    """A failed build gets one short sentence about the pair's code (the fixture may
+    say what it should name, e.g. the line or the cause); a good build gets none."""
+    help_text = answer.get("build_help", "")
+    if not step["test_result"].strip().startswith("Build failed"):
+        return [("no_build_help", not help_text, help_text[:60] or "none")]
+    checks = [("build_help", bool(help_text), help_text or '""'),
+              ("build_help_short", len(help_text.split()) <= MAX_BUILD_HELP_WORDS, f"{len(help_text.split())} words")]
+    if "build_help_mentions" in expect:  # every group: at least one of its words
+        groups = expect["build_help_mentions"]
+        groups = groups if isinstance(groups[0], list) else [groups]
+        missing = [g[0] for g in groups if not any(w.lower() in help_text.lower() for w in g)]
+        checks.append(("build_help_mentions", not missing, f"no {', '.join(missing)} in: {help_text[:70]}" if missing else help_text[:70]))
     return checks
 
 
@@ -223,7 +240,7 @@ def score(verdict, expect, step):
             checks.append(("rescue_mentions", hit, code.splitlines()[0] if code else '""'))
     else:
         checks.append(("no_rescue_code", not code and not verdict["rescue_why"].strip(), code[:40] or "none"))
-    return checks
+    return checks + score_build_help(verdict, expect, step)
 
 
 def score_orient(brief, expect):
@@ -275,8 +292,9 @@ def score_board(brief, expect, step):
     return checks
 
 
-def score_lab(answer, expect):
-    """A lab Look: the decision, the review, the board ticks, the hint and commit message."""
+def score_lab(answer, expect, step):
+    """A lab Look: the decision, the review, the board ticks, the hint and commit message,
+    and a failed build's sentence."""
     review = answer["move_review"]
     checks = []
     if "decision" in expect:
@@ -301,10 +319,11 @@ def score_lab(answer, expect):
         checks.append(("hints", has == expect["hints"], answer["hint_question"] or '""'))
     if answer["driver_action"]:
         checks.append(("single_action", single_action(answer["driver_action"]), answer["driver_action"]))
-    coded = [f for f in ("note", "hint_question", "hint_kind", "commit_message") if CODE_LIKE.search(answer[f])]
+    coded = [f for f in ("note", "hint_question", "hint_kind", "commit_message", "build_help")
+             if CODE_LIKE.search(answer[f])]
     coded += ["review note"] if CODE_LIKE.search(review["note"]) else []
     checks.append(("lab_no_code", not coded, ", ".join(coded) or "none"))
-    return checks
+    return checks + score_build_help(answer, expect, step)
 
 
 class Fatal(Exception):
@@ -314,10 +333,10 @@ class Fatal(Exception):
 # Checks only worth a line when they fail, per kind of fixture.
 QUIET = {
     "orient": ("orient_no_code", "first_move_short", "building_short"),
-    "lab": ("lab_no_code", "single_action"),
+    "lab": ("lab_no_code", "single_action", "no_build_help", "build_help_short"),
     "look": ("actions", "no_code", "single_action", "hint_is_question", "hint_no_answer", "hint_kind_vague",
              "smell_complete", "smell_only_on_green", "no_rescue_code", "step_count", "detail_short",
-             "detail_no_code", "detail_every_step"),
+             "detail_no_code", "detail_every_step", "no_build_help", "build_help_short"),
 }
 
 
@@ -355,7 +374,7 @@ def evaluate(client, f, catalogue):
     if kind == "orient":
         checks = score_orient(answer, expect) + (score_board(answer, expect, fx) if fx.get("lab") else [])
     elif kind == "lab":
-        checks = score_lab(answer, expect)
+        checks = score_lab(answer, expect, fx)
     else:  # one answer, both halves scored: the verdict, and the guidance steps
         checks = score(answer, expect, fx) + (score_next_steps(answer, expect, fx) if with_steps else [])
     ok = all(c[1] for c in checks)
@@ -385,7 +404,8 @@ def describe_lab(answer):
     return [f"      decision:  {answer['decision']}   note: {answer['note']}",
             describe_review(answer["move_review"]),
             f"      resolved:  {answer['smells_resolved']}   commit: {answer['commit_message'] or '-'}",
-            f"      hint:      {answer['hint_question']}  /  {answer['hint_kind']}  /  {answer['driver_action']}", ""]
+            f"      hint:      {answer['hint_question']}  /  {answer['hint_kind']}  /  {answer['driver_action']}",
+            *([f"      build:     {answer['build_help']}"] if answer["build_help"] else []), ""]
 
 
 def describe_look(verdict):
@@ -399,6 +419,8 @@ def describe_look(verdict):
               f"      hint:      {verdict['hint_question']}  /  {verdict['hint_kind']}"]
     if verdict["smell_question"] or verdict["smell_detail"]:
         lines.append(f"      smell:     {verdict['smell_question']}  /  {verdict['smell_detail']}")
+    if verdict["build_help"]:
+        lines.append(f"      build:     {verdict['build_help']}")
     if verdict["intent_match"] != "n_a":
         lines.append(f"      intent:    {verdict['intent_match']}")
     if verdict["rescue_code"]:

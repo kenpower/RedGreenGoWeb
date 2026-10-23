@@ -206,6 +206,7 @@
     const phase = forStep.stateName;
     const { verdict: answer, stale } = await ask(phase, checkRules(phase, gameState.before, current));
     if (stale || !answer || gameState.stepNumber !== forStep.stepNumber) return; // moved on meanwhile
+    noteBuildHelp(answer, current);
     gameState.setNextSteps(forStep.stepNumber, answer, { key: lookKey(current, forStep.stepNumber) });
     nextStepsAnswer = gameState.nextStepsFor(forStep.stepNumber);
     if (phase === "refactor") gameState.noteMove(answer.move_review); // for the teacher
@@ -237,6 +238,7 @@
       }
     }
     const result = await ask(phase, stepFindings, { done: true });
+    if (!result.stale) noteBuildHelp(result.verdict, snapshot);
     if (result.verdict && !result.stale && phase !== "finish") {
       gameState.setNextSteps(gameState.stepNumber, result.verdict, { key, used: true });
       nextStepsAnswer = gameState.nextStepsFor(gameState.stepNumber);
@@ -313,7 +315,16 @@
   $: if (startGate === "clean") clearStart();
   $: shownStartState = startGate === "clean" ? "" : startGate;
   $: failing = shownStartState ? failingTests(snapshot) : [];
-  $: buildErrors = shownStartState === "build_failed" ? snapshot.build?.errors || [] : [];
+  // the failed build's errors, explained on the card in any phase (BuildError)
+  $: buildErrors = snapshot && buildFailed(snapshot) ? snapshot.build.errors || [] : [];
+  // The coach's sentence about this failed build (build_help), kept with the
+  // build it saw: a newer build waits for the next Look rather than show
+  // a sentence about errors that may be gone.
+  let buildHelp = null; // {text, time}
+  const noteBuildHelp = (answer, current) => {
+    if (answer && current && buildFailed(current)) buildHelp = answer.build_help ? { text: answer.build_help, time: current.build.time } : null;
+  };
+  $: shownBuildHelp = buildHelp && buildErrors.length && snapshot.build.time === buildHelp.time ? buildHelp.text : "";
   $: uncommitted = shownStartState === "uncommitted" ? uncommittedFiles(snapshot) : commitWarning;
   $: repoMissing = step?.stateName === "red" && noRepo(snapshot);
 
@@ -725,6 +736,7 @@
         startState={shownStartState}
         failingTests={failing}
         {buildErrors}
+        buildHelp={shownBuildHelp}
         {freshStart}
         uncommittedFiles={uncommitted}
         noRepo={repoMissing}

@@ -68,11 +68,13 @@ SCHEMA = {
         # Only when the request has rescue: true; "" otherwise.
         "rescue_code": {"type": "string"},
         "rescue_why": {"type": "string"},
+        # Only when the build failed; "" otherwise (_clean_build_help).
+        "build_help": {"type": "string"},
     },
     "required": ["decision", "rule_problems", "note", "driver_action", "navigator_action",
                  "next_test", "likely_finished", "advice", "intent_match",
                  "hint_question", "hint_kind", "smell_question", "smell_detail",
-                 "rescue_code", "rescue_why"],
+                 "rescue_code", "rescue_why", "build_help"],
     "additionalProperties": False,
 }
 
@@ -105,7 +107,7 @@ MAX_NEXT_STEPS = 4
 MAX_REFACTORINGS = 20
 MAX_SMELLS = 12  # a lab README can list a dozen refactoring steps
 LAB_LOOK_FIELDS = ["decision", "note", "move_review", "smells_resolved", "hint_question", "hint_kind",
-                   "driver_action", "commit_message", "rescue_code", "rescue_why"]
+                   "driver_action", "commit_message", "rescue_code", "rescue_why", "build_help"]
 
 
 def lab_orient_schema():
@@ -137,6 +139,7 @@ def lab_look_schema(board):
             "commit_message": {"type": "string"},
             "rescue_code": {"type": "string"},
             "rescue_why": {"type": "string"},
+            "build_help": {"type": "string"},
         },
         "required": LAB_LOOK_FIELDS,
         "additionalProperties": False,
@@ -147,6 +150,20 @@ def lab_look_schema(board):
 # macro. Such a detail is blanked (the step's own text still stands); run_fixtures
 # checks with the same pattern.
 DETAIL_CODE_LIKE = re.compile(r"[{}]|==|!=|->|<<|\)\s*;|\b[A-Za-z_]\w*\([^)]*\)|\b(?:EXPECT|ASSERT)_[A-Z]+\b")
+
+# build_help: one sentence about the pair's failed build (which line, the likely
+# cause). The app shows it under its own fixed explanation of the error code.
+MAX_BUILD_HELP = 300
+BUILD_FAILED = "Build failed"  # how src/coach.js summariseResult starts a failed build's test_result
+
+
+def _clean_build_help(text, step):
+    """The coach's sentence about a failed build: "" when the build passed (it
+    has nothing to explain), or when it has code in it, like a guidance detail."""
+    text = (text or "").strip() if isinstance(text, str) else ""
+    if not step.get("test_result", "").strip().startswith(BUILD_FAILED) or DETAIL_CODE_LIKE.search(text):
+        return ""
+    return text[:MAX_BUILD_HELP]
 
 
 EFFECTS = ["better", "same", "worse", "none"]  # move_review.effect; "none": nothing changed
@@ -513,6 +530,7 @@ def _clean_lab_look(answer, step):
         cleaned["smells_resolved"] = []
     if not step.get("rescue"):
         cleaned["rescue_code"] = cleaned["rescue_why"] = ""
+    cleaned["build_help"] = _clean_build_help(answer.get("build_help"), step)
     return cleaned
 
 
@@ -591,6 +609,7 @@ def ask_coach(client, step, guidance=None):
     if guidance is None:
         guidance = not step.get("done")
     verdict, usage = _ask(client, "prompt.md", SCHEMA, build_user(step), 4000)
+    verdict["build_help"] = _clean_build_help(verdict.get("build_help"), step)
     if not step.get("catalogue") or not guidance:
         return {**verdict, **NO_GUIDANCE}, usage
     picked, more = _ask(client, "next_steps.md", guidance_schema(step["catalogue"], review=step["phase"] == "refactor"),

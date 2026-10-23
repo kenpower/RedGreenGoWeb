@@ -1,0 +1,34 @@
+description = "BUILD HELP, Green: the Stack class has no ; after its closing brace; build_help names stack.h and the missing semicolon, in words"
+phase = "green"
+cycle = 2
+problem = "Build a Stack class for ints with push, pop, top, size and isEmpty. Popping an empty stack throws std::out_of_range."
+expected = "Green: make Stack.NewStackIsEmpty pass with the least production code, test files unchanged."
+tests_before = '''
+// test.cpp
+#include "pch.h"
+#include "stack.h"
+
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+'''
+code_before = ""
+tests = '''
+// test.cpp
+#include "pch.h"
+#include "stack.h"
+
+TEST(Stack, NewStackIsEmpty) { Stack s; EXPECT_TRUE(s.isEmpty()); }
+'''
+code = '''
+// stack.h
+#pragma once
+
+class Stack {
+public:
+  bool isEmpty() const { return true; }
+}
+'''
+test_result = "Build failed: C:\\Users\\pair\\Stack\\stack.h(7,1): error C2628: 'Stack' followed by 'int' is illegal (did you forget a ';'?) | C:\\Users\\pair\\Stack\\test.cpp(5,1): error C2143: syntax error: missing ';' before '}'"
+
+[expect]
+decision = ["redo"]  # not green yet: the build fails
+build_help_mentions = [["stack.h", "Stack class", "class"], [";", "semicolon", "semi-colon"]]

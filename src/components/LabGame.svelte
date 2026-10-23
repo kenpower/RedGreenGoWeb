@@ -12,6 +12,7 @@
   import { nextStepsDue, runMark, codeKey } from "../content/steps.js";
   import { hintRung, TOP_RUNG } from "../ladder.js";
   import WaitingDots from "./WaitingDots.svelte";
+  import BuildError from "./BuildError.svelte";
 
   export let gameState;
   const dispatch = createEventDispatcher();
@@ -85,10 +86,16 @@
     if (!answer || gameState.lab?.round !== round) return;
     if (rescue) return (rescueShown = { code: answer.rescue_code, why: answer.rescue_why });
     look = answer;
+    lookBuildTime = buildFailed(current) ? current.build.time : null;
     gameState.labReview(answer);
     tickN++;
     report();
   };
+  // A failed build, explained (BuildError); the coach's sentence about it only
+  // while it's the build that Look saw.
+  let lookBuildTime = null;
+  $: buildErrors = snapshot && buildFailed(snapshot) ? snapshot.build.errors || [] : [];
+  $: buildHelp = buildErrors.length && look?.build_help && snapshot.build.time === lookBuildTime ? look.build_help : "";
   $: review = look?.move_review && look.move_review.effect !== "none" ? look.move_review : null;
   $: broke = !!review && !review.behaviour_kept && !!snapshot && (buildFailed(snapshot) || failingTests(snapshot).length > 0);
 
@@ -260,6 +267,9 @@
       </div>
     {/if}
 
+    {#if !helperMissing}
+      <BuildError errors={buildErrors} coachHelp={buildHelp} />
+    {/if}
     {#if helperMissing}
       <p class="doneHint locked">Waiting for the helper</p>
     {:else if status?.lines.length}
