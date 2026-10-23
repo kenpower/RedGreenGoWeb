@@ -55,7 +55,22 @@ export const RESCUE_AFTER = 3; // held this many times on one step: offer to sho
 // "teacher" (no coach: ask your teacher), or "" (not stuck yet).
 export const rescueOffer = (attempts, coached) => (attempts < RESCUE_AFTER ? "" : coached ? "show" : "teacher");
 
-const newCycle = (index) => ({ phase: TDDPhase.RED, index, backToRed: 0 });
+// The closing question: one per game, picked from the game id so a reload shows the same one.
+export const REFLECTION_QUESTIONS = [
+  "Which change made the code easiest to read, and why?",
+  "When did a test save you from a mistake?",
+  "What did the navigator notice that the driver missed?",
+  "What would you do differently if you started this game again?",
+  "Which step felt slowest, and what would make it faster next time?",
+];
+export const MAX_REFLECTION_CHARS = 380; // with the question, within the server's 500 per event
+
+export const reflectionQuestionFor = (gameId) => {
+  const hash = [...String(gameId || "")].reduce((sum, c) => (sum * 31 + c.charCodeAt(0)) >>> 0, 7);
+  return REFLECTION_QUESTIONS[hash % REFLECTION_QUESTIONS.length];
+};
+
+const newCycle =(index) => ({ phase: TDDPhase.RED, index, backToRed: 0 });
 
 // The lab's phases as coach_server takes them (its PROGRESS_PHASES).
 const LAB_SERVER_PHASES = { refactor: "refactor", test: "refactor", commit: "refactor" };
@@ -112,6 +127,7 @@ export class GameState {
       this.refactorings = r.refactorings || {};
       this.mode = r.mode || "tdd";
       this.lab = r.lab || null;
+      this.reflection = r.reflection || null;
     } else {
       this.players = ["John", "Jane"];
       this.driver = 0;
@@ -143,6 +159,7 @@ export class GameState {
       this.refactorings = {}; // refactorings the coach saw the pair make: {name: count}
       this.mode = "tdd"; // "tdd" | "refactor" (the refactor lab, chosen by the README: lab.js)
       this.lab = null; // the lab's state, see startLab
+      this.reflection = null; // the pair's answer to the closing question: {question, answer}
     }
     this.#save();
   }
@@ -234,6 +251,16 @@ export class GameState {
     if (this.iterations[this.iteration]) this.iterations[this.iteration].phase = TDDPhase.COMPLETED;
     this.finished = true;
     this.#save();
+  }
+
+  // The pair's answer to the closing question, kept and sent to the teacher as a
+  // `reflection` event. Once only; an empty answer isn't kept.
+  saveReflection(answer) {
+    const text = String(answer || "").trim().slice(0, MAX_REFLECTION_CHARS);
+    if (!this.finished || this.reflection || !text) return;
+    const question = reflectionQuestionFor(this.gameId);
+    this.reflection = { question, answer: text };
+    this.addEvent("reflection", `${question} | ${text}`);
   }
 
   // A Done or Ask again on this step that ended held (a rule hold or a coach

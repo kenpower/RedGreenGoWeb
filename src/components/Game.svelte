@@ -3,6 +3,7 @@
   import CycleLine from "./CycleLine.svelte";
   import OrientCard from "./OrientCard.svelte";
   import OrientLine from "./OrientLine.svelte";
+  import Reflection from "./Reflection.svelte";
   import { fade, fly } from "svelte/transition";
   import { createEventDispatcher, onDestroy, tick } from "svelte";
   import { helper, refreshHelper, BLOCKED_HELP, HELPER_PAGE, onGithubPages } from "../helper.js";
@@ -760,6 +761,7 @@
         Look back over your tests. Does each one check one behaviour, and do
         their names say what it is?
       </p>
+      <Reflection {gameState} on:save={report} />
       <div class="actions">
         <button on:click={() => dispatch("restart")}>Start again</button>
       </div>

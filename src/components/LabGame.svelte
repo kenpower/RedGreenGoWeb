@@ -12,6 +12,7 @@
   import { nextStepsDue, runMark, codeKey } from "../content/steps.js";
   import { hintRung, TOP_RUNG } from "../ladder.js";
   import WaitingDots from "./WaitingDots.svelte";
+  import Reflection from "./Reflection.svelte";
 
   export let gameState;
   const dispatch = createEventDispatcher();
@@ -184,7 +185,7 @@
 {#if gameState.finished}
   <div class="labCard" transition:fade>
     <p class="title aoc-heading">Lab finished</p>
-    <p>{lab?.rounds || 0} refactoring{lab?.rounds === 1 ? "" : "s"} committed{lab?.reverts ? `, ${lab.reverts} undone after a red run` : ""}.</p>
+    <Reflection {gameState} on:save={report} />
   </div>
 {:else if lab}
   <div class="labCard phase-{phase}" transition:fade>

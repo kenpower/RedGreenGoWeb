@@ -101,6 +101,7 @@ REUSE_PHASES = {"red", "green", "refactor", "finish"}  # the step phases coach.p
 EVENT_KINDS = {"advance", "hold", "release", "override", "back_to_red", "intent", "prediction",
                "hint", "smell", "commit", "finish", "rescue", "passed_first_time", "orient",
                "recheck",  # detail = the phase the pair re-checked from
+               "reflection",  # detail = "<question> | <the pair's answer>", at the end of the game
                "refactor_move"}  # detail = "<refactoring> | <effect>", e.g. "Extract Function | better"
 EVENT_PHASES = PROGRESS_PHASES | {"finish", ""}
 MAX_EVENTS_PER_CALL = 10
