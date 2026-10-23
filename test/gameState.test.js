@@ -1,4 +1,7 @@
-import { GameState, states, TDDPhase, HISTORY_LENGTH, newGameId, rescueOffer, RESCUE_AFTER } from "../src/gameState";
+import {
+  GameState, states, TDDPhase, HISTORY_LENGTH, newGameId, rescueOffer, RESCUE_AFTER,
+  REFLECTION_QUESTIONS, reflectionQuestionFor, MAX_REFLECTION_CHARS,
+} from "../src/gameState";
 import { hintFor, phaseHints } from "../src/content/hints.js";
 
 class LocalStorageMock {
@@ -996,4 +999,38 @@ test("recover_game_with_unknown_state_starts_on_red", () => {
 test("unreadable_save_is_ignored", () => {
   localStorage.setItem(GameState.GAME_STATE, "{not json");
   expect(GameState.recoverSavedGame()).toBeNull();
+});
+
+test("the_reflection_question_is_fixed_by_the_game_id", () => {
+  expect(REFLECTION_QUESTIONS).toContain(reflectionQuestionFor("g-abc"));
+  expect(reflectionQuestionFor("g-abc")).toBe(reflectionQuestionFor("g-abc"));
+  expect(REFLECTION_QUESTIONS).toContain(reflectionQuestionFor(null));
+});
+
+test("reflection_is_kept_and_sent_as_an_event_once_the_game_is_finished", () => {
+  const g = new GameState();
+  g.start();
+  g.saveReflection("too early");
+  expect(g.reflection).toBeNull();
+  g.finish();
+  g.saveReflection("  The rename helped.  ");
+  const question = reflectionQuestionFor(g.gameId);
+  expect(g.reflection).toEqual({ question, answer: "The rename helped." });
+  expect(g.pendingEvents.at(-1)).toMatchObject({ kind: "reflection", phase: "finished", detail: `${question} | The rename helped.` });
+  g.saveReflection("a second answer");
+  g.saveReflection("");
+  expect(g.reflection.answer).toBe("The rename helped.");
+  expect(g.pendingEvents.filter((e) => e.kind === "reflection").length).toBe(1);
+  expect(GameState.recoverSavedGame().reflection).toEqual(g.reflection);
+});
+
+test("an_empty_reflection_is_not_kept_and_a_long_one_fits_the_event", () => {
+  const g = new GameState();
+  g.start();
+  g.finish();
+  g.saveReflection("   ");
+  expect(g.reflection).toBeNull();
+  g.saveReflection("x".repeat(2000));
+  expect(g.reflection.answer.length).toBe(MAX_REFLECTION_CHARS);
+  expect(g.pendingEvents.at(-1).detail).toBe(`${g.reflection.question} | ${g.reflection.answer}`);
 });

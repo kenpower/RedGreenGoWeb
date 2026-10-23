@@ -69,12 +69,30 @@ GAME_PAGE = f"""<!DOCTYPE html>
 \t<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 \t<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@300;400;500;700&display=swap'>
 \t<link rel='stylesheet' href='global.css'>
-\t<link rel='stylesheet' href='build/bundle.css'>
 
-\t<script defer src='build/bundle.js'></script>
 </head>
 
 <body>
+\t<script>
+\t\t// GitHub Pages lets browsers cache files for 10 minutes, so ask for the current
+\t\t// release (build/version.txt, never cached) and load the bundle as ?v=<release>.
+\t\t// If that fails, load it plain so the game still works.
+\t\t(function () {{
+\t\t\tfunction load(v) {{
+\t\t\t\tvar q = v ? '?v=' + encodeURIComponent(v) : '';
+\t\t\t\tvar css = document.createElement('link');
+\t\t\t\tcss.rel = 'stylesheet';
+\t\t\t\tcss.href = 'build/bundle.css' + q;
+\t\t\t\tdocument.head.appendChild(css);
+\t\t\t\tvar js = document.createElement('script');
+\t\t\t\tjs.src = 'build/bundle.js' + q;
+\t\t\t\tdocument.body.appendChild(js);
+\t\t\t}}
+\t\t\tfetch('build/version.txt', {{ cache: 'no-store' }})
+\t\t\t\t.then(function (r) {{ return r.ok ? r.text() : ''; }})
+\t\t\t\t.then(function (t) {{ t = t.trim(); load(/^[\\w.-]{{1,40}}$/.test(t) ? t : ''); }}, function () {{ load(''); }});
+\t\t}})();
+\t</script>
 </body>
 </html>
 """

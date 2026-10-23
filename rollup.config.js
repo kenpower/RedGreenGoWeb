@@ -23,6 +23,21 @@ function helperScript() {
 	};
 }
 
+// Writes build/version.txt (git short hash + build time). The page fetches it with
+// cache: "no-store" and loads bundle.js?v=<it>, so a release is picked up at once even
+// though GitHub Pages lets browsers cache files for 10 minutes.
+function versionFile() {
+	return {
+		generateBundle() {
+			let hash = 'dev';
+			try {
+				hash = require('child_process').execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+			} catch (e) {}
+			this.emitFile({ type: 'asset', fileName: 'version.txt', source: `${hash}-${Date.now().toString(36)}` });
+		}
+	};
+}
+
 function serve() {
 	let server;
 
@@ -74,6 +89,7 @@ export default {
 		}),
 		commonjs(),
 		helperScript(),
+		versionFile(),
 
 		// In dev mode, call `npm run start` once
 		// the bundle has been generated

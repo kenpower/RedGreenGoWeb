@@ -326,6 +326,16 @@ class RefactorLabTests(unittest.TestCase):
                          [("refactor_move", "Extract Function | better")])
 
 
+class ReflectionTests(unittest.TestCase):
+    def test_reflection_events_are_stored(self):
+        detail = "Which change made the code easiest to read, and why? | Extract Function, the name says it"
+        body = progress_body("refl1", finished=True,
+                             events=[event("reflection", detail=detail, phase="finished")])
+        self.assertEqual(call("POST", "/progress", body, code="LAB")[0], 200)
+        self.assertEqual(rows("SELECT kind, detail FROM events WHERE game_id = 'refl1'"),
+                         [("reflection", detail)])
+
+
 class ClassCheckTests(unittest.TestCase):
     def test_active_class(self):
         add_class("CHECK")
