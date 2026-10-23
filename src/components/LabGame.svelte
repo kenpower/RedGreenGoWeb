@@ -6,12 +6,15 @@
   import { createEventDispatcher, onDestroy, tick } from "svelte";
   import { fade } from "svelte/transition";
   import { helper, refreshHelper } from "../helper.js";
-  import { snapshotOf, buildFailed, staleResults, failingTests, currentTests } from "../rules.js";
+  import { snapshotOf, buildFailed, staleResults, failingTests, currentTests, uncommittedFiles } from "../rules.js";
   import { sendProgress, isCoached, askOrient, askLab, resolveProblem } from "../coach.js";
-  import { labStatus, LAB_CARDS, LAB_PHASES } from "../lab.js";
+  import { labStatus, productionChanged, LAB_CARDS, LAB_PHASES } from "../lab.js";
   import { nextStepsDue, runMark, codeKey } from "../content/steps.js";
   import { hintRung, TOP_RUNG } from "../ladder.js";
   import WaitingDots from "./WaitingDots.svelte";
+  import PredictBox from "./PredictBox.svelte";
+  import MessGuide from "./MessGuide.svelte";
+  import { outcomeOf } from "../predict.js";
 
   export let gameState;
   const dispatch = createEventDispatcher();
@@ -130,6 +133,14 @@
   $: locked = helperMissing || !status?.goalMet;
   $: driver = gameState.players[gameState.driver];
   $: navigators = gameState.players.filter((p, i) => p && i !== gameState.driver);
+
+  // "In a mess?" undone back to the last commit in Test or Commit: there's no
+  // refactoring left to test or commit, so the round starts again at Refactor
+  $: if (snapshot && lab && phase !== "refactor" && !productionChanged(lab.base, snapshot)) restartRound();
+  const restartRound = () => {
+    gameState.labRestartRound();
+    tickN++;
+  };
 
   // a broken change, then a fixed one, is a revert for the teacher
   $: if (snapshot && lab && !staleResults(snapshot)) {
@@ -274,6 +285,10 @@
           </li>
         {/each}
       </ul>
+    {/if}
+    {#if snapshot && phase !== "commit"}
+      <PredictBox {gameState} {snapshot} navigator={navigators[0]} />
+      <MessGuide mode="refactor" {phase} uncommitted={uncommittedFiles(snapshot)} failing={outcomeOf(snapshot) === "red"} />
     {/if}
     <div class="actions">
       {#if waiting}

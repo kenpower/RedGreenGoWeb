@@ -37,6 +37,8 @@ const productionCode = (snapshot) =>
     .map((f) => `${f.path}\n${f.content}`)
     .join("\n");
 
+export const productionChanged = (base, now) => productionCode(now) !== productionCode(base);
+
 // A test edit that only follows the production code is still the same test:
 // a renamed name (Ctrl+R, Ctrl+R renames in test.cpp too), or a literal
 // replaced by a new constant with that value (`-1` → `ConnectFour::NoMove`).
@@ -117,7 +119,7 @@ export function labStatus(phase, base, now) {
   if (!testsUnchanged(base, now))
     Object.assign(testsLine, { ok: false, reason: "You changed what a test checks: put it back" });
   if (phase === "refactor") {
-    lines.push({ text: "Make one refactoring in the production code", ok: productionCode(now) !== productionCode(base) || null });
+    lines.push({ text: "Make one refactoring in the production code", ok: productionChanged(base, now) || null });
     lines.push(testsLine);
   } else if (phase === "test") {
     lines.push(testsLine);

@@ -452,6 +452,8 @@
         {#each liveAdvice as text}
           <p class="advice"><span class="adviceLabel">Advice:</span> {text}</p>
         {/each}
+        <!-- the navigator's prediction and "In a mess?", from Game -->
+        {#if !start}<slot name="tools" />{/if}
 
         {#if !held && !start}
           <div><HintLabel text={hint} /></div>

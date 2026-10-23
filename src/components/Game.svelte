@@ -3,6 +3,9 @@
   import CycleLine from "./CycleLine.svelte";
   import OrientCard from "./OrientCard.svelte";
   import OrientLine from "./OrientLine.svelte";
+  import PredictBox from "./PredictBox.svelte";
+  import MessGuide from "./MessGuide.svelte";
+  import { outcomeOf } from "../predict.js";
   import { fade, fly } from "svelte/transition";
   import { createEventDispatcher, onDestroy, tick } from "svelte";
   import { helper, refreshHelper, BLOCKED_HELP, HELPER_PAGE, onGithubPages } from "../helper.js";
@@ -742,7 +745,19 @@
         {nextSteps}
         {passedFirst}
         on:interact={onInteract}
-      />
+      >
+        <div slot="tools">
+          {#if snapshot && CHECKED_PHASES.includes(step.stateName)}
+            <PredictBox {gameState} {snapshot} navigator={step.navigators[0]} />
+            <MessGuide
+              mode="tdd"
+              phase={step.stateName}
+              uncommitted={uncommittedFiles(snapshot)}
+              failing={step.stateName !== "red" && outcomeOf(snapshot) === "red"}
+            />
+          {/if}
+        </div>
+      </Step>
     </div>
   {:else if gameState.finished}
     <div class="finished" in:fly={{ delay: 300, y: 400, duration: 1000 }}>

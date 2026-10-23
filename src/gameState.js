@@ -112,6 +112,9 @@ export class GameState {
       this.refactorings = r.refactorings || {};
       this.mode = r.mode || "tdd";
       this.lab = r.lab || null;
+      this.prediction = r.prediction || null;
+      this.lastPrediction = r.lastPrediction || null;
+      this.predictions = r.predictions || { right: 0, total: 0 };
     } else {
       this.players = ["John", "Jane"];
       this.driver = 0;
@@ -143,6 +146,9 @@ export class GameState {
       this.refactorings = {}; // refactorings the coach saw the pair make: {name: count}
       this.mode = "tdd"; // "tdd" | "refactor" (the refactor lab, chosen by the README: lab.js)
       this.lab = null; // the lab's state, see startLab
+      this.prediction = null; // the navigator's guess for the next run: {mark, guess} (guess null: skipped)
+      this.lastPrediction = null; // the last one settled: {guess, outcome, right}
+      this.predictions = { right: 0, total: 0 };
     }
     this.#save();
   }
@@ -296,6 +302,17 @@ export class GameState {
       lab.phase = "refactor";
       this.#swapPairRoles();
     }
+    this.#save();
+  }
+
+  // The pair went back to the last commit during Test or Commit ("In a mess?"):
+  // nothing left to test or commit, so this round starts again at Refactor,
+  // same driver, same base.
+  labRestartRound() {
+    const lab = this.lab;
+    if (!lab || this.finished || lab.phase === "refactor" || lab.phase === "switched") return;
+    lab.phase = "refactor";
+    this.stepNumber++;
     this.#save();
   }
 
@@ -504,6 +521,30 @@ export class GameState {
     this.#save();
   }
 
+  // The navigator's prediction for the next run (predict.js): "green", "red",
+  // or null to skip this run. `mark` is the latest run (steps.runMark) as they guess.
+  predict(guess, mark) {
+    this.prediction = { mark, guess };
+    this.#save();
+  }
+
+  // A fresh run newer than the guess settles it: counted for the teacher and
+  // kept to show. Returns the result, or null (nothing to settle, or skipped).
+  settlePrediction(mark, outcome) {
+    const p = this.prediction;
+    if (!p || !outcome || mark <= p.mark) return null;
+    this.prediction = null;
+    if (!p.guess) {
+      this.#save();
+      return null;
+    }
+    const right = p.guess === outcome;
+    this.predictions = { right: this.predictions.right + (right ? 1 : 0), total: this.predictions.total + 1 };
+    this.lastPrediction = { guess: p.guess, outcome, right };
+    this.addEvent("prediction", `${p.guess} -> ${outcome}: ${right ? "right" : "wrong"}`);
+    return this.lastPrediction;
+  }
+
   // The pair asked to be shown the code for this step.
   noteRescue(why) {
     this.rescues++;
@@ -593,6 +634,8 @@ export class GameState {
     finished: this.finished,
     rescues: this.rescues,
     passed_first: this.passedFirst,
+    predictions_right: this.predictions.right,
+    predictions_total: this.predictions.total,
     refactorings: this.refactorings, // running totals, {name: count}
     events: this.pendingEvents.slice(0, 10), // acknowledged with ackEvents once sent
   });

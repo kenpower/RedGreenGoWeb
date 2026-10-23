@@ -747,6 +747,18 @@ test("switching_from_the_lab_to_tdd_keeps_the_game_and_its_lab_counts", () => {
   expect(g.getStep().cycle).toBe(1);
 });
 
+test("undoing_back_to_the_last_commit_restarts_the_lab_round_at_refactor", () => {
+  let g = new GameState();
+  g.startLab([], { git: { repo: true, head: "aaa" } });
+  const driver = g.driver;
+  g.labDone(null); // test
+  g.labRestartRound();
+  expect(g.lab).toMatchObject({ phase: "refactor", round: 1, rounds: 0 });
+  expect(g.driver).toBe(driver); // no swap: the round isn't done
+  g.labRestartRound(); // already at Refactor: nothing changes
+  expect(g.lab.phase).toBe("refactor");
+});
+
 test("a_lab_phase_is_reported_as_one_the_server_knows", () => {
   let g = new GameState();
   g.startLab([], null);
@@ -858,6 +870,8 @@ test("progress_summarises_the_game", () => {
     finished: false,
     rescues: 0,
     passed_first: 0,
+    predictions_right: 0,
+    predictions_total: 0,
     refactorings: {},
     mode: "tdd",
     events: [],
