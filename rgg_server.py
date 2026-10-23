@@ -557,8 +557,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         for name, value in (headers or {}).items():
             self.send_header(name, value)
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass  # the tab was reloaded or closed mid-reply: nobody is waiting for it
 
     def allowed(self, require_origin=False):
         # Host check blocks DNS-rebinding; Origin check blocks other websites.
