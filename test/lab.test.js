@@ -87,7 +87,7 @@ describe("labStatus: each phase's Done gate", () => {
     expect(red.lines[1].reason).toMatch(/undo the last change/);
     const stale = snap();
     stale.files[1].mtime = 20; // saved after the run
-    expect(labStatus("test", base, stale).lines[1]).toEqual({ text: "Run all the tests (Ctrl+R, A): every test passes", ok: null });
+    expect(labStatus("test", base, stale).lines[1]).toEqual({ text: "Run all the tests (Ctrl+R, A): every test passes", ok: null, howto: "run_tests" });
     const broken = labStatus("test", base, snap({ build: { status: "failed", time: 20, errors: ["e"] } }));
     expect(broken.lines[1].ok).toBe(false);
   });

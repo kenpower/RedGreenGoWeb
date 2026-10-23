@@ -12,6 +12,7 @@
   import { nextStepsDue, runMark, codeKey } from "../content/steps.js";
   import { hintRung, TOP_RUNG } from "../ladder.js";
   import WaitingDots from "./WaitingDots.svelte";
+  import HowTo from "./HowTo.svelte";
 
   export let gameState;
   const dispatch = createEventDispatcher();
@@ -191,7 +192,7 @@
     <p class="title aoc-heading">Round {lab.round}: {card.title}</p>
     <dl class="roles">
       <dt>Driver ({driver})</dt>
-      <dd>{card.driver}</dd>
+      <dd>{card.driver} <HowTo item={card} /></dd>
       <dt>Navigator{navigators.length > 1 ? "s" : ""} ({navigators.join(", ")})</dt>
       <dd>{card.navigator}</dd>
     </dl>
@@ -226,6 +227,7 @@
       <div class="brokeBox">
         <p class="marker">That change broke something: undo the last change</p>
         {#if review.note}<p>What probably broke: {review.note}</p>{/if}
+        <HowTo item={{ howto: "undo" }} />
       </div>
     {:else if review}
       <p class="review effect-{review.effect}">
@@ -270,6 +272,7 @@
             <span>
               {line.text}
               {#if line.reason}<span class="reason">{line.reason}</span>{/if}
+              <HowTo item={line} />
             </span>
           </li>
         {/each}

@@ -4,6 +4,7 @@
   import { createEventDispatcher } from "svelte";
   import Icon from "./Icon.svelte";
   import WaitingDots from "./WaitingDots.svelte";
+  import HowTo from "./HowTo.svelte";
   import { helper } from "../helper.js";
   import { lockReason as lockReasonFor } from "../lock.js";
 
@@ -134,6 +135,7 @@
           list: uncommitted,
           driver: "Commit with a message that says what this cycle achieved.",
           navigator: "Suggest the commit message.",
+          howto: "commit",
           wait: "Waiting for a commit",
         };
       case "unknown":
@@ -143,6 +145,7 @@
           message: "Run your tests in Visual Studio so the game can see where you are.",
           driver: "Build the solution and run all the tests in Test Explorer.",
           navigator: "Check the badge at the top of the page says the code is connected.",
+          howto: "run_tests",
           wait: "Waiting for your test run",
         };
       case "build_failed":
@@ -153,6 +156,7 @@
           list: errors.slice(0, 5),
           driver: "Fix the compile errors, then build and run the tests.",
           navigator: "Read the first error aloud and find the line it points to.",
+          howto: "build",
           wait: "Waiting for a clean build",
         };
       case "one_failing":
@@ -181,6 +185,7 @@
           list: failing,
           driver: "Fix or comment out failing tests, running the tests as you go.",
           navigator: "Check which failing test belongs to the work you're about to do; that one can stay.",
+          howto: "comment_out",
           wait: "Waiting for at most one failing test",
         };
       default:
@@ -386,7 +391,7 @@
         <dl class="todo" class:heldTodo={held && !start}>
           {#if (start || instructions).driver}
             <dt style="--player-col: var(--player-{step.driverNumber})">Driver</dt>
-            <dd>{(start || instructions).driver}</dd>
+            <dd>{(start || instructions).driver} <HowTo item={start || instructions} /></dd>
           {/if}
           {#if (start || instructions).navigator}
             <dt style="--player-col: var(--player-{step.navigatorNumbers[0]})">
@@ -415,6 +420,7 @@
                       {item.text}
                       {#if item.detail}<span class="detail">{item.detail}</span>{/if}
                       {#if item.why}<span class="why">{item.why}</span>{/if}
+                      <HowTo {item} />
                     </span>
                   </li>
                 {/each}
@@ -438,6 +444,7 @@
                   {item.text}
                   {#if item.reason}<span class="reason">{item.reason}</span>{/if}
                   {#if item.why}<span class="why">{item.why}</span>{/if}
+                  <HowTo {item} />
                 </span>
               </li>
             {/each}
