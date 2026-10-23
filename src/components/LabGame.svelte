@@ -46,6 +46,11 @@
   };
   $: board = lab?.board || [];
   $: smellsLeft = board.filter((s) => !s.resolved).length;
+  // the next few smells to fix; the rest (and the resolved ones) on request
+  const BOARD_PREVIEW = 3;
+  let showAllSmells = false;
+  $: shownSmells = showAllSmells ? board : board.filter((s) => !s.resolved).slice(0, BOARD_PREVIEW);
+  $: hiddenSmells = board.length - shownSmells.length;
 
   // a Look on each fresh run or build with changed code, at most once a minute
   let lastLook = null;
@@ -202,13 +207,18 @@
       <details class="board" open={phase === "refactor"}>
         <summary>Smell board: {smellsLeft ? `${smellsLeft} of ${board.length} left` : "clear ✓"}</summary>
         <ul>
-          {#each board as smell}
+          {#each shownSmells as smell}
             <li class:resolved={smell.resolved}>
               <span class="box">{smell.resolved ? "[✓]" : "[ ]"}</span>
               <span><strong>{smell.where}:</strong> {smell.what} <span class="muted">({smell.refactoring}{smell.from_readme ? "" : ", extra"})</span></span>
             </li>
           {/each}
         </ul>
+        {#if hiddenSmells > 0}
+          <button class="quiet more" on:click={() => (showAllSmells = true)}>… {hiddenSmells} more: show all</button>
+        {:else if showAllSmells && board.length > BOARD_PREVIEW}
+          <button class="quiet more" on:click={() => (showAllSmells = false)}>Show fewer</button>
+        {/if}
       </details>
     {/if}
 
@@ -426,6 +436,16 @@
     display: flex;
     gap: 0.5em;
     margin: 0.2em 0;
+  }
+
+  .board .box {
+    flex: none;
+    white-space: pre; /* "[ ]" stays on one line, as wide as "[✓]" */
+  }
+
+  .board .more {
+    margin: 0 0 0.3em 0.4em;
+    font-size: 0.9em;
   }
 
   .board li.resolved {
