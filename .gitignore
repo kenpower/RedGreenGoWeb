@@ -5,3 +5,4 @@ __pycache__/
 /coach/*.sqlite3
 /.env.deploy
 /tmp
+/.claude/worktrees
