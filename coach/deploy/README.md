@@ -81,6 +81,7 @@ class code to list every class.
 | rescue | times they asked "Show me the code" after being held 3 times on one step; a pair that keeps needing it is worth a visit | browser |
 | kept | Red tests that passed straight away and that they chose to keep (skipping Green) | browser |
 | rounds, revert | refactor lab: refactor → test → commit rounds done; changes undone after breaking a test | browser |
+| kinds | refactor lab: how many different refactorings the pair completed (each counted once, when its round is committed) | browser |
 
 The CSV also has `commits` and `refactorings` (refactor lab: how many of each refactoring, e.g.
 `Extract Function:3; Rename Variable:1`).
