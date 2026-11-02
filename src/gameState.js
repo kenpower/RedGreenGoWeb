@@ -1,3 +1,5 @@
+import { canonicalRefactoring, refactoringInMessage } from "./content/glossary.js";
+
 export const states = [
   {
     id: "red",
@@ -305,11 +307,45 @@ export class GameState {
   // start for round 1): the tests may never change from it.
   // `smells`: the project's smells.md as the lab starts, or null when it has
   // none; with one, the board waits for the pair's own list (labShowBoard).
-  startLab(refactorings, snapshot, smells = null) {
+  // `steps`: the README's worksheet steps (worksheet.js) as [{id, hat, title}]:
+  // the lab then goes through them in order, one per round.
+  startLab(refactorings, snapshot, smells = null, steps = []) {
     this.start();
     this.mode = "refactor";
     this.lab = { phase: "refactor", round: 1, refactorings, rounds: 0, commits: 0, reverts: 0, base: snapshot, sawRed: false };
     this.lab.ownSmells = typeof smells === "string" ? { start: smells, shown: false } : null;
+    this.lab.steps = (steps || []).map(({ id, hat, title }) => ({ id: String(id), hat, title: String(title || "").slice(0, 120) }));
+    this.lab.step = this.lab.steps[0]?.id ?? null;
+    this.#enterStep();
+    this.#save();
+  }
+
+  // The round's phase from the worksheet step it's on: a [Develop] step starts
+  // in Develop (failing and edited tests don't hold), a [Refactor] step in Refactor.
+  #enterStep() {
+    const lab = this.lab;
+    const step = lab.steps?.find((s) => s.id === lab.step);
+    if (step?.hat === "develop") {
+      lab.phase = "develop";
+      lab.develop = `Step ${step.id}: ${step.title}`.slice(0, MAX_DEVELOP_CHARS);
+      lab.sawRed = false;
+    } else {
+      lab.phase = "refactor";
+      lab.develop = null;
+    }
+  }
+
+  // Back to an earlier worksheet step, or on past one: between rounds only
+  // (Refactor or Develop), so a half-made change isn't left in another step.
+  labGotoStep(id) {
+    const lab = this.lab;
+    if (!lab || this.finished || !lab.steps?.some((s) => s.id === id) || id === lab.step) return;
+    if (!["refactor", "develop"].includes(lab.phase)) return;
+    const from = lab.step;
+    lab.step = id;
+    this.#enterStep();
+    this.stepNumber++;
+    this.addEvent("advance", `worksheet step ${from ?? "-"} -> ${id}`);
     this.#save();
   }
 
@@ -324,8 +360,10 @@ export class GameState {
   }
 
   // Done on a lab phase: on to the next; after the commit, a new round with
-  // swapped roles, and the commit as the new base.
-  labDone(snapshot) {
+  // swapped roles, and the commit as the new base. `stayOnStep`: the commit
+  // was part of the worksheet step, not all of it (e.g. step 4.1's numbers,
+  // one kind per commit), so the next round is the same step.
+  labDone(snapshot, { stayOnStep = false } = {}) {
     const lab = this.lab;
     if (!lab || this.finished) return;
     this.stepNumber++;
@@ -333,15 +371,23 @@ export class GameState {
     else if (lab.phase === "test" || lab.phase === "develop") lab.phase = "commit";
     else {
       const git = snapshot?.git;
-      if (git?.repo && git.head && git.head !== lab.base?.git?.head) {
+      const committed = git?.repo && git.head && git.head !== lab.base?.git?.head;
+      if (committed) {
         lab.commits++;
         this.addEvent("commit", `${git.head.slice(0, 8)} ${git.headMessage || ""}`.trim());
       }
+      if (!lab.develop) this.#countRefactoring(committed ? git.headMessage : "");
+      lab.roundMove = null;
       lab.rounds++;
       lab.round++;
       lab.base = snapshot;
       lab.phase = "refactor";
       lab.develop = null;
+      if (lab.steps?.length && lab.step !== null) {
+        // the worksheet's next step (null after the last one), or this one again
+        if (!stayOnStep) lab.step = lab.steps[lab.steps.findIndex((s) => s.id === lab.step) + 1]?.id ?? null;
+        this.#enterStep();
+      }
       this.#swapPairRoles();
     }
     this.#save();
@@ -382,8 +428,11 @@ export class GameState {
   labRestartRound() {
     const lab = this.lab;
     if (!lab || this.finished || lab.phase === "refactor" || lab.phase === "switched") return;
-    lab.phase = "refactor";
-    lab.develop = null;
+    if (lab.steps?.length) this.#enterStep(); // a [Develop] step starts again in Develop
+    else {
+      lab.phase = "refactor";
+      lab.develop = null;
+    }
     this.stepNumber++;
     this.#save();
   }
@@ -423,8 +472,25 @@ export class GameState {
       smell.resolved = true;
       this.addEvent("smell", `resolved: ${smell.what}`);
     }
-    this.noteMove(answer.move_review);
+    // in the lab a refactoring counts once, when its round is committed (labDone):
+    // the coach reviews a change on each run, so its reviews would count it again
+    const review = answer.move_review;
+    this.noteMove(review, { count: false });
+    if (review?.refactoring && review.effect !== "none" && review.behaviour_kept !== false)
+      this.lab.roundMove = String(review.refactoring).slice(0, 60);
     this.#save();
+  }
+
+  // A lab round done: the refactoring it made, from the commit message when
+  // that names one, else the coach's last review of the round, counted once
+  // (in the lab's own spelling) for the teacher's count of kinds.
+  #countRefactoring(message) {
+    const listed = this.lab?.refactorings || [];
+    const name =
+      refactoringInMessage(message, listed) ||
+      canonicalRefactoring(this.lab?.roundMove, listed) ||
+      refactoringInMessage(message, listed, { loose: true });
+    if (name) this.refactorings = { ...this.refactorings, [name]: (this.refactorings[name] || 0) + 1 };
   }
 
   // A fresh run in the lab: a red one means a change broke a test; the next
@@ -460,10 +526,13 @@ export class GameState {
 
   // The coach reviewed a refactoring move (move_review). Counted per refactoring
   // for the teacher, and recorded as a `refactor_move` event.
-  noteMove(review) {
+  noteMove(review, { count = true } = {}) {
     if (!review || review.effect === "none" || !review.refactoring) return;
     const name = String(review.refactoring).slice(0, 60);
-    this.refactorings = { ...this.refactorings, [name]: (this.refactorings[name] || 0) + 1 };
+    if (count) {
+      const kind = canonicalRefactoring(name);
+      this.refactorings = { ...this.refactorings, [kind]: (this.refactorings[kind] || 0) + 1 };
+    }
     this.addEvent("refactor_move", `${name} | ${review.effect}`);
     this.#save();
   }

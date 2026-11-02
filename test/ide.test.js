@@ -40,7 +40,7 @@ describe("tailor: Visual Studio's keys and menus, as the pair's IDE has them", (
     "src/components/Step.svelte", "src/components/LabGame.svelte", "src/App.svelte"];
   const literals = (path) =>
     fs
-      .readFileSync(path, "utf8")
+      .readFileSync(new URL(`../${path}`, import.meta.url), "utf8")
       .split("\n")
       .filter((line) => !line.trim().startsWith("//"))
       .join("\n")

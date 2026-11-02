@@ -725,8 +725,52 @@ test("the_lab_board_ticks_smells_the_coach_saw_resolved", () => {
   });
   expect(g.lab.board[0].resolved).toBe(true);
   expect(g.pendingEvents.filter((e) => e.kind === "smell").map((e) => e.detail)).toEqual(["resolved: Inline tax."]);
-  expect(g.refactorings).toEqual({ "Extract Function": 1 });
+  expect(g.refactorings).toEqual({}); // counted when the round is committed
+  expect(g.lab.roundMove).toBe("Extract Function");
   expect(GameState.recoverSavedGame().lab.board[0].resolved).toBe(true);
+});
+
+const review = (refactoring, extra = {}) => ({
+  move_review: { refactoring, effect: "better", behaviour_kept: true, note: "", ...extra },
+});
+const commitRound = (g, head, headMessage) => {
+  g.labDone(null); // test
+  g.labDone(null); // commit
+  g.labDone({ git: { repo: true, head, headMessage } });
+};
+
+test("a_lab_refactoring_counts_once_when_its_round_is_committed_in_the_labs_spelling", () => {
+  let g = new GameState();
+  g.startLab(["Rename Function", "Rename Variable", "Extract Function"], { git: { repo: true, head: "a" } });
+  // reviewed on three runs in one round, committed once
+  g.labReview(review("Extract Method"));
+  g.labReview(review("Extract Method"));
+  g.labReview(review("Extract Method"));
+  commitRound(g, "b", "tidy up");
+  expect(g.refactorings).toEqual({ "Extract Function": 1 });
+  // the commit message names it: that wins over the review
+  g.labReview(review("Inline Variable"));
+  commitRound(g, "c", "Rename Variable: t to afterMove");
+  // a bare "Rename ..." says less than the coach's review
+  g.labReview(review("rename function"));
+  commitRound(g, "d", "Rename move to bestMoveFor");
+  // nothing reviewed and nothing named: the bare word is all there is
+  commitRound(g, "e", "Rename p to player");
+  expect(g.refactorings).toEqual({ "Extract Function": 1, "Rename Variable": 1, "Rename Function": 1, Rename: 1 });
+  expect(g.progress().refactorings).toEqual(g.refactorings);
+});
+
+test("a_lab_round_that_broke_a_test_or_changed_behaviour_counts_no_refactoring", () => {
+  let g = new GameState();
+  g.startLab([], { git: { repo: true, head: "a" } });
+  g.labReview(review("Extract Function", { behaviour_kept: false }));
+  commitRound(g, "b", "oops");
+  g.labDone(null); // test
+  g.labDevelop("any legal move");
+  g.labDone(null); // commit
+  g.labDone({ git: { repo: true, head: "c", headMessage: "Develop: Extract Function by accident" } });
+  expect(g.refactorings).toEqual({});
+  expect(g.lab.rounds).toBe(2);
 });
 
 test("switching_from_the_lab_to_tdd_keeps_the_game_and_its_lab_counts", () => {
@@ -822,6 +866,72 @@ test("without_a_smells_md_the_board_shows_straight_away_and_skipping_is_recorded
   g.startLab([], null, "");
   g.labShowBoard();
   expect(g.pendingEvents.at(-1).detail).toBe("board shown: own list skipped");
+});
+
+const STEPS = [
+  { id: "2.1", hat: "refactor", title: "Rename move to bestMoveFor" },
+  { id: "3.4", hat: "develop", title: "change of hat" },
+  { id: "3.5", hat: "refactor", title: "one result variable" },
+];
+
+test("a_worksheet_lab_goes_through_its_steps_one_per_committed_round", () => {
+  let g = new GameState();
+  g.startLab([], { git: { repo: true, head: "a" } }, null, STEPS);
+  expect(g.lab).toMatchObject({ step: "2.1", phase: "refactor", develop: null });
+  commitRound(g, "b", "Rename Function: move -> bestMoveFor");
+  // a [Develop] step starts in Develop, with no button to press
+  expect(g.lab).toMatchObject({ step: "3.4", phase: "develop", develop: "Step 3.4: change of hat" });
+  g.labDone(null); // develop -> commit
+  g.labDone({ git: { repo: true, head: "c", headMessage: "Develop: any legal move" } });
+  expect(g.lab).toMatchObject({ step: "3.5", phase: "refactor", develop: null });
+  expect(g.refactorings).toEqual({ "Rename Function": 1 }); // the Develop round counts none
+  commitRound(g, "d", "Replace Nested Conditional with Guard Clauses: one exit");
+  expect(g.lab.step).toBeNull(); // every step done
+  expect(GameState.recoverSavedGame().lab.steps).toHaveLength(3);
+});
+
+test("a_step_can_take_several_commits", () => {
+  let g = new GameState();
+  g.startLab([], { git: { repo: true, head: "a" } }, null, STEPS);
+  g.labDone(null); // test
+  g.labDone(null); // commit
+  g.labDone({ git: { repo: true, head: "b", headMessage: "Replace Magic Number with Constant: Columns" } }, { stayOnStep: true });
+  expect(g.lab).toMatchObject({ step: "2.1", phase: "refactor", round: 2 });
+  commitRound(g, "c", "Replace Magic Number with Constant: Rows");
+  expect(g.lab.step).toBe("3.4");
+  expect(g.refactorings).toEqual({ "Replace Magic Number with Constant": 2 });
+});
+
+test("the_pair_can_go_back_or_skip_a_step_between_rounds_only", () => {
+  let g = new GameState();
+  g.startLab([], null, null, STEPS);
+  g.labGotoStep("3.4");
+  expect(g.lab).toMatchObject({ step: "3.4", phase: "develop" });
+  expect(g.pendingEvents.at(-1)).toMatchObject({ kind: "advance", detail: "worksheet step 2.1 -> 3.4" });
+  g.labGotoStep("2.1");
+  expect(g.lab).toMatchObject({ step: "2.1", phase: "refactor", develop: null });
+  g.labDone(null); // test: a change is being checked
+  g.labGotoStep("3.5");
+  expect(g.lab.step).toBe("2.1");
+  g.labGotoStep("9.9"); // not a step
+  expect(g.lab.step).toBe("2.1");
+});
+
+test("undoing_a_develop_steps_change_starts_it_again_in_develop", () => {
+  let g = new GameState();
+  g.startLab([], null, null, STEPS);
+  g.labGotoStep("3.4");
+  g.labDone(null); // develop -> commit
+  g.labRestartRound();
+  expect(g.lab).toMatchObject({ step: "3.4", phase: "develop" });
+});
+
+test("a_lab_without_worksheet_steps_works_as_before", () => {
+  let g = new GameState();
+  g.startLab([], null);
+  expect(g.lab).toMatchObject({ steps: [], step: null, phase: "refactor" });
+  commitRound(g, "b", "x");
+  expect(g.lab).toMatchObject({ step: null, phase: "refactor", round: 2 });
 });
 
 test("a_lab_phase_is_reported_as_one_the_server_knows", () => {

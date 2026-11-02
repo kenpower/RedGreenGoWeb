@@ -294,6 +294,12 @@ class RefactorLabTests(unittest.TestCase):
         summary = call("GET", "/teacher/pair?key=ann__bo", code="LAB", key=self.key)[1]["summary"]
         self.assertEqual((summary["rounds"], summary["commits"], summary["reverts"]), (4, 4, 1))
         self.assertEqual(summary["refactorings"], {"Extract Function": 3, "Rename Variable": 1})
+        self.assertEqual(summary["refactoring_kinds"], 2)
+
+    def test_kinds_count_each_refactoring_once_whatever_its_spelling(self):
+        self.assertEqual(s.refactoring_kinds({"Extract Function": 3, "extract  function": 1, "Merge Loops": 1,
+                                              "Rename Variable": 0}), 2)
+        self.assertEqual(s.refactoring_kinds({}), 0)
 
     def test_totals_are_replaced_not_added(self):
         call("POST", "/progress", progress_body("lab3", "ed__fi", mode="refactor", refactorings={"Extract Function": 1}),
@@ -308,6 +314,9 @@ class RefactorLabTests(unittest.TestCase):
         row = next(line for line in csv[1:] if "ann__bo" in line or "bo__ann" in line).split(",")
         self.assertEqual((row[header.index("rounds")], row[header.index("reverts")]), ("4", "1"))
         self.assertEqual(row[header.index("refactorings")], "Extract Function:3; Rename Variable:1")
+        self.assertEqual(row[header.index("refactoring_kinds")], "2")
+        table = quietly(s.show_progress, SimpleNamespace(code="LAB", days=None, csv=False)).splitlines()
+        self.assertIn("kinds", table[0])
         table = quietly(s.show_progress, SimpleNamespace(code="LAB", days=None, csv=False))
         self.assertIn("rounds", table.splitlines()[0])
 

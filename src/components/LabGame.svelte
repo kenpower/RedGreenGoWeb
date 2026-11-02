@@ -11,6 +11,7 @@
   import { sendProgress, isCoached, askOrient, askLab, resolveProblem } from "../coach.js";
   import { labStatus, productionChanged, codeChanged, ownSmellsListed, MIN_OWN_SMELLS, LAB_CARDS, LAB_PHASES } from "../lab.js";
   import { nextStepsDue, runMark, codeKey } from "../content/steps.js";
+  import { parseWorksheet, worksheetProblem, renderMarkdown, stepHeadline } from "../worksheet.js";
   import { hintRung, TOP_RUNG } from "../ladder.js";
   import WaitingDots from "./WaitingDots.svelte";
   import PredictBox from "./PredictBox.svelte";
@@ -38,7 +39,7 @@
     orientLoading = true;
     try {
       const { brief } = await askOrient({
-        problem: resolveProblem(gameState.problem, $helper.data),
+        problem: labProblem,
         after: snapshot,
         gameId: gameState.gameId,
         players: gameState.players,
@@ -106,7 +107,7 @@
     if (!rescue) lastLook = { step: lab.round, run: runMark(current), code: codeKey(current), at: now };
     const round = lab.round;
     const { answer } = await askLab({
-      problem: resolveProblem(gameState.problem, $helper.data),
+      problem: labProblem,
       base: lab.base,
       after: current,
       labPhase: lab.phase,
@@ -166,6 +167,27 @@
 
   let tickN = 0; // bumped after each gameState change (it mutates in place)
   $: lab = (tickN, gameState.lab);
+
+  // ---- The worksheet (worksheet.js): the README's numbered steps, one per
+  // round. The step's details come from the README as it is now; which step,
+  // and its hat, from the game (gameState.labGotoStep, labDone).
+  $: worksheet = parseWorksheet($helper.data?.readme?.content);
+  $: steps = lab?.steps || [];
+  $: stepIndex = steps.findIndex((s) => s.id === lab?.step);
+  $: currentStep = worksheet.steps.find((s) => s.id === lab?.step) || steps[stepIndex] || null;
+  $: worksheetDone = steps.length > 0 && lab?.step === null;
+  $: smellsSection = worksheet.sections.find((s) => s.number === 1);
+  // the coach gets the step list and the current step, not the whole README
+  $: labProblem = steps.length
+    ? worksheetProblem(worksheet.steps.length ? worksheet : { steps }, lab.step)
+    : resolveProblem(gameState.problem, $helper.data);
+  $: canMoveStep = (phase === "refactor" || phase === "develop") && !helperMissing;
+  const gotoStep = (id) => {
+    gameState.labGotoStep(id);
+    tickN++;
+    report();
+  };
+  const sentence = (text) => (text ? text[0].toUpperCase() + text.slice(1) + (/[.?!:]$/.test(text) ? "" : ".") : "");
   $: phase = lab?.phase || "refactor";
   $: card = phase === "commit" && lab?.develop ? { ...LAB_CARDS.commit, driver: LAB_CARDS.develop.commit } : LAB_CARDS[phase];
   // a Develop round is DEVELOP ---> COMMIT
@@ -201,6 +223,8 @@
       : problem.reason || problem.text
     : boardHidden && phase === "refactor" && !status?.goalMet
     ? "Find the smells yourselves first: read the code together and write each smell, with its line number, in smells.md."
+    : currentStep && (phase === "refactor" || phase === "develop") && !status?.goalMet
+    ? `Step ${currentStep.id}: ${sentence(stepHeadline(currentStep))}`
     : status?.goalMet
     ? "Everything is ticked: click Done below."
     : card.driver;
@@ -222,13 +246,13 @@
     if ((await sendProgress(progress)) && progress.events.length) gameState.ackEvents(progress.events.length);
   };
 
-  const done = async () => {
+  const done = async (options = {}) => {
     if (waiting || helperMissing) return;
     waiting = true;
     if (await refreshHelper()) await tick(); // the code as it is on disk now
     waiting = false;
     if (!status?.goalMet) return;
-    gameState.labDone(snapshot);
+    gameState.labDone(snapshot, options);
     tickN++;
     report();
   };
@@ -247,7 +271,8 @@
   // will change, and failing or edited tests stop holding them until every
   // test passes again. Offered in Refactor and Test, and opened up when a
   // failing or edited test is what holds them.
-  $: canDevelop = (phase === "refactor" || phase === "test") && !helperMissing;
+  // (a worksheet's [Develop] steps start in Develop by themselves: no offer then)
+  $: canDevelop = (phase === "refactor" || phase === "test") && !helperMissing && !steps.length;
   $: heldByTests = !!problem?.testsHold;
   let developOpen = false;
   let developWhat = "";
@@ -291,6 +316,14 @@
 {:else if lab}
   <div class="labCard phase-{phase}" transition:fade>
     <p class="title aoc-heading">Round {lab.round}: {card.title}</p>
+    {#if currentStep && !boardHidden}
+      <p class="stepLine">
+        <strong>Step {currentStep.id}</strong>
+        [{currentStep.hat === "develop" ? "Develop" : "Refactor"}]
+        {#if currentStep.optional}<span class="optional">{currentStep.optional}</span>{/if}
+        <span class="muted">· step {stepIndex + 1} of {steps.length}</span>
+      </p>
+    {/if}
     <!-- One card, one thing to do now: this line, then what blocks it, the
          to-do list and Done. Everything else is folded away at the bottom. -->
     <DoNow
@@ -303,10 +336,16 @@
       held={!!problem || broke}
     >
       <HowTo item={problem || card} />
-      {#if lab.develop}
+      {#if lab.develop && !currentStep}
         <p class="developSaid">You're changing: <strong>{lab.develop}</strong></p>
       {/if}
-      {#if phase === "refactor" && nextSmell && !boardHidden}
+      {#if currentStep?.hat === "develop" && phase === "develop"}
+        <p class="developSaid">
+          A <strong>Develop</strong> step: it changes what the code does, so tests may fail and you may change them.
+          The game doesn't hold you for that until every test passes again.
+        </p>
+      {/if}
+      {#if phase === "refactor" && nextSmell && !boardHidden && !steps.length}
         <p class="nextSmell">
           Next on the smell board: <strong>{nextSmell.where}:</strong> {nextSmell.what}
           <span class="muted">(<Glossary name={nextSmell.refactoring} />)</span>
@@ -316,6 +355,39 @@
         <p class="muted">Suggested commit message: <strong>{look.commit_message}</strong></p>
       {/if}
     </DoNow>
+
+    {#if currentStep && !boardHidden}
+      <Fold title="Step {currentStep.id} in full" note="from the README" open={true}>
+        <div class="stepBody">
+          {#if currentStep.body}{@html renderMarkdown(currentStep.body)}{:else}<p>{@html renderMarkdown(currentStep.title)}</p>{/if}
+        </div>
+        <p class="stepNav">
+          {#if stepIndex > 0}
+            <button class="quiet" disabled={!canMoveStep} on:click={() => gotoStep(steps[stepIndex - 1].id)}
+              >◀ Back to step {steps[stepIndex - 1].id}</button
+            >
+          {/if}
+          {#if stepIndex < steps.length - 1}
+            <button class="quiet" disabled={!canMoveStep} on:click={() => gotoStep(steps[stepIndex + 1].id)}
+              >Skip to step {steps[stepIndex + 1].id} ▶</button
+            >
+          {/if}
+          {#if !canMoveStep}<span class="muted">Commit, or undo, this round's change first.</span>{/if}
+        </p>
+      </Fold>
+    {:else if worksheetDone}
+      <div class="ownSmells">
+        <p>
+          <strong>That's every step on the worksheet.</strong> {lab.rounds} round{lab.rounds === 1 ? "" : "s"} committed.
+          Do the Wrap-up in the README, then finish the lab (under More).
+        </p>
+        <p class="stepNav">
+          <button class="quiet" disabled={!canMoveStep} on:click={() => gotoStep(steps[steps.length - 1].id)}
+            >◀ Back to step {steps[steps.length - 1].id}</button
+          >
+        </p>
+      </div>
+    {/if}
 
     {#if broke}
       <div class="brokeBox">
@@ -352,10 +424,20 @@
       {#if waiting}
         <button disabled>Checking<WaitingDots /></button>
       {:else}
-        <button class:lockedDone={locked} aria-disabled={locked} on:click={done}>{card.done}</button>
+        {#if phase === "commit" && currentStep}
+          <!-- a worksheet step can take several commits (e.g. one kind of magic number each) -->
+          <button class:lockedDone={locked} aria-disabled={locked} on:click={() => done()}
+            >{stepIndex < steps.length - 1 ? `Done: committed, on to step ${steps[stepIndex + 1].id}` : "Done: committed, last step"}</button
+          >
+          <button class="quiet" class:lockedDone={locked} aria-disabled={locked} on:click={() => done({ stayOnStep: true })}
+            >Committed, but step {currentStep.id} isn't finished yet</button
+          >
+        {:else}
+          <button class:lockedDone={locked} aria-disabled={locked} on:click={() => done()}>{card.done}</button>
+        {/if}
       {/if}
     </div>
-    {#if phase === "develop"}
+    {#if phase === "develop" && !steps.length}
       <p class="finishRow">
         <button class="quiet" on:click={cancelDevelop}>Not changing behaviour after all: back to Refactor</button>
       </p>
@@ -388,7 +470,7 @@
       </div>
     {/if}
     <!-- a clear board makes switching to TDD the next thing to do; until then it waits under More -->
-    {#if boardClear}
+    {#if boardClear && !steps.length}
       <div class="switchRow">
         <p>
           <span class="clear">The board is clear. </span>
@@ -408,10 +490,19 @@
           <strong>{$helper.data?.smells?.path || "smells.md"}</strong>. Save it, then compare your list with the
           coach's.
         </p>
+        {#if smellsSection?.intro}
+          <Fold title="Section {smellsSection.number}: {smellsSection.title}" note="from the README">
+            <div class="stepBody">{@html renderMarkdown(smellsSection.intro)}</div>
+          </Fold>
+        {/if}
         {#if ownSmellsNote}<p class="reason">{ownSmellsNote}</p>{/if}
         <p class="developActions">
           <button disabled={checkingOwn || helperMissing} on:click={showBoard}
-            >{checkingOwn ? "Reading smells.md…" : "We've listed our smells: show the coach's board"}</button
+            >{checkingOwn
+              ? "Reading smells.md…"
+              : steps.length
+              ? `We've listed our smells: on to step ${steps[0].id}`
+              : "We've listed our smells: show the coach's board"}</button
           >
           <button class="quiet" on:click={skipOwnSmells}>Skip</button>
         </p>
@@ -419,7 +510,10 @@
     {:else if orientLoading}
       <p class="muted">The coach is reading your code for smells<WaitingDots label="Reading your code" /></p>
     {:else if board.length}
-      <Fold title="Smell board" note={smellsLeft ? `${smellsLeft} of ${board.length} left` : "clear ✓"}>
+      <Fold
+        title={steps.length ? "The coach's smell board" : "Smell board"}
+        note={smellsLeft ? `${smellsLeft} of ${board.length} left` : "clear ✓"}
+      >
         <ul class="board">
           {#each shownSmells as smell}
             <li class:resolved={smell.resolved}>
@@ -600,6 +694,55 @@
 
   .ownSmells p {
     margin: 0.3em 0;
+  }
+
+  .stepLine {
+    margin: 0.1em 0 0.3em 0;
+    color: var(--refactoring-blue);
+  }
+
+  .optional {
+    margin-left: 0.4em;
+    padding: 0 0.4em;
+    border: 1px solid var(--amber);
+    color: var(--amber);
+    font-size: 0.85em;
+  }
+
+  .stepBody {
+    font-size: 0.9em;
+    overflow-x: auto;
+  }
+
+  .stepBody :global(pre) {
+    overflow-x: auto;
+    padding: 0.4em;
+    background: var(--bg);
+  }
+
+  .stepBody :global(blockquote) {
+    margin: 0.4em 0;
+    padding-left: 0.6em;
+    border-left: 2px solid var(--refactoring-blue);
+  }
+
+  .stepBody :global(table) {
+    border-collapse: collapse;
+  }
+
+  .stepBody :global(th),
+  .stepBody :global(td) {
+    padding: 0.1em 0.5em;
+    border: 1px solid var(--opacity-50);
+    text-align: left;
+  }
+
+  .stepNav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6em;
+    align-items: center;
+    font-size: 0.9em;
   }
 
   .developSaid {

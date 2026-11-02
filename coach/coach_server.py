@@ -467,7 +467,14 @@ def summarize(rows):
         for kind, n in json.loads(r["refactorings"]).items():
             s["refactorings"][kind] = s["refactorings"].get(kind, 0) + n
     s["first_time_pct"] = round(100 * s["coach_advance"] / s["coach_asks"]) if s["coach_asks"] else None
+    s["refactoring_kinds"] = refactoring_kinds(s["refactorings"])
     return s
+
+
+def refactoring_kinds(kinds):
+    """How many different refactorings a pair completed. The game spells each one way
+    (the lab's README, else its glossary); case and spacing are ignored here too."""
+    return len({" ".join(k.lower().split()) for k, n in kinds.items() if n > 0})
 
 
 def refactorings_text(kinds):
@@ -481,6 +488,7 @@ def game_json(r):
                               *SUMMED)}
     game.update(
         refactorings=json.loads(r["refactorings"]),
+        refactoring_kinds=refactoring_kinds(json.loads(r["refactorings"])),
         pair_key=pair_key(r["pair"]),
         started=epoch(r["started"]),
         updated=epoch(r["updated"]),
@@ -871,20 +879,20 @@ def show_progress(args):
         pairs.append(p)
 
     columns = ["class", "pair", "games", "last_active", "steps", "cycles", "coach_asks", "first_time_pct",
-               "holds", "overrides", "rescues", "passed_first", "rounds", "commits", "reverts", "refactorings",
-               "finished", "coach_agreed"]
+               "holds", "overrides", "rescues", "passed_first", "rounds", "commits", "reverts", "refactoring_kinds",
+               "refactorings", "finished", "coach_agreed"]
     ordered = sorted(pairs, key=lambda p: (p["class"], p["pair"]))
     if args.csv:
         return write_csv([{**p, "refactorings": refactorings_text(p["refactorings"])} for p in ordered], columns)
     print(f"{'class':<10} {'pair':<28} {'games':>5}  {'last active':<19} {'steps':>5} {'cycles':>6} "
           f"{'asks':>5} {'1st ok':>6} {'holds':>5} {'overr':>5} {'rescue':>6} {'kept':>4} {'rounds':>6} {'revert':>6}"
-          f"  finished (coach agreed)")
+          f" {'kinds':>5}  finished (coach agreed)")
     for p in ordered:
         pct = f"{p['first_time_pct']}%" if p["coach_asks"] else "-"
         print(f"{p['class']:<10} {p['pair']:<28} {p['games']:>5}  {p['last_active']:<19} {p['steps']:>5} "
               f"{p['cycles']:>6} {p['coach_asks']:>5} {pct:>6} {p['holds']:>5} {p['overrides']:>5} "
-              f"{p['rescues']:>6} {p['passed_first']:>4} {p['rounds']:>6} {p['reverts']:>6}  "
-              f"{p['finished']}/{p['games']} ({p['coach_agreed']})")
+              f"{p['rescues']:>6} {p['passed_first']:>4} {p['rounds']:>6} {p['reverts']:>6} "
+              f"{p['refactoring_kinds']:>5}  {p['finished']}/{p['games']} ({p['coach_agreed']})")
     if not ordered:
         print("(no progress recorded)")
 

@@ -39,9 +39,14 @@ const listLines = (text) =>
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l && !l.startsWith("#"));
+// With a table (the worksheet's smell log), only its rows count, and only rows
+// with something in them: not an empty template row, nor the pair's names.
+const isRow = (l) => l.startsWith("|");
+const rowHasContent = (l) => /[^|\s:-]/.test(l);
 export function ownSmellsListed(start, now) {
   const before = new Set(listLines(start));
-  const count = listLines(now).filter((l) => !before.has(l)).length;
+  const table = listLines(start).some(isRow);
+  const count = listLines(now).filter((l) => !before.has(l) && (!table || (isRow(l) && rowHasContent(l)))).length;
   return { count, enough: count >= MIN_OWN_SMELLS };
 }
 
@@ -60,8 +65,17 @@ export const codeChanged = (base, now) =>
 // A test edit that only follows the production code is still the same test:
 // a renamed name (Ctrl+R, Ctrl+R renames in test.cpp too), or a literal
 // replaced by a new constant with that value (`-1` → `ConnectFour::NoMove`).
-const TOKEN = /'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|[A-Za-z_]\w*|\d[\w.]*|::|\S/g;
-const tokens = (text) => text.match(TOKEN) || [];
+// A literal never runs past the end of its line.
+const TOKEN = /'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|[A-Za-z_]\w*|\d[\w.]*|::|\S/g;
+const tokens = (text) => stripComments(text).match(TOKEN) || [];
+
+// The code without its comments; string and character literals kept. An
+// apostrophe in a comment ("the players' pieces") would otherwise open a
+// character literal that swallows the code after it, and hide a rename.
+export const stripComments = (text) =>
+  String(text || "").replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/g, (m) =>
+    m[0] === "/" ? " " : m
+  );
 const NAME = /^[A-Za-z_]\w*$/;
 const LITERAL = /^(?:'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|\d[\w.]*)$/;
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -112,7 +126,7 @@ export function labTestChanges(base, now) {
   const c = testChanges(base, now);
   if (!c.changed.length) return c;
   const was = namesIn(productionCode(base));
-  const code = productionCode(now);
+  const code = stripComments(productionCode(now));
   const is = namesIn(code);
   const oldNames = new Set([...was].filter((n) => !is.has(n)));
   const newNames = new Set([...is].filter((n) => !was.has(n)));
@@ -156,7 +170,12 @@ export function labStatus(phase, base, now) {
     // tests are expected, so nothing here holds them; every test green ends it.
     lines.push({ text: "Change what the code does, and the tests that check the old behaviour", ok: codeChanged(base, now) || null });
     const run = { text: "Run all the tests (Ctrl+R, A): every test passes again", ok: true, howto: "run_tests" };
-    if (buildFailed(now)) Object.assign(run, { ok: false, reason: "The code doesn't build: fix it before you run the tests" });
+    // tests written first (e.g. for a class that isn't there yet) don't build: that's this step's red
+    if (buildFailed(now))
+      Object.assign(run, {
+        ok: null,
+        reason: "The code doesn't build yet. Expected if you wrote the tests first: carry on until it builds and every test passes.",
+      });
     else if (staleResults(now) || !currentTests(now).length || !codeChanged(base, now)) run.ok = null;
     else if (failingTests(now).length)
       Object.assign(run, { ok: null, reason: `Still failing, as you expected: ${failingTests(now).join(", ")}. Carry on until every test passes.` });

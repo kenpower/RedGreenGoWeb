@@ -1,4 +1,4 @@
-import { GLOSSARY, glossaryFor } from "../src/content/glossary.js";
+import { GLOSSARY, glossaryFor, canonicalRefactoring, refactoringInMessage } from "../src/content/glossary.js";
 
 describe("refactoring glossary", () => {
   test("every entry has a line and a tiny before/after", () => {
@@ -38,6 +38,29 @@ describe("refactoring glossary", () => {
 
   test("a smell and its refactoring stay apart", () => {
     expect(glossaryFor("Magic number")).not.toBe(glossaryFor("Replace Magic Number with Constant"));
+  });
+
+  test("one spelling per refactoring: the lab's, else the glossary's, else as given", () => {
+    const lab = ["Extract Function", "Replace Magic Number with Constant"];
+    expect(canonicalRefactoring("extract method", lab)).toBe("Extract Function");
+    expect(canonicalRefactoring("Replace Magic Number with Symbolic Constant: Columns", lab)).toBe(
+      "Replace Magic Number with Constant"
+    );
+    expect(canonicalRefactoring("split loop")).toBe("Split Loop");
+    expect(canonicalRefactoring("Rename Function")).not.toBe(canonicalRefactoring("Rename Variable"));
+    expect(canonicalRefactoring("Simplify  Expression: winner")).toBe("Simplify Expression");
+    expect(canonicalRefactoring("")).toBe("");
+  });
+
+  test("the refactoring a commit message names", () => {
+    const lab = ["Rename Function", "Merge Loops"];
+    expect(refactoringInMessage("Merge Loops: the two loops in bestMoveFor", lab)).toBe("Merge Loops");
+    expect(refactoringInMessage("rename function move to bestMoveFor", lab)).toBe("Rename Function");
+    expect(refactoringInMessage("Extract Method indexOf\n\nlonger text")).toBe("Extract Function");
+    expect(refactoringInMessage("Rename move to bestMoveFor", lab)).toBe("");
+    expect(refactoringInMessage("Rename move to bestMoveFor", lab, { loose: true })).toBe("Rename");
+    expect(refactoringInMessage("tidy up", lab)).toBe("");
+    expect(refactoringInMessage(undefined)).toBe("");
   });
 
   test("unknown or empty names give null", () => {

@@ -2,6 +2,7 @@
   import Game from "./components/Game.svelte";
   import LabGame from "./components/LabGame.svelte";
   import { parseLab } from "./lab.js";
+  import { parseWorksheet, stepHeadline } from "./worksheet.js";
   //import {gameState} from './store.js';
   //import {reStartGame, startGame} from './gameLogic.js';
   import { GameState } from "./gameState";
@@ -83,7 +84,11 @@
     gameState.problem = problem.trim();
     gameState.enforceRules = enforceRules;
     setClassCode(classCode);
-    if (labChoice) gameState.startLab(labChoice.refactorings, snapshotOf($helper.data), $helper.data?.smells?.content ?? null);
+    if (labChoice) {
+      // a README with worksheet steps: the lab goes through them in order
+      const steps = parseWorksheet($helper.data?.readme?.content).steps.map((s) => ({ ...s, title: stepHeadline(s) }));
+      gameState.startLab(labChoice.refactorings, snapshotOf($helper.data), $helper.data?.smells?.content ?? null, steps);
+    }
     else gameState.start();
     gameState = gameState;
   };

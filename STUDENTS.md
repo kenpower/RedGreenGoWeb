@@ -11,6 +11,7 @@ passes it, then tidy up. A coach watches each step and helps when you get stuck.
      CLion, on Windows or Linux. Your teacher's starter project is already set up for the game.
 2. Download [rgg_server.py](https://kenpower.github.io/RedGreenGoWeb/build/rgg_server.py) into your
    project folder: the one with the `.sln` file, or the one with `CMakeLists.txt`. You need Python 3.
+   If your teacher's starter project already has `rgg_server.py` in it, skip the download and use that one.
 3. Open a terminal in that folder:
    - **Visual Studio:** **Tools → Command Line → Developer PowerShell** (or **View → Terminal**),
      which opens there. Or, in Solution Explorer, right-click the solution and choose **Open in Terminal**.

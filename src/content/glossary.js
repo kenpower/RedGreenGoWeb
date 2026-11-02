@@ -137,3 +137,32 @@ for (const entry of GLOSSARY) for (const name of entry.names) if (!BY_KEY.has(ke
 
 // The entry for a refactoring or smell name, or null: {names, line, before, after}.
 export const glossaryFor = (name) => BY_KEY.get(key(name)) || null;
+
+// One spelling per refactoring, so the teacher's count of kinds isn't split by
+// "Extract Method" vs "extract function": the lab's own spelling (`preferred`,
+// its README's Refactorings line), else the glossary's, else the name as given
+// (without a ": where" part). Only the same name in other words, never another
+// refactoring: Rename Function and Rename Variable stay two. "" for no name.
+const ALL_NAMES = GLOSSARY.flatMap((entry) => entry.names);
+export function canonicalRefactoring(name, preferred = []) {
+  const k = key(name);
+  if (!k) return "";
+  return (
+    preferred.find((p) => key(p) === k) ||
+    ALL_NAMES.find((n) => key(n) === k) ||
+    String(name).split(":")[0].replace(/\s+/g, " ").trim().slice(0, 60)
+  );
+}
+
+// The refactoring a commit message names first ("Extract Function: indexOf",
+// "Rename Variable t to afterMove"), from `preferred` or the glossary; "" if none.
+// A one-word alias ("Rename move to bestMoveFor") only with `loose`: it says
+// less than the coach's review of the change does.
+export function refactoringInMessage(message, preferred = [], { loose = false } = {}) {
+  const words = key(String(message || "").split("\n")[0].replace(/:/g, " "));
+  const names = [...preferred, ...ALL_NAMES].filter((n) => key(n) && (loose || key(n).includes(" ")));
+  const found = names
+    .filter((n) => words === key(n) || words.startsWith(key(n) + " "))
+    .sort((a, b) => key(b).length - key(a).length)[0];
+  return found ? canonicalRefactoring(found, preferred) : "";
+}

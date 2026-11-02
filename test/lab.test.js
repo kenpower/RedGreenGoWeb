@@ -43,6 +43,19 @@ describe("ownSmellsListed: the pair's own smells, before the coach's board", () 
     expect(ownSmellsListed(START, two + "line 21  Poor name: move\n")).toEqual({ count: 3, enough: true });
   });
 
+  test("a smell log table: only new rows with something in them count", () => {
+    const table =
+      "# Smell log\n\n**Pair:** _name_ & _name_\n\n|Line(s)|Smell|What's wrong|Fixed in|\n|-|-|-|-|\n" +
+      "|23|Poor name|`t`||\n| | | | |\n| | | | |\n| | | | |\n";
+    const filled = (n) =>
+      table
+        .replace("_name_ & _name_", "Ann & Bo")
+        .replace(/\| \| \| \| \|/g, (row, i) => (n-- > 0 ? `|${12 + i}|Magic number|what is 7?||` : row));
+    expect(ownSmellsListed(table, filled(2))).toEqual({ count: 2, enough: false }); // the names don't count
+    expect(ownSmellsListed(table, filled(3))).toEqual({ count: 3, enough: true });
+    expect(ownSmellsListed(table, table.replace("| | | | |", "|  |  | | |")).count).toBe(0); // still empty
+  });
+
   test("an edited pair line counts like any new line; a missing file counts nothing", () => {
     expect(ownSmellsListed(START, START.replace("_name_ & _name_", "Ann & Bo")).count).toBe(1);
     expect(ownSmellsListed(START, undefined)).toEqual({ count: 0, enough: false });
@@ -65,6 +78,25 @@ describe("labTestChanges: test edits that only follow the production code are al
     const code = CODE.replace("public:", "public:\n  static const int NoMove = -1;").replace("return -1", "return NoMove");
     expect(labTestChanges(base, after(TEST.replace("-1", "ConnectFour::NoMove"), code)).changed).toEqual([]);
     expect(labTestChanges(base, after(TEST.replace("-1", "NoMove"), code)).changed).toEqual([]);
+  });
+
+  test("an apostrophe in a comment doesn't hide a rename (the Connect Four header, sent before the .cpp)", () => {
+    const header = "// '-' is an empty cell, 'X' and 'O' are the players' pieces.\nclass ConnectFour {\n public:\n  int move(char p) const;\n};";
+    const cpp = "int ConnectFour::move(char p) const { if (board[0] == '-') return 0; return -1; }";
+    const snapOf = (h, c, tests) => ({
+      tests: [],
+      files: [
+        { path: "ConnectFour.h", kind: "production", content: h },
+        { path: "ConnectFour.cpp", kind: "production", content: c },
+        { path: "test.cpp", kind: "test", content: tests },
+      ],
+    });
+    const before = snapOf(header, cpp, TEST);
+    const renamed = snapOf(header.replace("move(", "bestMoveFor("), cpp.replace("move(", "bestMoveFor("), TEST.replace("g.move", "g.bestMoveFor"));
+    expect(labTestChanges(before, renamed).changed).toEqual([]);
+    // and a comment edited in a test doesn't change what it checks
+    const commented = snapOf(header, cpp, TEST.replace("{\n", "{\n  // the players' last move\n"));
+    expect(labTestChanges(before, commented).changed).toEqual([]);
   });
 
   test("still a change: a different expected value, a constant with another value, a name the code didn't gain", () => {
@@ -139,9 +171,11 @@ describe("labStatus: each phase's Done gate", () => {
     expect(labStatus("develop", base, green).goalMet).toBe(true);
     // a test relaxed on its own is a change too (the worksheet's step 3.4 can start there)
     expect(labStatus("develop", base, snap({ tests: TESTS.replace("EXPECT_EQ", "EXPECT_GE") })).goalMet).toBe(true);
-    // a broken build is still a problem to fix
+    // tests first don't build yet: expected, not a hold, and not done either
     const broken = labStatus("develop", base, snap({ code: "int priceFor(", build: { status: "failed", time: 20, errors: ["e"] } }));
-    expect(broken.lines[1].ok).toBe(false);
+    expect(broken.lines[1].ok).toBeNull();
+    expect(broken.lines[1].reason).toMatch(/tests first/);
+    expect(broken.goalMet).toBe(false);
   });
 
   test("no helper data: nothing to show", () => {

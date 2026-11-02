@@ -148,6 +148,13 @@ suggest; without it the coach uses a basic list. Students set up as in section 3
 - The coach reads the code and shows a smell board, each smell with a refactoring that fixes it:
   the refactoring steps your README asks for, in its order (up to 24), then at most 3 obvious extras.
   Pairs pick the order.
+- **A worksheet README.** When the README numbers its steps, the game follows them: sections
+  `## 2. Easy changes`, and steps written either as `- [ ] **2.1 [Refactor]** text` (indented lines
+  are its body) or as `### Step 3.4 [Develop]: title`. The card shows the current step, with its
+  text, code and notes from the README, and moves on after each commit. Pairs can go back or skip,
+  or keep a step for another commit. A `[Develop]` step starts in Develop by itself. A section titled
+  `(if you have time)` or `(take-home)` marks its steps so. The smell board becomes the coach's
+  view, and the coach checks each change against the step, as advice.
 - **Develop steps.** A README step that changes behaviour on purpose (e.g. relaxing an
   over-specified test) would normally hold the pair. They click **Changing what the code does on
   purpose?** and say what will change; failing and edited tests then don't hold them until every
@@ -161,9 +168,13 @@ suggest; without it the coach uses a basic list. Students set up as in section 3
 - A failing test locks the step until they undo the last change.
 - The lab ends when the coach agrees the board is clear, or the pair clicks Finish.
 
-During and after the lab, `progress` shows each pair's **rounds** and **revert** (changes undone
-after breaking a test). The `--csv` export adds their commits and how many of each refactoring
-they applied, e.g. `Extract Function:3; Rename Variable:1`.
+During and after the lab, `progress` shows each pair's **rounds**, **revert** (changes undone
+after breaking a test) and **kinds**: how many different refactorings they have completed, e.g. 4
+for Rename Function, Rename Variable, Extract Function and Merge Loops. A refactoring counts once,
+when its round is committed: named by the commit message if it names one ("Extract Function:
+indexOf"), else by the coach's review of the change. A Develop step, or a change that broke a test,
+counts none. The `--csv` export adds their commits and how many of each refactoring they
+completed, e.g. `Extract Function:3; Rename Variable:1`.
 
 ## 7. Not ready yet: the live class view
 
