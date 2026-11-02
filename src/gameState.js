@@ -73,7 +73,8 @@ export const reflectionQuestionFor = (gameId) => {
 const newCycle =(index) => ({ phase: TDDPhase.RED, index, backToRed: 0 });
 
 // The lab's phases as coach_server takes them (its PROGRESS_PHASES).
-const LAB_SERVER_PHASES = { refactor: "refactor", test: "refactor", commit: "refactor" };
+const LAB_SERVER_PHASES = { refactor: "refactor", test: "refactor", commit: "refactor", develop: "refactor" };
+const MAX_DEVELOP_CHARS = 200;
 
 // Identifies one game in the progress records on the coach server.
 export function newGameId() {
@@ -302,10 +303,23 @@ export class GameState {
   // [REFACTOR] ---> [TEST] ---> [COMMIT] --↺, one refactoring per round, roles
   // swapped after every commit. `base` is the code at the last commit (at the
   // start for round 1): the tests may never change from it.
-  startLab(refactorings, snapshot) {
+  // `smells`: the project's smells.md as the lab starts, or null when it has
+  // none; with one, the board waits for the pair's own list (labShowBoard).
+  startLab(refactorings, snapshot, smells = null) {
     this.start();
     this.mode = "refactor";
     this.lab = { phase: "refactor", round: 1, refactorings, rounds: 0, commits: 0, reverts: 0, base: snapshot, sawRed: false };
+    this.lab.ownSmells = typeof smells === "string" ? { start: smells, shown: false } : null;
+    this.#save();
+  }
+
+  // The coach's smell board shown: after the pair listed `count` smells of
+  // their own in smells.md, or skipped that (count null).
+  labShowBoard(count = null) {
+    const own = this.lab?.ownSmells;
+    if (!own || own.shown) return;
+    own.shown = true;
+    this.addEvent("smell", count === null ? "board shown: own list skipped" : `board shown after own list: ${count} lines`);
     this.#save();
   }
 
@@ -316,7 +330,7 @@ export class GameState {
     if (!lab || this.finished) return;
     this.stepNumber++;
     if (lab.phase === "refactor") lab.phase = "test";
-    else if (lab.phase === "test") lab.phase = "commit";
+    else if (lab.phase === "test" || lab.phase === "develop") lab.phase = "commit";
     else {
       const git = snapshot?.git;
       if (git?.repo && git.head && git.head !== lab.base?.git?.head) {
@@ -327,8 +341,38 @@ export class GameState {
       lab.round++;
       lab.base = snapshot;
       lab.phase = "refactor";
+      lab.develop = null;
       this.#swapPairRoles();
     }
+    this.#save();
+  }
+
+  // A Develop step, chosen by the pair (the worksheet's [Develop] steps, e.g.
+  // "simplify the default move", which turns two tests red on purpose): until
+  // every test passes again, failing and edited tests don't hold them. Then
+  // they commit it and the next round is refactoring again. From Refactor or
+  // Test, same round and driver; `what` is what they said will change, for the
+  // teacher (an override event: the server knows that kind).
+  labDevelop(what) {
+    const lab = this.lab;
+    const said = String(what || "").trim().slice(0, MAX_DEVELOP_CHARS);
+    if (!lab || this.finished || !said || !["refactor", "test"].includes(lab.phase)) return;
+    lab.phase = "develop";
+    lab.develop = said;
+    lab.sawRed = false; // red is expected now, not a revert
+    this.stepNumber++;
+    this.addEvent("override", `Develop step: ${said}`);
+    this.#save();
+  }
+
+  // Not changing behaviour after all: back to Refactor, the holds back on.
+  labCancelDevelop() {
+    const lab = this.lab;
+    if (!lab || this.finished || lab.phase !== "develop") return;
+    lab.phase = "refactor";
+    lab.develop = null;
+    this.stepNumber++;
+    this.addEvent("override", "Develop step cancelled");
     this.#save();
   }
 
@@ -339,6 +383,7 @@ export class GameState {
     const lab = this.lab;
     if (!lab || this.finished || lab.phase === "refactor" || lab.phase === "switched") return;
     lab.phase = "refactor";
+    lab.develop = null;
     this.stepNumber++;
     this.#save();
   }
@@ -386,7 +431,7 @@ export class GameState {
   // green one means they undid (or fixed) it, which the teacher sees as a revert.
   labRun({ red, green }) {
     const lab = this.lab;
-    if (!lab) return;
+    if (!lab || lab.develop) return;
     if (red && !lab.sawRed) lab.sawRed = true;
     else if (green && lab.sawRed) {
       lab.sawRed = false;

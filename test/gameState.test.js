@@ -762,6 +762,68 @@ test("undoing_back_to_the_last_commit_restarts_the_lab_round_at_refactor", () =>
   expect(g.lab.phase).toBe("refactor");
 });
 
+test("a_develop_step_in_the_lab_goes_to_commit_and_then_back_to_refactoring", () => {
+  let g = new GameState();
+  g.startLab([], { git: { repo: true, head: "aaa" } });
+  g.labDone(null); // test: two tests fail, on purpose
+  const driver = g.driver;
+  g.labDevelop("   "); // they must say what will change
+  expect(g.lab.phase).toBe("test");
+  g.labDevelop("  any legal move, not just the first  ");
+  expect(g.lab).toMatchObject({ phase: "develop", develop: "any legal move, not just the first", round: 1 });
+  expect(g.driver).toBe(driver);
+  expect(g.pendingEvents.at(-1)).toMatchObject({ kind: "override", detail: "Develop step: any legal move, not just the first", phase: "refactor" });
+  g.labRun({ red: true, green: false }); // red is expected: not a revert
+  g.labRun({ red: false, green: true });
+  g.labDone(null);
+  expect(g.lab.phase).toBe("commit");
+  expect(g.lab.develop).toBeTruthy(); // the commit is still the Develop round's
+  g.labDone({ git: { repo: true, head: "bbb", headMessage: "Develop: any legal move" } });
+  expect(g.lab).toMatchObject({ phase: "refactor", round: 2, rounds: 1, commits: 1, reverts: 0, develop: null });
+  expect(g.lab.base.git.head).toBe("bbb"); // the changed tests are the next round's tests
+  expect(g.driver).not.toBe(driver);
+  expect(GameState.recoverSavedGame().lab.reverts).toBe(0);
+});
+
+test("a_develop_step_starts_only_from_refactor_or_test_and_can_be_cancelled", () => {
+  let g = new GameState();
+  g.startLab([], null);
+  g.labDone(null); // test
+  g.labDone(null); // commit
+  g.labDevelop("something");
+  expect(g.lab.phase).toBe("commit");
+  g.labDone(null); // round 2, refactor
+  g.labDevelop("something else");
+  expect(g.lab.phase).toBe("develop");
+  g.labCancelDevelop();
+  expect(g.lab).toMatchObject({ phase: "refactor", develop: null, round: 2 });
+  expect(g.pendingEvents.at(-1)).toMatchObject({ kind: "override", detail: "Develop step cancelled" });
+});
+
+test("with_a_smells_md_the_lab_board_waits_for_the_pairs_own_list", () => {
+  let g = new GameState();
+  g.startLab([], null, "# Smell log\n");
+  expect(g.lab.ownSmells).toEqual({ start: "# Smell log\n", shown: false });
+  g.labShowBoard(4);
+  expect(g.lab.ownSmells.shown).toBe(true);
+  expect(g.pendingEvents.at(-1)).toMatchObject({ kind: "smell", detail: "board shown after own list: 4 lines" });
+  g.labShowBoard(); // once only
+  expect(g.pendingEvents.filter((e) => e.kind === "smell")).toHaveLength(1);
+  expect(GameState.recoverSavedGame().lab.ownSmells.shown).toBe(true);
+});
+
+test("without_a_smells_md_the_board_shows_straight_away_and_skipping_is_recorded", () => {
+  let g = new GameState();
+  g.startLab([], null);
+  expect(g.lab.ownSmells).toBeNull();
+  g.labShowBoard(); // nothing to show or record
+  expect(g.pendingEvents.filter((e) => e.kind === "smell")).toHaveLength(0);
+  g = new GameState();
+  g.startLab([], null, "");
+  g.labShowBoard();
+  expect(g.pendingEvents.at(-1).detail).toBe("board shown: own list skipped");
+});
+
 test("a_lab_phase_is_reported_as_one_the_server_knows", () => {
   let g = new GameState();
   g.startLab([], null);

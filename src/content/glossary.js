@@ -66,6 +66,18 @@ export const GLOSSARY = [
     after: "if (!ok) return 0;\nif (n <= 0) return 0;\nreturn n;",
   },
   {
+    names: ["Merge Loops", "Fuse Loops", "Combine Loops", "Loop Fusion"],
+    line: "Two loops over the same range, with no early exit, become one loop doing both jobs.",
+    before: "for (int x : v) sum += x;\nfor (int x : v) if (x > big) big = x;",
+    after: "for (int x : v) { sum += x; if (x > big) big = x; }",
+  },
+  {
+    names: ["Replace Primitive with Object", "Replace Data Value with Object", "Introduce Value Object"],
+    line: "Give a plain int or string its own small class, so the idea it stands for has a name and a home.",
+    before: "int price = 1999;  // cents? euro?",
+    after: "Money price = Money::euro(19.99);",
+  },
+  {
     names: ["Remove Dead Code"],
     line: "Delete code nothing uses. Version control remembers it if you ever need it.",
     before: "int f() { return 1; }  // never called",

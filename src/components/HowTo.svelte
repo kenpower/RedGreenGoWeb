@@ -1,11 +1,12 @@
 <script>
-  // A "[How?]" toggle that opens a short Visual Studio answer inline (content/howto.js).
+  // A "[How?]" toggle that opens a short answer inline, for the pair's IDE (content/howto.js).
   // Pass the item ({id?, howto?}); nothing shows when the item has no how-to.
   import { howtoFor } from "../content/howto.js";
+  import { ide } from "../helper.js";
 
   export let item = null;
   let open = false;
-  $: howto = howtoFor(item);
+  $: howto = howtoFor(item, $ide);
 </script>
 
 {#if howto}

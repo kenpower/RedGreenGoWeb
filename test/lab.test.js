@@ -1,4 +1,4 @@
-import { parseLab, labStatus, labTestChanges, DEFAULT_REFACTORINGS } from "../src/lab.js";
+import { parseLab, labStatus, labTestChanges, ownSmellsListed, DEFAULT_REFACTORINGS } from "../src/lab.js";
 
 const TESTS = 'TEST(Price, Basic) {\n  EXPECT_EQ(10, priceFor(1));\n}\n';
 function snap({ tests = TESTS, code = "int priceFor(int n) { return n * 10; }", results = { "Price.Basic": "passed" }, build = null, runTime = 10, git } = {}) {
@@ -29,6 +29,23 @@ describe("parseLab: the README chooses the lab", () => {
     expect(parseLab("Refactorings: Extract Function")).toBeNull();
     expect(parseLab("Lab: tdd")).toBeNull();
     expect(parseLab(null)).toBeNull();
+  });
+});
+
+describe("ownSmellsListed: the pair's own smells, before the coach's board", () => {
+  // the worksheet's starter smells.md: a heading, a pair line and two examples
+  const START = "# Smell log\n\n**Pair:** _name_ & _name_\n\nline:24\tPoor name : `t`\n\nlines:39–44\tDuplicated code : X and O\n";
+
+  test("only lines that weren't there at the start count; blank lines and headings don't", () => {
+    expect(ownSmellsListed(START, START)).toEqual({ count: 0, enough: false });
+    const two = START + "\nline 12  Magic number: 5\n\n## More\nline 7  Magic number: 7\n";
+    expect(ownSmellsListed(START, two)).toEqual({ count: 2, enough: false });
+    expect(ownSmellsListed(START, two + "line 21  Poor name: move\n")).toEqual({ count: 3, enough: true });
+  });
+
+  test("an edited pair line counts like any new line; a missing file counts nothing", () => {
+    expect(ownSmellsListed(START, START.replace("_name_ & _name_", "Ann & Bo")).count).toBe(1);
+    expect(ownSmellsListed(START, undefined)).toEqual({ count: 0, enough: false });
   });
 });
 
@@ -99,6 +116,32 @@ describe("labStatus: each phase's Done gate", () => {
     expect(labStatus("commit", base, snap({ git: { repo: true, head: "bbb", dirtySource: [] } })).goalMet).toBe(true);
     // no git: the commit can't be checked, so it doesn't hold them
     expect(labStatus("commit", base, snap({ git: { repo: false } })).goalMet).toBe(true);
+  });
+
+  test("a test hold is marked, so the game can offer a Develop step", () => {
+    const testsEdited = snap({ tests: TESTS.replace("10", "11") });
+    expect(labStatus("refactor", base, testsEdited).lines[1].testsHold).toBe(true);
+    expect(labStatus("test", base, snap({ results: { "Price.Basic": "failed" } })).lines[1].testsHold).toBe(true);
+    // a broken build is not the tests holding them
+    expect(labStatus("test", base, snap({ build: { status: "failed", time: 20, errors: ["e"] } })).lines[1].testsHold).toBeUndefined();
+  });
+
+  test("DEVELOP: failing and edited tests don't hold; Done once every test passes again", () => {
+    // nothing changed yet: not done, not a problem
+    expect(oks(labStatus("develop", base, base))).toEqual([null, null]);
+    // the code changed and a test fails, as they said it would
+    const red = labStatus("develop", base, snap({ code: "int priceFor(int n) { return n * 11; }", results: { "Price.Basic": "failed" } }));
+    expect(oks(red)).toEqual([true, null]);
+    expect(red.lines[1].reason).toMatch(/Price\.Basic/);
+    expect(red.lines.some((l) => l.ok === false)).toBe(false);
+    // the test changed to match: green, so Done
+    const green = snap({ code: "int priceFor(int n) { return n * 11; }", tests: TESTS.replace("10", "11") });
+    expect(labStatus("develop", base, green).goalMet).toBe(true);
+    // a test relaxed on its own is a change too (the worksheet's step 3.4 can start there)
+    expect(labStatus("develop", base, snap({ tests: TESTS.replace("EXPECT_EQ", "EXPECT_GE") })).goalMet).toBe(true);
+    // a broken build is still a problem to fix
+    const broken = labStatus("develop", base, snap({ code: "int priceFor(", build: { status: "failed", time: 20, errors: ["e"] } }));
+    expect(broken.lines[1].ok).toBe(false);
   });
 
   test("no helper data: nothing to show", () => {

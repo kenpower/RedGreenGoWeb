@@ -175,6 +175,17 @@ class Lab(unittest.TestCase):
         self.assertEqual([s["id"] for s in brief["smells"]], ["long-price", "extra-1", "extra-2", "extra-3"])
         self.assertEqual([s["from_readme"] for s in brief["smells"]], [True, False, False, False])
 
+    def test_a_long_readme_keeps_all_its_steps_on_the_board(self):
+        # the Connect Four worksheet has 17 refactoring steps
+        steps = [{"id": f"step-{i}", "where": "x", "what": "a step", "refactoring": "Rename Variable",
+                  "from_readme": True} for i in range(17)]
+        extras = [{"id": f"extra-{i}", "where": "x", "what": "obvious", "refactoring": "Inline Function",
+                   "from_readme": False} for i in range(3)]
+        client = self.answering({**Orient.BRIEF, "smells": steps + extras})
+        brief, _ = coach.ask_coach(client, step(mode="orient", catalogue=None, lab="refactor",
+                                                refactorings=self.REFACTORINGS))
+        self.assertEqual(len(brief["smells"]), 20)
+
     def test_the_look_sees_which_smells_are_extras(self):
         board = [{**self.BOARD[0], "from_readme": True},
                  {"id": "dup", "where": "winner", "what": "X and O checks repeat.", "refactoring": "Extract Function"}]

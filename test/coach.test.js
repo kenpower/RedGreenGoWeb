@@ -348,6 +348,7 @@ describe("the class code", () => {
     expect(classCodeFromReadme("# FizzBuzz\n\nClass code: SD2-2026\n")).toEqual("SD2-2026");
     expect(classCodeFromReadme("  class CODE :  sd2  ")).toEqual("SD2");
     expect(classCodeFromReadme("CLASS CODE:abc-1")).toEqual("ABC-1");
+    expect(classCodeFromReadme("Class code: REFACTORING_26\nLab: refactor\n")).toEqual("REFACTORING_26");
   });
 
   test("no line, or not a code on it", () => {

@@ -1,7 +1,8 @@
 # Running a class with RedGreenGo
 
 Students practise test-driven development in pairs: they write C++ and GoogleTest code in Visual
-Studio, and the game coaches them through Red, Green and Refactor. A small coach server keeps
+Studio (a solution), or in a CMake project opened in Visual Studio, VS Code or CLion, and the game
+coaches them through Red, Green and Refactor. A small coach server keeps
 your class code, its daily allowance and each pair's progress.
 
 You run every command below from your own computer, in a terminal (Git Bash, WSL or macOS). Each
@@ -42,20 +43,42 @@ You can delete it all after the module (section 5).
 
 Give the students [STUDENTS.md](STUDENTS.md). In short:
 
-1. A Visual Studio C++ project with GoogleTest tests, in a git repository.
+1. A C++ project with GoogleTest tests, in a git repository: a Visual Studio solution, or a CMake
+   project (see [CMake projects](#cmake-projects) below).
 2. Download the helper, [rgg_server.py](https://kenpower.github.io/RedGreenGoWeb/build/rgg_server.py),
-   into the solution folder (next to the `.sln`). It needs Python 3.
-3. Open a terminal in the solution folder (Visual Studio: **Tools → Command Line → Developer
-   PowerShell**, or right-click the solution in Solution Explorer → **Open in Terminal**) and run
+   into the project folder (next to the `.sln`, or next to `CMakeLists.txt`). It needs Python 3.
+3. Open a terminal in that folder (Visual Studio: **Tools → Command Line → Developer PowerShell**,
+   or right-click the solution in Solution Explorer → **Open in Terminal**; VS Code: **Terminal →
+   New Terminal**; CLion: **View → Tool Windows → Terminal**) and run
    `python rgg_server.py --class-code SD2-2026` (`py` instead of `python` if the Microsoft Store
-   opens). The game opens in the browser.
+   opens; `python3` on Linux). The game opens in the browser.
 4. Play at **http://127.0.0.1:8000/**, the page the helper opens, not at github.io: Chrome blocks
    the github.io page from talking to the helper.
 5. Optional: a `README.md` in the solution folder that describes the problem, with a line
    `Class code: SD2-2026`. The coach reads the problem, and the helper then picks up the class code
    without `--class-code`.
-6. Run the tests once (**Test → Run All Tests**), enter both names and click **Start Game**. Tell
-   them to use Run All: a run of only some tests leaves the others' results from earlier.
+6. Run the tests once (**Test → Run All Tests**; VS Code: the Testing view; CLion: **All CTest**),
+   enter both names and click **Start Game**. Tell them to use Run All: a run of only some tests
+   leaves the others' results from earlier.
+
+### CMake projects
+
+The helper reads the GoogleTest results that each test run saves. Visual Studio's test adapter
+saves them by itself for a solution, but a CMake project has to ask for it, with
+`XML_OUTPUT_DIR` on the line that registers the tests in `CMakeLists.txt`:
+
+```cmake
+gtest_discover_tests(my_tests XML_OUTPUT_DIR ${CMAKE_BINARY_DIR}/test-results)
+```
+
+Without it the helper warns at start-up and the game never sees a test run. With it, every run
+through CTest is seen: Visual Studio's Test Explorer, VS Code's Testing view, CLion's **All CTest**
+configuration, and `ctest` on the command line. Running the test program directly (CLion's green
+▶ beside a test, or `./build/my_tests`) isn't seen, so tell CLion users to use **All CTest**.
+
+Not yet with CMake: the game doesn't see **build errors**, because a CMake build leaves no log to
+read. A broken build shows as "run the tests" rather than as the build error, explained. And the
+game's own keyboard hints are Visual Studio's (e.g. **Ctrl+R, A** to run the tests).
 
 ## 4. During class
 
@@ -106,8 +129,9 @@ ssh -t ken@compucore3.setu.ie rgg-coach-admin clear-progress SD2-2026
 Instead of building code test-first, pairs get messy code whose tests all pass and apply the
 refactorings from your lecture.
 
-**Prepare the starter project:** a Visual Studio solution with working (but messy) code and
-GoogleTest tests that cover it and all pass, committed to git. Its README.md says what the code
+**Prepare the starter project:** a Visual Studio solution or a CMake project (with the
+`XML_OUTPUT_DIR` line above) with working (but messy) code and GoogleTest tests that cover it and
+all pass, committed to git. Its README.md says what the code
 does and has these lines:
 
 ```
@@ -121,8 +145,14 @@ suggest; without it the coach uses a basic list. Students set up as in section 3
 
 **How it runs:**
 
-- The coach reads the code and shows a smell board: up to 8 things worth tidying, each with a
-  refactoring from your list. Pairs pick the order.
+- The coach reads the code and shows a smell board, each smell with a refactoring that fixes it:
+  the refactoring steps your README asks for, in its order (up to 24), then at most 3 obvious extras.
+  Pairs pick the order.
+- **Develop steps.** A README step that changes behaviour on purpose (e.g. relaxing an
+  over-specified test) would normally hold the pair. They click **Changing what the code does on
+  purpose?** and say what will change; failing and edited tests then don't hold them until every
+  test passes again, and they commit it as one round. You see each one in the progress as an
+  override event, "Develop step: …".
 - Each round is **refactor → run tests → commit**: one refactoring, Run All Tests (all must still
   pass), then a commit naming the refactoring. They swap driver and navigator after each commit.
 - **The tests may not change.** Editing a test, or changing what the code does, holds the pair

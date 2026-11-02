@@ -30,6 +30,7 @@ describe("refactoring glossary", () => {
       "Rename Variable", "Rename Function", "Extract Function", "Replace Magic Number with Constant", "Decompose Conditional",
       "Split Loop", "Inline Variable", "Inline Function", "Introduce Explaining Variable",
       "Consolidate Duplicate Conditional Fragments", "Replace Loop with Algorithm",
+      "Merge Loops", "Replace Primitive with Object", "Replace Nested Conditional with Guard Clauses",
       "Poor name", "Magic number", "Duplicated code", "Long or tangled method", "Primitive obsession",
     ])
       expect(glossaryFor(name)).not.toBeNull();

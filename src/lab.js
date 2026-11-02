@@ -30,14 +30,32 @@ export function parseLab(readme) {
   return { refactorings: (listed.length ? [...new Set(listed)] : DEFAULT_REFACTORINGS).slice(0, MAX_REFACTORINGS) };
 }
 
+// "Smells first" (the worksheet's section 1): when the project has a smells.md,
+// the coach's board stays hidden until the pair has listed smells of their own
+// there: lines that weren't in it when the lab started.
+export const MIN_OWN_SMELLS = 3;
+const listLines = (text) =>
+  String(text || "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"));
+export function ownSmellsListed(start, now) {
+  const before = new Set(listLines(start));
+  const count = listLines(now).filter((l) => !before.has(l)).length;
+  return { count, enough: count >= MIN_OWN_SMELLS };
+}
+
 // The production code, to tell whether it changed since the round began.
-const productionCode = (snapshot) =>
+const productionCode = (snapshot, kinds = ["production"]) =>
   (snapshot?.files || [])
-    .filter((f) => f.kind === "production")
+    .filter((f) => kinds.includes(f.kind))
     .map((f) => `${f.path}\n${f.content}`)
     .join("\n");
 
 export const productionChanged = (base, now) => productionCode(now) !== productionCode(base);
+// A Develop step may change the tests alone (relax one first, then the code)
+export const codeChanged = (base, now) =>
+  productionCode(now, ["production", "test"]) !== productionCode(base, ["production", "test"]);
 
 // A test edit that only follows the production code is still the same test:
 // a renamed name (Ctrl+R, Ctrl+R renames in test.cpp too), or a literal
@@ -117,7 +135,7 @@ export function labStatus(phase, base, now) {
   const lines = [];
   const testsLine = { text: "Keep the tests the same (renames are fine)", ok: true };
   if (!testsUnchanged(base, now))
-    Object.assign(testsLine, { ok: false, reason: "You changed what a test checks: put it back" });
+    Object.assign(testsLine, { ok: false, reason: "You changed what a test checks: put it back", testsHold: true });
   if (phase === "refactor") {
     lines.push({ text: "Make one refactoring in the production code", ok: productionChanged(base, now) || null });
     lines.push(testsLine);
@@ -127,7 +145,21 @@ export function labStatus(phase, base, now) {
     if (buildFailed(now)) Object.assign(run, { ok: false, reason: "The code doesn't build: fix it, or undo the last change" });
     else if (staleResults(now) || !currentTests(now).length) run.ok = null;
     else if (failingTests(now).length)
-      Object.assign(run, { ok: false, reason: `${failingTests(now).join(", ")} fails: undo the last change, then run the tests again` });
+      Object.assign(run, {
+        ok: false,
+        reason: `${failingTests(now).join(", ")} fails: undo the last change, then run the tests again`,
+        testsHold: true,
+      });
+    lines.push(run);
+  } else if (phase === "develop") {
+    // The pair said they're changing behaviour: failing tests and edited
+    // tests are expected, so nothing here holds them; every test green ends it.
+    lines.push({ text: "Change what the code does, and the tests that check the old behaviour", ok: codeChanged(base, now) || null });
+    const run = { text: "Run all the tests (Ctrl+R, A): every test passes again", ok: true, howto: "run_tests" };
+    if (buildFailed(now)) Object.assign(run, { ok: false, reason: "The code doesn't build: fix it before you run the tests" });
+    else if (staleResults(now) || !currentTests(now).length || !codeChanged(base, now)) run.ok = null;
+    else if (failingTests(now).length)
+      Object.assign(run, { ok: null, reason: `Still failing, as you expected: ${failingTests(now).join(", ")}. Carry on until every test passes.` });
     lines.push(run);
   } else if (phase === "commit") {
     const git = now.git;
@@ -165,5 +197,15 @@ export const LAB_CARDS = {
     navigator: "Check nothing else slipped into the commit. Then you swap roles.",
     howto: "commit",
     done: "Done: committed",
+  },
+  // A Develop step inside the lab, chosen by the pair (gameState.labDevelop):
+  // DEVELOP ---> COMMIT, then back to refactoring.
+  develop: {
+    title: "Develop",
+    driver: "Change what the code does. Tests that checked the old behaviour will fail: change them to check the new one.",
+    navigator: "Before each run, say which tests should fail and why. A test you didn't expect to fail means a mistake.",
+    howto: "run_tests",
+    done: "Done: all green, back to refactoring",
+    commit: "Commit, with a message that says what the code does now (e.g. 'Develop: any legal move, not just the first').",
   },
 };

@@ -5,10 +5,11 @@
   // the coach; the coach's smell board and reviews come later (build item 4).
   import { createEventDispatcher, onDestroy, tick } from "svelte";
   import { fade } from "svelte/transition";
-  import { helper, refreshHelper } from "../helper.js";
+  import { helper, ide, refreshHelper } from "../helper.js";
+  import { tailor } from "../ide.js";
   import { snapshotOf, buildFailed, staleResults, failingTests, currentTests, uncommittedFiles } from "../rules.js";
   import { sendProgress, isCoached, askOrient, askLab, resolveProblem } from "../coach.js";
-  import { labStatus, productionChanged, LAB_CARDS, LAB_PHASES } from "../lab.js";
+  import { labStatus, productionChanged, codeChanged, ownSmellsListed, MIN_OWN_SMELLS, LAB_CARDS, LAB_PHASES } from "../lab.js";
   import { nextStepsDue, runMark, codeKey } from "../content/steps.js";
   import { hintRung, TOP_RUNG } from "../ladder.js";
   import WaitingDots from "./WaitingDots.svelte";
@@ -53,6 +54,32 @@
       orientLoading = false;
     }
   };
+  // "Smells first": with a smells.md, the board (and the hints and next smell
+  // that come from it) wait until the pair has listed smells of their own
+  $: boardHidden = !!lab?.ownSmells && !lab.ownSmells.shown;
+  let ownSmellsNote = "";
+  let checkingOwn = false;
+  const showBoard = async () => {
+    checkingOwn = true;
+    const data = await refreshHelper(); // smells.md as it is on disk now
+    checkingOwn = false;
+    const { count, enough } = ownSmellsListed(lab.ownSmells.start, data?.smells?.content);
+    if (!enough) {
+      ownSmellsNote =
+        `smells.md has ${count} new line${count === 1 ? "" : "s"} so far. ` +
+        `List at least ${MIN_OWN_SMELLS} smells of your own, save the file, then try again.`;
+      return;
+    }
+    gameState.labShowBoard(count);
+    tickN++;
+    report();
+  };
+  const skipOwnSmells = () => {
+    if (!confirm("Show the coach's smell board without listing your own smells first?")) return;
+    gameState.labShowBoard();
+    tickN++;
+    report();
+  };
   $: board = lab?.board || [];
   $: smellsLeft = board.filter((s) => !s.resolved).length;
   // the next few smells to fix; the rest (and the resolved ones) on request
@@ -69,7 +96,8 @@
     look = null;
     lookRound = lab.round;
   }
-  $: if (coached && snapshot && lab && !gameState.finished && (buildFailed(snapshot) || !staleResults(snapshot)))
+  // not in a Develop step: the lab's coach reviews refactorings, and would call a behaviour change broken
+  $: if (coached && snapshot && lab && !lab.develop && !gameState.finished && (buildFailed(snapshot) || !staleResults(snapshot)))
     lookAt(snapshot);
   const lookAt = async (current, { rescue = false } = {}) => {
     const now = Date.now() / 1000;
@@ -105,7 +133,8 @@
   $: buildErrors = snapshot && buildFailed(snapshot) ? snapshot.build.errors || [] : [];
   $: buildHelp = buildErrors.length && look?.build_help && snapshot.build.time === lookBuildTime ? look.build_help : "";
   $: review = look?.move_review && look.move_review.effect !== "none" ? look.move_review : null;
-  $: broke = !!review && !review.behaviour_kept && !!snapshot && (buildFailed(snapshot) || failingTests(snapshot).length > 0);
+  $: broke =
+    !!review && !lab?.develop && !review.behaviour_kept && !!snapshot && (buildFailed(snapshot) || failingTests(snapshot).length > 0);
 
   // the hint ladder for the next smell: one rung more per "More help", or after 5 minutes
   let nowSec = Date.now() / 1000;
@@ -138,7 +167,9 @@
   let tickN = 0; // bumped after each gameState change (it mutates in place)
   $: lab = (tickN, gameState.lab);
   $: phase = lab?.phase || "refactor";
-  $: card = LAB_CARDS[phase];
+  $: card = phase === "commit" && lab?.develop ? { ...LAB_CARDS.commit, driver: LAB_CARDS.develop.commit } : LAB_CARDS[phase];
+  // a Develop round is DEVELOP ---> COMMIT
+  $: shownPhases = lab?.develop ? ["develop", "commit"] : LAB_PHASES;
   $: snapshot = $helper.status === "connected" ? snapshotOf($helper.data) : null;
   $: status = snapshot && lab ? labStatus(phase, lab.base, snapshot) : null;
   $: helperMissing = $helper.status !== "connected";
@@ -147,8 +178,15 @@
   $: navigators = gameState.players.filter((p, i) => p && i !== gameState.driver);
 
   // "In a mess?" undone back to the last commit in Test or Commit: there's no
-  // refactoring left to test or commit, so the round starts again at Refactor
-  $: if (snapshot && lab && phase !== "refactor" && !productionChanged(lab.base, snapshot)) restartRound();
+  // refactoring left to test or commit, so the round starts again at Refactor.
+  // A Develop step waits for its first change; its commit may be tests alone.
+  $: if (
+    snapshot &&
+    lab &&
+    (phase === "test" || phase === "commit") &&
+    !(lab.develop ? codeChanged : productionChanged)(lab.base, snapshot)
+  )
+    restartRound();
   const restartRound = () => {
     gameState.labRestartRound();
     tickN++;
@@ -161,6 +199,8 @@
     ? phase === "commit" && problem.reason
       ? `${problem.text}. ${problem.reason}`
       : problem.reason || problem.text
+    : boardHidden && phase === "refactor" && !status?.goalMet
+    ? "Find the smells yourselves first: read the code together and write each smell, with its line number, in smells.md."
     : status?.goalMet
     ? "Everything is ticked: click Done below."
     : card.driver;
@@ -203,6 +243,30 @@
     dispatch("switched");
   };
 
+  // ---- A Develop step (the worksheet's [Develop] hat): the pair says what
+  // will change, and failing or edited tests stop holding them until every
+  // test passes again. Offered in Refactor and Test, and opened up when a
+  // failing or edited test is what holds them.
+  $: canDevelop = (phase === "refactor" || phase === "test") && !helperMissing;
+  $: heldByTests = !!problem?.testsHold;
+  let developOpen = false;
+  let developWhat = "";
+  $: developReady = developWhat.trim().length >= 5;
+  const startDevelop = () => {
+    if (!canDevelop || !developReady) return;
+    gameState.labDevelop(developWhat);
+    developOpen = false;
+    developWhat = "";
+    tickN++;
+    report();
+  };
+  const cancelDevelop = () => {
+    if (!confirm("Back to refactoring? Failing or edited tests will hold you again.")) return;
+    gameState.labCancelDevelop();
+    tickN++;
+    report();
+  };
+
   const finish = () => {
     if (!confirm("Finish the lab? This ends the game.")) return;
     gameState.finish();
@@ -212,9 +276,9 @@
 </script>
 
 <div class="labLine" role="img" aria-label="Round {lab?.round || 1}, {card?.title}">
-  {#each LAB_PHASES as p, i}
+  {#each shownPhases as p, i}
     <span class="ph" class:on={!gameState.finished && p === phase}>[{LAB_CARDS[p].title.toUpperCase()}]</span
-    >{#if i < LAB_PHASES.length - 1}<span class="arrow"> ---> </span>{:else}<span class="arrow" title="Swap roles, next round"> --↺</span>{/if}
+    >{#if i < shownPhases.length - 1}<span class="arrow"> ---> </span>{:else}<span class="arrow" title="Swap roles, next round"> --↺</span>{/if}
   {/each}
   <span class="round">{gameState.finished ? "  Finished" : `  Round ${lab?.round || 1}`}</span>
 </div>
@@ -239,7 +303,10 @@
       held={!!problem || broke}
     >
       <HowTo item={problem || card} />
-      {#if phase === "refactor" && nextSmell}
+      {#if lab.develop}
+        <p class="developSaid">You're changing: <strong>{lab.develop}</strong></p>
+      {/if}
+      {#if phase === "refactor" && nextSmell && !boardHidden}
         <p class="nextSmell">
           Next on the smell board: <strong>{nextSmell.where}:</strong> {nextSmell.what}
           <span class="muted">(<Glossary name={nextSmell.refactoring} />)</span>
@@ -269,8 +336,8 @@
           <li class:done={line.ok === true}>
             <span class="box" aria-label={line.ok === true ? "done" : "not done"}>{line.ok === true ? "[✓]" : "[✖]"}</span>
             <span>
-              {line.text}
-              {#if line.reason}<span class="reason">{line.reason}</span>{/if}
+              {tailor(line.text, $ide)}
+              {#if line.reason}<span class="reason">{tailor(line.reason, $ide)}</span>{/if}
               <HowTo item={line} />
             </span>
           </li>
@@ -288,6 +355,38 @@
         <button class:lockedDone={locked} aria-disabled={locked} on:click={done}>{card.done}</button>
       {/if}
     </div>
+    {#if phase === "develop"}
+      <p class="finishRow">
+        <button class="quiet" on:click={cancelDevelop}>Not changing behaviour after all: back to Refactor</button>
+      </p>
+    {:else if canDevelop}
+      <div class="developRow" class:held={heldByTests}>
+        {#if !developOpen && !heldByTests}
+          <button class="quiet" on:click={() => (developOpen = true)}>Changing what the code does on purpose?</button>
+        {:else}
+          <p>
+            <strong>Changing what the code does on purpose?</strong> That's a Develop step, not a refactoring.
+            Tests that check the old behaviour will fail, and you'll change them. Say what will change, and the
+            lab stops holding you for failing or changed tests. When every test passes again, you commit and go
+            back to refactoring.
+          </p>
+          <label>
+            What will the code do differently?
+            <input
+              type="text"
+              maxlength="200"
+              placeholder="e.g. play any legal move, not just the first one"
+              bind:value={developWhat}
+              on:keydown={(e) => e.key === "Enter" && startDevelop()}
+            />
+          </label>
+          <p class="developActions">
+            <button disabled={!developReady} on:click={startDevelop}>We expect tests to fail: start the Develop step</button>
+            {#if !heldByTests}<button class="quiet" on:click={() => (developOpen = false)}>Never mind</button>{/if}
+          </p>
+        {/if}
+      </div>
+    {/if}
     <!-- a clear board makes switching to TDD the next thing to do; until then it waits under More -->
     {#if boardClear}
       <div class="switchRow">
@@ -301,7 +400,23 @@
     {/if}
 
     <!-- Everything else, folded: secondary, and only when there's something in it -->
-    {#if orientLoading}
+    {#if boardHidden}
+      <div class="ownSmells">
+        <p>
+          <strong>Smells first.</strong> The coach has a smell board ready, but find the smells yourselves
+          first: read the code together and write each smell, with its line number, in
+          <strong>{$helper.data?.smells?.path || "smells.md"}</strong>. Save it, then compare your list with the
+          coach's.
+        </p>
+        {#if ownSmellsNote}<p class="reason">{ownSmellsNote}</p>{/if}
+        <p class="developActions">
+          <button disabled={checkingOwn || helperMissing} on:click={showBoard}
+            >{checkingOwn ? "Reading smells.md…" : "We've listed our smells: show the coach's board"}</button
+          >
+          <button class="quiet" on:click={skipOwnSmells}>Skip</button>
+        </p>
+      </div>
+    {:else if orientLoading}
       <p class="muted">The coach is reading your code for smells<WaitingDots label="Reading your code" /></p>
     {:else if board.length}
       <Fold title="Smell board" note={smellsLeft ? `${smellsLeft} of ${board.length} left` : "clear ✓"}>
@@ -321,7 +436,7 @@
       </Fold>
     {/if}
 
-    {#if phase === "refactor" && hintText?.question}
+    {#if phase === "refactor" && hintText?.question && !boardHidden}
       <Fold title="Hints" note={rescueShown ? "the code for one move" : rung >= 3 ? "Think, Look for, Try" : rung >= 2 ? "Think, Look for" : "Think"}>
         <div class="ladder">
           <p><span class="label">Think:</span> {hintText.question}</p>
@@ -474,6 +589,49 @@
 
   .clear {
     color: var(--coding-green);
+  }
+
+  .ownSmells {
+    margin-top: 0.8em;
+    padding: 0.3em 0.8em;
+    border: 1px solid var(--refactoring-blue);
+    font-size: 0.9em;
+  }
+
+  .ownSmells p {
+    margin: 0.3em 0;
+  }
+
+  .developSaid {
+    margin: 0.3em 0;
+    font-size: 0.9em;
+  }
+
+  .developRow {
+    margin-top: 0.6em;
+    font-size: 0.9em;
+  }
+
+  .developRow.held {
+    padding: 0.3em 0.8em;
+    border: 1px solid var(--amber);
+  }
+
+  .developRow p {
+    margin: 0.3em 0;
+  }
+
+  .developRow input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 0.2em;
+  }
+
+  .developActions {
+    display: flex;
+    gap: 0.6em;
+    flex-wrap: wrap;
   }
 
   .switchRow {

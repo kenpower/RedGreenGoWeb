@@ -5,7 +5,8 @@
 // before each Red), but going back that far from Green or Refactor would
 // throw away this cycle's test.
 
-const GIT_CHANGES = "Open Git Changes: View > Git Changes (Ctrl+0, Ctrl+G).";
+// Visual Studio's keys and menus; MessGuide tailors them to the pair's IDE (ide.js)
+const GIT_CHANGES = "Open View > Git Changes (Ctrl+0, Ctrl+G).";
 const RUN = "Build and run all the tests (Ctrl+R, A): you should be back where you started.";
 const SAY = "Navigator: say what you were trying to do. You'll try it again in a smaller step.";
 

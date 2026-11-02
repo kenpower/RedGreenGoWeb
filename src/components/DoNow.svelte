@@ -3,6 +3,8 @@
   // and the navigator's job in one short line under it. Everything else on
   // the card supports this line.
   import Icon from "./Icon.svelte";
+  import { ide } from "../helper.js";
+  import { tailor } from "../ide.js";
 
   export let driver = ""; // the driver's name
   export let driverNumber = 1; // which --player-N colour
@@ -18,7 +20,7 @@
   <p class="action" style="--player-col: var(--player-{driverNumber})">
     <Icon icon="keyboard" size="18px" />
     <span class="role"><strong class="name">{driver}</strong> (driver):</span>
-    {action}
+    {tailor(action, $ide)}
   </p>
   {#if navigatorAction}
     <p class="navigator" style="--player-col: var(--player-{navigatorNumber})">
@@ -26,7 +28,7 @@
       <span class="role"
         ><strong class="name">{navigators.join(", ")}</strong> (navigator{navigators.length > 1 ? "s" : ""}):</span
       >
-      {navigatorAction}
+      {tailor(navigatorAction, $ide)}
     </p>
   {/if}
   <slot />

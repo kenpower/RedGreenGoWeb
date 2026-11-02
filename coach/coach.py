@@ -105,7 +105,7 @@ MAX_NEXT_STEPS = 4
 # call with coach/lab.md (no catalogue): the review against the last commit,
 # the smells it resolved, and the next smell's hint ladder.
 MAX_REFACTORINGS = 20
-MAX_SMELLS = 12  # a lab README can list a dozen refactoring steps
+MAX_SMELLS = 24  # a lab README can list a lot of refactoring steps (Connect Four: 17), plus the extras
 LAB_LOOK_FIELDS = ["decision", "note", "move_review", "smells_resolved", "hint_question", "hint_kind",
                    "driver_action", "commit_message", "rescue_code", "rescue_why", "build_help"]
 

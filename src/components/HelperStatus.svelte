@@ -1,7 +1,8 @@
 <script>
   import {
-    helper, enableHelper, disableHelper, BLOCKED_HELP, OFFLINE_HELP, HELPER_PAGE, onGithubPages, helperDownloadUrl,
+    helper, ide, enableHelper, disableHelper, BLOCKED_HELP, OFFLINE_HELP, HELPER_PAGE, onGithubPages, helperDownloadUrl,
   } from "../helper.js";
+  import { tailor } from "../ide.js";
   import { testNames } from "../rules.js";
 
   let open = false;
@@ -108,8 +109,8 @@
     <div class="panel">
       {#if $helper.status === "off"}
         <p>
-          Let the game see your tests and code as you work in Visual Studio.
-          Save the helper into your solution folder, run
+          Let the game see your tests and code as you work.
+          Save the helper into your project folder (with the .sln or CMakeLists.txt), run
           <code>python rgg_server.py</code> there, then connect.
         </p>
         <p class="muted">{@html TERMINAL_HELP}</p>
@@ -166,7 +167,7 @@
             {/each}
           </ul>
         {:else if !buildFailed}
-          <p>Connected. Run your tests in Visual Studio and they'll appear here.</p>
+          <p>{tailor("Connected. Run your tests (Test → Run All Tests) and they'll appear here.", $ide)}</p>
         {/if}
 
         {#if removedTests.length}

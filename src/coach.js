@@ -18,6 +18,7 @@ const CLASS_KEY = "RGG_CLASS_CODE";
 const MASTERY_KEY = "RGG_COACH_MASTERY"; // per browser: good verdicts in a row, per phase
 export const MASTERY_STREAK = 3; // after this many, stop praising plain good steps in that phase
 const MAX_PROBLEM = 8000; // coach_server rejects longer problem text
+const MAX_SMELLS = 24; // coach.py's MAX_SMELLS: a longer board is rejected
 
 // Bumped on every new game, so a reply that arrives afterwards is ignored.
 let generation = 0;
@@ -75,7 +76,7 @@ export function resetCoach() {
 }
 
 // A "Class code: XYZ" line in the pair's README.md gives the class code.
-const README_CLASS = /^\s*class code\s*:\s*([A-Za-z0-9-]{2,40})\s*$/im;
+const README_CLASS = /^\s*class code\s*:\s*([A-Za-z0-9_-]{2,40})\s*$/im;
 
 export function classCodeFromReadme(content) {
   return (typeof content === "string" && content.match(README_CLASS)?.[1].toUpperCase()) || "";
@@ -305,7 +306,7 @@ export function buildLabRequest({
     lab_phase: labPhase,
     cycle: Math.max(1, Math.floor(Number(round) || 1)),
     refactorings: refactorings.slice(0, 20).map((r) => String(r).slice(0, 60)),
-    board: board.slice(0, 12).map((s) => ({
+    board: board.slice(0, MAX_SMELLS).map((s) => ({
       id: String(s.id).slice(0, 64), where: String(s.where).slice(0, 200), what: String(s.what).slice(0, 300),
       refactoring: String(s.refactoring).slice(0, 60), resolved: !!s.resolved, from_readme: !!s.from_readme,
     })),

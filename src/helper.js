@@ -4,7 +4,8 @@
 // Connecting is opt-in: talking to 127.0.0.1 makes Chrome/Edge ask the visitor for
 // local-network permission, which we only want for people actually running the helper.
 // The helper opens the game with ?helper=1, which turns it on (and is remembered).
-import { writable } from "svelte/store";
+import { derived, writable } from "svelte/store";
+import { ideName } from "./ide.js";
 
 export const HELPER_URL = "http://127.0.0.1:8000";
 const ENABLED_KEY = "RGG_HELPER_ENABLED";
@@ -15,6 +16,9 @@ const RETRY_MS = 5000;
 // page reach 127.0.0.1: Chrome's Local Network Access permission was denied)
 // data: latest message from the helper, kept while offline so the UI doesn't flicker
 export const helper = writable({ status: "off", data: null });
+
+// The pair's IDE as the helper sees it (ide.js), for the keys and menus the game names.
+export const ide = derived(helper, ($helper) => ideName($helper.data?.ide?.name));
 
 // The helper also serves the game itself here, which Chrome doesn't block
 // (the page and the helper are the same origin).

@@ -2,6 +2,8 @@
   // "In a mess?": a folded guide back to code that works (mess.js). Stands out
   // while the build or a test is failing, when it's most likely needed.
   import { messGuide } from "../mess.js";
+  import { ide } from "../helper.js";
+  import { tailor } from "../ide.js";
 
   export let mode = "tdd";
   export let phase = "red";
@@ -19,7 +21,7 @@
   {#if open}
     <p class="title">{guide.title}</p>
     <ol>
-      {#each guide.steps as text}<li>{text}</li>{/each}
+      {#each guide.steps as text}<li>{tailor(text, $ide)}</li>{/each}
     </ol>
     {#if guide.files.length}
       <p class="muted">Changed: {guide.files.map((f) => f.split("/").pop()).join(", ")}</p>

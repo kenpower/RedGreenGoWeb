@@ -9,6 +9,12 @@ No setup needed: Visual Studio's Google Test adapter writes XMLGoogleTestResults
 next to the test .exe on every run, and the build writes <Project>.log; the helper
 finds both under the solution folder.
 
+A CMake project (Visual Studio Open Folder, VS Code, CLion, the command line) needs one
+line in CMakeLists.txt, so that each test run through CTest writes its GoogleTest XML:
+  gtest_discover_tests(my_tests XML_OUTPUT_DIR ${CMAKE_BINARY_DIR}/test-results)
+CTest's own Testing/*/Test.xml is no use: VS Code runs CTest once per test, and each run
+overwrites it. A CMake build leaves no log, so build errors aren't seen there yet.
+
 Run from the folder that holds your solution:
   python rgg_server.py                  opens the game at http://127.0.0.1:8000/ (after the first test run, if there are tests)
   python rgg_server.py --class-code CODE   the same, with your class code filled in (--class also works);
@@ -107,15 +113,18 @@ SSE_RETRY_MS = 2000
 SSE_PING_SECONDS = 15
 
 RESULT_FILE_NAMES = ["XMLGoogleTestResults.xml", "test_detail.xml"]  # VS adapter; plain --gtest_output=xml
+RESULT_DIR = "test-results"  # CMake's XML_OUTPUT_DIR: one <Suite>.<Test>.xml per test
+BURST_SECONDS = 1.0  # a CTest run writes one file per test: wait until the folder is quiet this long
 BUILD_ERROR = re.compile(r"^.*: (?:fatal )?error [A-Z]+\d+:.*$", re.MULTILINE)
 SOURCE_EXTENSIONS = {".cpp", ".cc", ".h", ".hpp"}
 SKIP_DIRS = {"packages", "x64", "x86", "Win32", "ARM64", "Debug", "Release", "out", "build"}
+SKIP_DIR_PREFIXES = (".", "cmake-build-")  # dot folders; CLion's build folders (GoogleTest's own sources in _deps)
 SKIP_FILES = re.compile(r"^(pch|stdafx|framework|targetver)\.(h|cpp)$", re.IGNORECASE)
 TEST_MARKER = re.compile(r"\bTEST(?:_F|_P)?\s*\(")
 MAX_FILE_BYTES = 100_000
 MAX_FILES = 50
 MAX_README_CHARS = 8_000  # the problem description sent to the coach
-CLASS_CODE_LINE = re.compile(r"^\s*class code\s*:\s*([A-Za-z0-9-]{2,40})\s*$", re.IGNORECASE | re.MULTILINE)
+CLASS_CODE_LINE = re.compile(r"^\s*class code\s*:\s*([A-Za-z0-9_-]{2,40})\s*$", re.IGNORECASE | re.MULTILINE)
 GIT_TIMEOUT_SECONDS = 3
 MAX_DIRTY = 200  # untracked build output can be thousands of files when there's no .gitignore
 
@@ -132,6 +141,8 @@ state = {
     "build": None,  # {status, errors, time} from the latest build log
     "files": [],  # [{path, kind: test|production, content, mtime}] read when results/build arrive
     "readme": None,  # {path, content} of the solution's README.md, read alongside the files
+    "smells": None,  # {path, content} of a refactor lab's smells.md, the same way
+    "ide": None,  # {name, compiler}, see detect_ide(): from where the latest results came from
     "git": None,  # see read_git()
     "project": None,  # {path, name, vsName}: the folder being watched, so the app can show a wrong one
 }
@@ -167,11 +178,17 @@ def parse_results(path):
 
 
 def find_result_files(project_dir):
-    """The VS Google Test adapter writes XMLGoogleTestResults.xml next to each test .exe."""
+    """The VS Google Test adapter writes XMLGoogleTestResults.xml next to each test .exe;
+    CMake's XML_OUTPUT_DIR one file per test in a test-results folder of the build."""
     paths = []
     for name in RESULT_FILE_NAMES:
         paths += glob.glob(os.path.join(project_dir, "**", name), recursive=True)
+    paths += glob.glob(os.path.join(project_dir, "**", RESULT_DIR, "*.xml"), recursive=True)
     return paths
+
+
+def in_result_dir(path):
+    return os.path.basename(os.path.dirname(path)) == RESULT_DIR
 
 
 def check_result_files(paths, seen_mtimes):
@@ -179,16 +196,25 @@ def check_result_files(paths, seen_mtimes):
 
     Visual Studio rewrites these files on every run, so they are only read, never deleted.
     A file holds only the tests that ran: run a few tests in Test Explorer and the others
-    are left out, not reported as skipped (see publish).
+    are left out, not reported as skipped (see publish). A CTest run writes a test-results
+    folder one file at a time, so while any of them is still changing none are read: the
+    app gets the whole run at once, never half of it.
     """
     runs = []
     now = time.time()
+    changed_files = []
     for path in paths:
         try:
             mtime = os.path.getmtime(path)
         except OSError:
             continue
-        if seen_mtimes.get(path) == mtime or now - mtime < SETTLE_SECONDS:
+        if seen_mtimes.get(path) == mtime:
+            continue
+        if in_result_dir(path) and now - mtime < BURST_SECONDS:
+            return []
+        changed_files.append((path, mtime))
+    for path, mtime in changed_files:
+        if now - mtime < SETTLE_SECONDS:
             continue
         try:
             results = parse_results(path)
@@ -224,11 +250,20 @@ def check_build_logs(paths, seen_mtimes):
     return latest
 
 
+def skip_dir(name, parent=None):
+    """Build output, packages and dot folders: never the students' own source. Given the
+    parent folder, also any CMake build folder, whatever it's called (it has a
+    CMakeCache.txt; e.g. build-autograde), and FetchContent's _deps."""
+    if name in SKIP_DIRS or name == "_deps" or name.startswith(SKIP_DIR_PREFIXES):
+        return True
+    return parent is not None and os.path.isfile(os.path.join(parent, name, "CMakeCache.txt"))
+
+
 def read_sources(project_dir):
     """Read the students' .cpp/.h files, skipping build output, packages and precompiled headers."""
     files = []
     for dirpath, dirnames, filenames in os.walk(project_dir):
-        dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS and not d.startswith("."))
+        dirnames[:] = sorted(d for d in dirnames if not skip_dir(d, dirpath))
         for name in sorted(filenames):
             if os.path.splitext(name)[1].lower() not in SOURCE_EXTENSIONS or SKIP_FILES.match(name):
                 continue
@@ -247,7 +282,7 @@ def read_sources(project_dir):
     return files
 
 
-def read_readme(project_dir):
+def read_readme(project_dir, file_name="readme.md"):
     """README.md (any case) in the solution folder, else in one of its subfolders; it
     tells the coach what the pair is building. Cut to MAX_README_CHARS."""
     def find_in(folder):
@@ -256,13 +291,13 @@ def read_readme(project_dir):
         except OSError:
             return None
         return next((os.path.join(folder, n) for n in names
-                     if n.lower() == "readme.md" and os.path.isfile(os.path.join(folder, n))), None)
+                     if n.lower() == file_name and os.path.isfile(os.path.join(folder, n))), None)
 
     path = find_in(project_dir)
     if path is None:
         for name in sorted(os.listdir(project_dir)):
             sub = os.path.join(project_dir, name)
-            if os.path.isdir(sub) and name not in SKIP_DIRS and not name.startswith("."):
+            if os.path.isdir(sub) and not skip_dir(name, project_dir):
                 path = find_in(sub)
                 if path:
                     break
@@ -272,6 +307,12 @@ def read_readme(project_dir):
         "path": os.path.relpath(path, project_dir).replace("\\", "/"),
         "content": read_text(path)[:MAX_README_CHARS],
     }
+
+
+def read_smells(project_dir):
+    """A refactor lab's smells.md (any case), found like README.md: the smells the pair
+    listed themselves, before the game shows the coach's smell board."""
+    return read_readme(project_dir, "smells.md")
 
 
 def find_vs_project(project_dir):
@@ -284,6 +325,79 @@ def find_vs_project(project_dir):
             if found:
                 return found[0]
     return None
+
+
+CMAKE_PROJECT_LINE = re.compile(r"^\s*project\s*\(\s*([A-Za-z0-9_.+-]+)", re.IGNORECASE | re.MULTILINE)
+
+
+def find_cmake_project(project_dir):
+    """The CMakeLists.txt nearest the top of the folder (up to 2 levels below it), as
+    {path, name, xmlOutput}: name from its project(...) line, xmlOutput False when it
+    discovers GoogleTest tests without writing their results (no XML_OUTPUT_DIR). None
+    if there is none."""
+    for depth in range(3):
+        pattern = os.path.join(project_dir, *["*"] * depth, "CMakeLists.txt")
+        found = sorted(p for p in glob.glob(pattern) if os.path.isfile(p))
+        if found:
+            text = read_text(found[0])
+            name = CMAKE_PROJECT_LINE.search(text)
+            return {
+                "path": found[0],
+                "name": name.group(1) if name else None,
+                "xmlOutput": "gtest_discover_tests" not in text or "XML_OUTPUT_DIR" in text,
+            }
+    return None
+
+
+CMAKE_COMPILER_ID = re.compile(r'set\(CMAKE_CXX_COMPILER_ID "([^"]*)"\)')
+COMPILERS = {"GNU": "gcc", "MSVC": "msvc", "Clang": "clang", "AppleClang": "clang"}
+
+
+def cmake_build_root(path, project_dir):
+    """The CMake build folder (the one with CMakeCache.txt) a results file is in, or None."""
+    folder = os.path.dirname(os.path.abspath(path))
+    top = os.path.abspath(project_dir)
+    while folder.startswith(top):
+        if os.path.isfile(os.path.join(folder, "CMakeCache.txt")):
+            return folder
+        if folder == top:
+            break
+        folder = os.path.dirname(folder)
+    return None
+
+
+def detect_ide(project_dir, results_path=None):
+    """Which IDE (and compiler) the pair works in, so the game can give its keys and menus:
+    {name: visualstudio|vscode|clion|commandline|None, compiler: msvc|gcc|clang|None}.
+    The best sign is where the latest test results came from; before any, the project's
+    own folders (.sln, .vs, .idea, .vscode). Reads only."""
+    name = compiler = None
+    if results_path:
+        parts = os.path.relpath(results_path, project_dir).replace("\\", "/").split("/")
+        root = cmake_build_root(results_path, project_dir)
+        if os.path.basename(results_path) == "XMLGoogleTestResults.xml":
+            name, compiler = "visualstudio", "msvc"  # Visual Studio's Google Test adapter
+        elif any(p.startswith("cmake-build-") for p in parts):
+            name = "clion"
+        elif parts[:2] == ["out", "build"] or (root and os.path.isdir(
+                os.path.join(root, ".cmake", "api", "v1", "query", "client-MicrosoftVS"))):
+            name = "visualstudio"
+        elif root and os.path.isdir(os.path.join(root, ".cmake", "api", "v1", "query", "client-vscode")):
+            name = "vscode"
+        elif root:
+            name = "commandline"
+        if root and not compiler:
+            for path in glob.glob(os.path.join(root, "CMakeFiles", "*", "CMakeCXXCompiler.cmake")):
+                found = CMAKE_COMPILER_ID.search(read_text(path))
+                if found:
+                    compiler = COMPILERS.get(found.group(1))
+                    break
+    if not name:
+        has = lambda folder: os.path.isdir(os.path.join(project_dir, folder))  # noqa: E731
+        signs = [("visualstudio", find_vs_project(project_dir)), ("visualstudio", has(".vs")),
+                 ("clion", has(".idea")), ("vscode", has(".vscode"))]
+        name = next((ide for ide, sign in signs if sign), None)
+    return {"name": name, "compiler": compiler}
 
 
 class GitError(Exception):
@@ -312,7 +426,7 @@ def is_source_path(path):
     """Same rule as read_sources: a .cpp/.h outside build output, packages and dot folders."""
     *dirs, name = path.split("/")
     return (os.path.splitext(name)[1].lower() in SOURCE_EXTENSIONS and not SKIP_FILES.match(name)
-            and not any(d in SKIP_DIRS or d.startswith(".") for d in dirs))
+            and not any(skip_dir(d) for d in dirs))
 
 
 def read_git(project_dir):
@@ -388,7 +502,7 @@ def beep(runs):
     winsound.MessageBeep(winsound.MB_OK if all_passed else winsound.MB_ICONHAND)
 
 
-def publish(runs, build, files, readme, git):
+def publish(runs, build, files, readme, git, smells=None):
     """Apply new results/build/files as one change, so the app never sees a half-updated state.
 
     Tests are kept even when a later run leaves them out, since a partial run in Test
@@ -406,10 +520,13 @@ def publish(runs, build, files, readme, git):
                     test["latest"] = False
             for r in results:
                 state["tests"][r["name"]] = {**r, "run": state["run"], "file": file, "latest": True}
+        if runs:
+            state["ide"] = detect_ide(config["project"], runs[-1][2])
         if build:
             state["build"] = build
         state["files"] = files
         state["readme"] = readme
+        state["smells"] = smells
         state["version"] += 1
         changed.notify_all()
     if runs:
@@ -441,7 +558,7 @@ def reload_from_disk(clear):
             state["build"] = None
             state["runTime"] = None
         publish(runs, build, read_sources(config["project"]), read_readme(config["project"]),
-                read_git(config["project"]))
+                read_git(config["project"]), read_smells(config["project"]))
 
 
 def watch(beep_on_results):
@@ -463,8 +580,9 @@ def watch(beep_on_results):
 
             if runs or build:
                 publish(runs, build, read_sources(config["project"]), read_readme(config["project"]),
-                        read_git(config["project"]))
-                for _, results, _ in runs:
+                        read_git(config["project"]), read_smells(config["project"]))
+                if runs:  # one line per run, even when CTest wrote a file per test
+                    results = [r for _, run_results, _ in runs for r in run_results]
                     print("tests: " + ", ".join(f'{r["name"]}={r["status"]}' for r in results), flush=True)
                 if build:
                     print(f'build {build["status"]}: {len(build["errors"])} error(s)', flush=True)
@@ -487,6 +605,8 @@ def snapshot():
             "build": state["build"],
             "files": state["files"],
             "readme": state["readme"],
+            "smells": state["smells"],
+            "ide": state["ide"],
             "git": state["git"],
             "project": state["project"],
         }
@@ -617,7 +737,8 @@ def open_game_unless_connected(url):
     with changed:
         has_tests = any(f["kind"] == "test" for f in state["files"])
     if has_tests and not have_results.wait(timeout=1):
-        print(f"Waiting for your first test run, then the game opens. In Visual Studio: Test > Run All Tests."
+        print(f"Waiting for your first test run, then the game opens. Run all your tests"
+              f" (Visual Studio: Test > Run All Tests)."
               f" (Opening anyway in {RESULTS_WAIT_SECONDS} s.)", flush=True)
         if not have_results.wait(timeout=RESULTS_WAIT_SECONDS):
             print("No test results yet - opening the game anyway. Run your tests and it will pick them up.",
@@ -633,7 +754,7 @@ def open_game_unless_connected(url):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Feed Visual Studio test results to RedGreenGo")
+    parser = argparse.ArgumentParser(description="Feed GoogleTest results (Visual Studio or CMake) to RedGreenGo")
     parser.add_argument("--project", default=".",
                         help="folder holding the solution and source files (default: current folder)")
     parser.add_argument("--results", action="append", default=[],
@@ -655,19 +776,29 @@ def main():
     with changed:
         state["files"] = read_sources(project_dir)
         state["readme"] = read_readme(project_dir)
+        state["smells"] = read_smells(project_dir)
+        state["ide"] = detect_ide(project_dir)
         state["git"] = read_git(project_dir)
         vs_project = find_vs_project(project_dir)
+        cmake = None if vs_project else find_cmake_project(project_dir)
         state["project"] = {
             "path": project_dir,
             "name": os.path.basename(project_dir.rstrip("\\/")) or project_dir,
-            "vsName": os.path.splitext(os.path.basename(vs_project))[0] if vs_project else None,
+            # the app shows it as the project's name (a CMake project's too)
+            "vsName": os.path.splitext(os.path.basename(vs_project))[0] if vs_project else (cmake or {}).get("name"),
         }
         state["version"] = 1
 
     vs_name = state["project"]["vsName"]
     print(f"Project: {project_dir}{f' ({vs_name})' if vs_name else ''}, {len(state['files'])} source files")
-    if not vs_project:
-        print("  WARNING: No Visual Studio solution or project found here. Run the helper from your project folder.")
+    if not (vs_project or cmake):
+        print("  WARNING: No Visual Studio solution or CMakeLists.txt found here. Run the helper from your project folder.")
+    if cmake and not cmake["xmlOutput"]:
+        print(f"  WARNING: {os.path.relpath(cmake['path'], project_dir)} doesn't save test results, so the game"
+              " can't see them. Add XML_OUTPUT_DIR to gtest_discover_tests, e.g.\n"
+              "    gtest_discover_tests(my_tests XML_OUTPUT_DIR ${CMAKE_BINARY_DIR}/test-results)")
+    if state["ide"]["name"]:
+        print(f"  IDE: {state['ide']['name']} (the game's keys and menus follow your latest test run)")
     if state["readme"]:
         print(f"  Problem description: {state['readme']['path']}")
     git = state["git"]
@@ -676,7 +807,8 @@ def main():
     else:
         print(f"  Git: {git['error'] or 'not a git repository'}")
     if not (args.results or find_result_files(project_dir)):
-        print("  No test results yet - run your tests in Visual Studio's Test Explorer.")
+        print("  No test results yet - run all your tests (Visual Studio: Test Explorer; VS Code: the Testing view;"
+              " CLion: All CTest).")
     class_code, source = args.class_code, "--class-code"
     if not class_code and state["readme"]:
         found = CLASS_CODE_LINE.search(state["readme"]["content"])

@@ -9,7 +9,8 @@
   import WaitingDots from "./WaitingDots.svelte";
   import HowTo from "./HowTo.svelte";
   import Glossary from "./Glossary.svelte";
-  import { helper } from "../helper.js";
+  import { helper, ide } from "../helper.js";
+  import { tailor } from "../ide.js";
   import { lockReason as lockReasonFor } from "../lock.js";
 
   const dispatch = createEventDispatcher();
@@ -150,7 +151,7 @@
           box: "infoBox",
           heading: "Run your tests first",
           message: "Run your tests in Visual Studio so the game can see where you are.",
-          driver: "Build the solution and run all the tests in Test Explorer.",
+          driver: "Build and run all the tests: Test → Run All Tests (Ctrl+R, A).",
           navigator: "Check the badge at the top of the page says the code is connected.",
           howto: "run_tests",
           wait: "Waiting for your test run",
@@ -307,7 +308,7 @@
     {#if start}
       <div class={start.box}>
         <p class="marker">{start.heading}</p>
-        <p>{start.message}</p>
+        <p>{tailor(start.message, $ide)}</p>
         {#if start.list?.length}
           <ul>
             {#each start.list as item}<li>{item}</li>{/each}
@@ -396,8 +397,8 @@
                     >{item.extra ? "   " : BOX[item.done]}</span
                   >
                   <span class="itemText">
-                    {item.text}
-                    {#if item.detail}<span class="detail">{item.detail}</span>{/if}
+                    {tailor(item.text, $ide)}
+                    {#if item.detail}<span class="detail">{tailor(item.detail, $ide)}</span>{/if}
                     <HowTo {item} />
                   </span>
                 </li>
@@ -418,8 +419,8 @@
                   >{BOX[item.done]}</span
                 >
                 <span class="itemText">
-                  {item.text}
-                  {#if item.reason}<span class="reason">{item.reason}</span>{/if}
+                  {tailor(item.text, $ide)}
+                  {#if item.reason}<span class="reason">{tailor(item.reason, $ide)}</span>{/if}
                   <HowTo {item} />
                 </span>
               </li>
@@ -428,7 +429,7 @@
         {:else if !start && liveLines.length}
           <ul class="live" class:amberLive title={focusTest ? `This step is about ${focusTest}` : ""}>
             {#each liveLines as line}
-              <li class="ok-{line.ok}">{line.text}</li>
+              <li class="ok-{line.ok}">{tailor(line.text, $ide)}</li>
             {/each}
           </ul>
         {/if}
@@ -547,7 +548,7 @@
             </div>
           {/if}
           {#each liveAdvice as text}
-            <p class="advice"><span class="adviceLabel">Advice:</span> {text}</p>
+            <p class="advice"><span class="adviceLabel">Advice:</span> {tailor(text, $ide)}</p>
           {/each}
           {#if showHint}
             <div><HintLabel text={hint} /></div>
@@ -582,8 +583,8 @@
                   >{item.extra ? "   " : BOX[item.done]}</span
                 >
                 <span class="itemText">
-                  {item.text}
-                  {#if item.detail}<span class="detail">{item.detail}</span>{/if}
+                  {tailor(item.text, $ide)}
+                  {#if item.detail}<span class="detail">{tailor(item.detail, $ide)}</span>{/if}
                   {#if item.why}<span class="why">{item.why}</span>{/if}
                   <HowTo {item} />
                 </span>

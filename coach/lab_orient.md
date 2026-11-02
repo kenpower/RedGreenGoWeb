@@ -7,7 +7,7 @@ Return:
 - `code_state`: "partial" if the tests pass, otherwise the closest of "empty", "scaffold", "partial", "looks_done".
 - `warnings`: at most 3 short sentences, only for: tests failing as the lab starts, the build failing, uncommitted work (when the notes say so). Otherwise an empty list.
 - `first_move`: the smell you'd start with, in words, at most 20 words (e.g. "Start with the magic number 0.2 in priceFor: name it.").
-- `smells`: 3 to 12 smells, in the order the pair should fix them. Each:
+- `smells`: 3 to 24 smells, in the order the pair should fix them. Each:
   - `id`: a short kebab-case id, unique (e.g. "magic-discount", "long-price-for").
   - `where`: the function (and file) it's in, e.g. "priceFor in cart.cpp".
   - `what`: one sentence, at most 20 words, saying what's wrong in plain words, no code.

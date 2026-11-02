@@ -8,9 +8,10 @@
   import { fly } from "svelte/transition";
   import HelperStatus from "./components/HelperStatus.svelte";
   import {
-    helper, startHelper, resetHelper, enableHelper, BLOCKED_HELP, OFFLINE_HELP, HELPER_PAGE, onGithubPages,
+    helper, ide, startHelper, resetHelper, enableHelper, BLOCKED_HELP, OFFLINE_HELP, HELPER_PAGE, onGithubPages,
     helperDownloadUrl,
   } from "./helper.js";
+  import { tailor } from "./ide.js";
   import { testNames, snapshotOf } from "./rules.js";
   import {
     startCoach, resetCoach, getClassCode, setClassCode, linkedClassCode, classCodeFromReadme, checkClassCode,
@@ -82,7 +83,7 @@
     gameState.problem = problem.trim();
     gameState.enforceRules = enforceRules;
     setClassCode(classCode);
-    if (labChoice) gameState.startLab(labChoice.refactorings, snapshotOf($helper.data));
+    if (labChoice) gameState.startLab(labChoice.refactorings, snapshotOf($helper.data), $helper.data?.smells?.content ?? null);
     else gameState.start();
     gameState = gameState;
   };
@@ -252,7 +253,7 @@
           {:else if !helperConnected}
             <span class="hint">Run <code>python rgg_server.py</code> in your project folder to start</span>
           {:else if needsTestRun}
-            <span class="hint">Run your tests in Visual Studio's Test Explorer first</span>
+            <span class="hint">{tailor("Run all your tests first: Test → Run All Tests (Ctrl+R, A)", $ide)}</span>
           {/if}
         </div>
         {#if !helperConnected}
