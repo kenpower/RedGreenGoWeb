@@ -254,6 +254,43 @@ class BrowserConnectionTests(unittest.TestCase):
         self.assertEqual(h.sse_clients, 1)
 
 
+class RescanTests(unittest.TestCase):
+    """Between builds: a saved change reaches the app without a build or a test run."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        h.config["project"] = self.dir
+        h.state.update(tests={}, run=0, runTime=None, version=0, files=[], smells=None, git=None, build=None)
+        self.code = Path(self.dir, "ConnectFour.cpp")
+        self.save("int play() { return 0; }")
+        h.rescan_sources(self.dir)
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def save(self, content, path=None):
+        (path or self.code).write_text(content)
+
+    def test_a_saved_change_is_published_without_a_build(self):
+        h.state["build"] = {"status": "succeeded", "errors": [], "time": 1}
+        version = h.state["version"]
+        self.save("int play() { return NoMove; }")
+        self.assertTrue(h.rescan_sources(self.dir))
+        self.assertEqual(h.state["files"][0]["content"], "int play() { return NoMove; }")
+        self.assertGreater(h.state["version"], version)
+        self.assertEqual(h.state["build"]["status"], "succeeded")  # kept: no new build
+
+    def test_nothing_saved_publishes_nothing(self):
+        version = h.state["version"]
+        self.assertFalse(h.rescan_sources(self.dir))
+        self.assertEqual(h.state["version"], version)
+
+    def test_smells_md_being_written_is_published(self):
+        self.save("- line 3: magic number", Path(self.dir, "smells.md"))
+        self.assertTrue(h.rescan_sources(self.dir))
+        self.assertIn("magic number", h.state["smells"]["content"])
+
+
 class WaitTests(unittest.TestCase):
     def test_the_game_opens_after_at_most_10_seconds(self):
         self.assertLessEqual(h.RESULTS_WAIT_SECONDS, 10)

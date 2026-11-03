@@ -111,6 +111,22 @@ describe("labTestChanges: test edits that only follow the production code are al
   });
 });
 
+describe("labStatus: why an item isn't ticked", () => {
+  const why = (status) => status.lines.map((l) => l.why || null);
+  test("an unchanged refactor says the app compared the production code, a ticked item says nothing", () => {
+    const base = snap();
+    expect(why(labStatus("refactor", base, base))[0]).toMatch(/compares the production code/);
+    expect(why(labStatus("refactor", base, base))[1]).toBe(null);
+  });
+  test("an uncommitted round names the commit it's still on and the files git lists", () => {
+    const base = { ...snap(), git: { repo: true, head: "abcdef1234", dirtySource: [] } };
+    const now = { ...snap(), git: { repo: true, head: "abcdef1234", dirtySource: ["ConnectFour.cpp"] } };
+    const [commit, left] = why(labStatus("commit", base, now));
+    expect(commit).toMatch(/abcdef12/);
+    expect(left).toMatch(/ConnectFour\.cpp/);
+  });
+});
+
 describe("labStatus: each phase's Done gate", () => {
   const base = snap({ git: { repo: true, head: "aaa", dirtySource: [] } });
 
@@ -136,7 +152,12 @@ describe("labStatus: each phase's Done gate", () => {
     expect(red.lines[1].reason).toMatch(/undo the last change/);
     const stale = snap();
     stale.files[1].mtime = 20; // saved after the run
-    expect(labStatus("test", base, stale).lines[1]).toEqual({ text: "Run all the tests (Ctrl+R, A): every test passes", ok: null, howto: "run_tests" });
+    expect(labStatus("test", base, stale).lines[1]).toEqual({
+      text: "Run all the tests (Ctrl+R, A): every test passes",
+      ok: null,
+      howto: "run_tests",
+      why: expect.stringMatching(/older than your last saved change/),
+    });
     const broken = labStatus("test", base, snap({ build: { status: "failed", time: 20, errors: ["e"] } }));
     expect(broken.lines[1].ok).toBe(false);
   });

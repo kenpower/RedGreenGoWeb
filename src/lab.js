@@ -141,21 +141,50 @@ const testsUnchanged = (base, now) => {
 };
 
 // A lab phase's to-do list, against `base` (the code at the last commit, or at
-// the start): [{text, ok, reason?}]. The text is the task and never changes;
+// the start): [{text, ok, reason?, why?}]. The text is the task and never changes;
 // ok true = done, false = a problem (reason says what), null = not done yet.
+// `why`, on an item not done: how the app checked it, for "Why can't we go on?".
 // goalMet when every item is done, so Done may be clicked.
+const WHY_UNCHANGED =
+  "The app compares the production code (the .cpp and .h files that aren't tests) with the last commit " +
+  "(or the start of the lab) and sees no difference. Saved your files? The helper picks up a save within about 5 seconds.";
+const whyRun = (now) =>
+  buildFailed(now)
+    ? "The newest build log has errors."
+    : !currentTests(now).length
+    ? "The app hasn't seen any test results yet."
+    : staleResults(now)
+    ? "The test results are older than your last saved change, so they don't show the code as it is now: run the tests again."
+    : `The last run has failing tests: ${failingTests(now).join(", ")}.`;
+
 export function labStatus(phase, base, now) {
   if (!now) return null;
   const lines = [];
   const testsLine = { text: "Keep the tests the same (renames are fine)", ok: true };
-  if (!testsUnchanged(base, now))
-    Object.assign(testsLine, { ok: false, reason: "You changed what a test checks: put it back", testsHold: true });
+  if (!testsUnchanged(base, now)) {
+    const c = labTestChanges(base, now);
+    const changed = [
+      ...c.added.map((n) => `${n} (added)`),
+      ...c.removed.map((n) => `${n} (removed)`),
+      ...c.changed.map((n) => `${n} (changed)`),
+    ];
+    Object.assign(testsLine, {
+      ok: false,
+      reason: "You changed what a test checks: put it back",
+      testsHold: true,
+      why:
+        `Compared with the last commit: ${changed.join(", ")}. A rename, or a new constant in place of a literal, ` +
+        "carried into a test is allowed; any other change to a test counts as changing what it checks.",
+    });
+  }
   if (phase === "refactor") {
-    lines.push({ text: "Make one refactoring in the production code", ok: productionChanged(base, now) || null });
+    const made = productionChanged(base, now);
+    lines.push({ text: "Make one refactoring in the production code", ok: made || null, ...(made ? {} : { why: WHY_UNCHANGED }) });
     lines.push(testsLine);
   } else if (phase === "test") {
     lines.push(testsLine);
     const run = { text: "Run all the tests (Ctrl+R, A): every test passes", ok: true, howto: "run_tests" };
+    if (buildFailed(now) || staleResults(now) || !currentTests(now).length || failingTests(now).length) run.why = whyRun(now);
     if (buildFailed(now)) Object.assign(run, { ok: false, reason: "The code doesn't build: fix it, or undo the last change" });
     else if (staleResults(now) || !currentTests(now).length) run.ok = null;
     else if (failingTests(now).length)
@@ -168,8 +197,15 @@ export function labStatus(phase, base, now) {
   } else if (phase === "develop") {
     // The pair said they're changing behaviour: failing tests and edited
     // tests are expected, so nothing here holds them; every test green ends it.
-    lines.push({ text: "Change what the code does, and the tests that check the old behaviour", ok: codeChanged(base, now) || null });
+    const changed = codeChanged(base, now);
+    lines.push({
+      text: "Change what the code does, and the tests that check the old behaviour",
+      ok: changed || null,
+      ...(changed ? {} : { why: WHY_UNCHANGED.replace("that aren't tests", "and the tests") }),
+    });
     const run = { text: "Run all the tests (Ctrl+R, A): every test passes again", ok: true, howto: "run_tests" };
+    if (buildFailed(now) || staleResults(now) || !currentTests(now).length || failingTests(now).length || !changed)
+      run.why = changed ? whyRun(now) : "Nothing has changed since the last commit yet, so a run says nothing about this step.";
     // tests written first (e.g. for a class that isn't there yet) don't build: that's this step's red
     if (buildFailed(now))
       Object.assign(run, {
@@ -185,10 +221,18 @@ export function labStatus(phase, base, now) {
     if (!git?.repo) lines.push({ text: "Commit if you can (no git repository, so it can't be checked)", ok: true });
     else {
       const moved = !!git.head && git.head !== base?.git?.head;
-      lines.push({ text: "Commit, with a message that names the refactoring", ok: moved || null, howto: "commit" });
+      const commit = { text: "Commit, with a message that names the refactoring", ok: moved || null, howto: "commit" };
+      if (!moved)
+        commit.why =
+          `git's newest commit is still the one this round started from (${String(base?.git?.head || "none").slice(0, 8)}). ` +
+          "Committed in another folder or repository, or not pushed the commit button yet? The helper checks git every 5 seconds.";
+      lines.push(commit);
       const dirty = uncommittedFiles(now);
       const left = { text: "Leave nothing uncommitted", ok: !dirty.length || (moved ? false : null) };
-      if (dirty.length) left.reason = `Not committed yet: ${dirty.slice(0, 3).join(", ")}${dirty.length > 3 ? "…" : ""}`;
+      if (dirty.length) {
+        left.reason = `Not committed yet: ${dirty.slice(0, 3).join(", ")}${dirty.length > 3 ? "…" : ""}`;
+        left.why = `git status lists these source files as changed since the last commit: ${dirty.join(", ")}.`;
+      }
       lines.push(left);
     }
   }
@@ -212,7 +256,7 @@ export const LAB_CARDS = {
   },
   commit: {
     title: "Commit",
-    driver: "Commit, with a message that names the refactoring (e.g. 'Extract Function: priceFor').",
+    driver: "Commit, with a message that names the refactoring and what it changed (e.g. 'Extract Function: …').",
     navigator: "Check nothing else slipped into the commit. Then you swap roles.",
     howto: "commit",
     done: "Done: committed",

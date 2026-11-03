@@ -760,6 +760,59 @@ test("a_lab_refactoring_counts_once_when_its_round_is_committed_in_the_labs_spel
   expect(g.progress().refactorings).toEqual(g.refactorings);
 });
 
+test("the_coachs_commit_message_is_kept_for_the_round_and_survives_a_refresh", () => {
+  let g = new GameState();
+  g.startLab(["Extract Function"], { git: { repo: true, head: "a" } });
+  g.labReview({ ...review("Extract Function"), commit_message: "Extract Function: dropRow" });
+  g.labReview(review("Extract Function")); // a later look without one keeps it
+  expect(GameState.recoverSavedGame().lab.commitMessage).toBe("Extract Function: dropRow");
+  commitRound(g, "b", "Extract Function: dropRow");
+  expect(g.lab.commitMessage).toBe(null); // the next round starts without one
+});
+
+test("the_same_refactoring_in_round_after_round_keeps_the_lab_moving", () => {
+  let g = new GameState();
+  g.startLab(["Extract Function"], { git: { repo: true, head: "a" } });
+  g.labReview(review("Extract Function"));
+  commitRound(g, "b", "Extract Function: priceFor");
+  g.labReview(review("Extract Function"));
+  commitRound(g, "c", "Extract Function: taxFor");
+  expect(g.lab).toMatchObject({ phase: "refactor", round: 3, rounds: 2, commits: 2 });
+  expect(g.refactorings).toEqual({ "Extract Function": 2 });
+});
+
+test("going_on_anyway_in_the_lab_is_an_override_that_moves_on_and_holds_the_round", () => {
+  let g = new GameState();
+  g.startLab(["Extract Function"], { git: { repo: true, head: "a" } });
+  g.labOverride({ git: { repo: true, head: "a" } }, ["Make one refactoring in the production code"]);
+  expect(g.lab).toMatchObject({ phase: "test", round: 1, forced: true });
+  expect(g.overrides).toBe(1);
+  expect(g.pendingEvents.filter((e) => e.kind === "override").map((e) => e.detail)).toEqual([
+    "refactor: Make one refactoring in the production code",
+  ]);
+  g.labDone(null); // commit
+  g.labOverride({ git: { repo: true, head: "a" } }, ["Commit, with a message that names the refactoring"]);
+  expect(g.lab).toMatchObject({ phase: "refactor", round: 2, forced: false });
+  expect(g.overrides).toBe(2);
+});
+
+test("going_on_anyway_from_a_worksheet_commit_can_stay_on_the_step", () => {
+  let g = new GameState();
+  const steps = [
+    { id: "2.1", hat: "refactor", title: "Rename" },
+    { id: "2.2", hat: "refactor", title: "Extract" },
+  ];
+  g.startLab(["Extract Function"], { git: { repo: true, head: "a" } }, null, steps);
+  g.labDone(null); // test
+  g.labDone(null); // commit
+  g.labOverride({ git: { repo: true, head: "a" } }, ["Commit"], { stayOnStep: true });
+  expect(g.lab).toMatchObject({ phase: "refactor", round: 2, step: "2.1" });
+  g.labDone(null);
+  g.labDone(null);
+  g.labOverride({ git: { repo: true, head: "a" } }, ["Commit"]);
+  expect(g.lab).toMatchObject({ round: 3, step: "2.2" });
+});
+
 test("a_lab_round_that_broke_a_test_or_changed_behaviour_counts_no_refactoring", () => {
   let g = new GameState();
   g.startLab([], { git: { repo: true, head: "a" } });

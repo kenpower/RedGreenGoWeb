@@ -378,6 +378,8 @@ export class GameState {
       }
       if (!lab.develop) this.#countRefactoring(committed ? git.headMessage : "");
       lab.roundMove = null;
+      lab.commitMessage = null;
+      lab.forced = false;
       lab.rounds++;
       lab.round++;
       lab.base = snapshot;
@@ -390,6 +392,22 @@ export class GameState {
       }
       this.#swapPairRoles();
     }
+    this.#save();
+  }
+
+  // Done although the to-do list isn't all ticked ("Go on anyway"): counted as
+  // an override and recorded for the teacher with what wasn't ticked, then on
+  // to the next phase as if Done had been clicked.
+  labOverride(snapshot, unticked = [], options = {}) {
+    const lab = this.lab;
+    if (!lab || this.finished) return;
+    this.overrides++;
+    const what = unticked.map((t) => String(t)).join("; ").slice(0, 200);
+    this.addEvent("override", `${lab.phase}: ${what || "nothing unticked"}`);
+    const round = lab.round;
+    this.labDone(snapshot, options);
+    // still this round: it doesn't go back to Refactor for want of a change the app can't see
+    if (lab.round === round) lab.forced = true;
     this.#save();
   }
 
@@ -466,6 +484,8 @@ export class GameState {
   // board (a `smell` event each), and the move counts for the teacher.
   labReview(answer) {
     if (!this.lab || !answer) return;
+    // kept with the round, so the Commit card still suggests it after a refresh
+    if (answer.commit_message) this.lab.commitMessage = String(answer.commit_message).slice(0, 120);
     for (const id of answer.smells_resolved || []) {
       const smell = (this.lab.board || []).find((s) => s.id === id && !s.resolved);
       if (!smell) continue;

@@ -167,6 +167,7 @@
 
   let tickN = 0; // bumped after each gameState change (it mutates in place)
   $: lab = (tickN, gameState.lab);
+  $: finished = (tickN, gameState.finished);
 
   // ---- The worksheet (worksheet.js): the README's numbered steps, one per
   // round. The step's details come from the README as it is now; which step,
@@ -189,15 +190,23 @@
   };
   const sentence = (text) => (text ? text[0].toUpperCase() + text.slice(1) + (/[.?!:]$/.test(text) ? "" : ".") : "");
   $: phase = lab?.phase || "refactor";
-  $: card = phase === "commit" && lab?.develop ? { ...LAB_CARDS.commit, driver: LAB_CARDS.develop.commit } : LAB_CARDS[phase];
+  // the commit's example names this round's refactoring when the coach saw one
+  // (lab.roundMove is saved, so it survives a refresh; the coach's `look` doesn't)
+  $: card =
+    phase === "commit" && lab?.develop
+      ? { ...LAB_CARDS.commit, driver: LAB_CARDS.develop.commit }
+      : phase === "commit" && lab?.roundMove
+      ? { ...LAB_CARDS.commit, driver: LAB_CARDS.commit.driver.replace("Extract Function", lab.roundMove) }
+      : LAB_CARDS[phase];
   // a Develop round is DEVELOP ---> COMMIT
   $: shownPhases = lab?.develop ? ["develop", "commit"] : LAB_PHASES;
   $: snapshot = $helper.status === "connected" ? snapshotOf($helper.data) : null;
   $: status = snapshot && lab ? labStatus(phase, lab.base, snapshot) : null;
   $: helperMissing = $helper.status !== "connected";
   $: locked = helperMissing || !status?.goalMet;
-  $: driver = gameState.players[gameState.driver];
-  $: navigators = gameState.players.filter((p, i) => p && i !== gameState.driver);
+  // tickN: gameState mutates in place, so the roles swapped at a commit need it to show
+  $: driver = (tickN, gameState.players[gameState.driver]);
+  $: navigators = (tickN, gameState.players.filter((p, i) => p && i !== gameState.driver));
 
   // "In a mess?" undone back to the last commit in Test or Commit: there's no
   // refactoring left to test or commit, so the round starts again at Refactor.
@@ -206,6 +215,7 @@
     snapshot &&
     lab &&
     (phase === "test" || phase === "commit") &&
+    !lab.forced &&
     !(lab.develop ? codeChanged : productionChanged)(lab.base, snapshot)
   )
     restartRound();
@@ -217,18 +227,21 @@
   // ---- The card's one "do this now" (DoNow): the first problem on the
   // to-do list, else the phase's task, else (all ticked) Done.
   $: problem = status?.lines.find((l) => l.ok === false);
+  // listing their own smells is the whole task for now: the refactor to-do
+  // list, Done and Develop wait until the board is shown (or skipped)
+  $: smellsFirst = !problem && boardHidden && phase === "refactor" && !status?.goalMet;
   $: doNow = problem
     ? phase === "commit" && problem.reason
       ? `${problem.text}. ${problem.reason}`
       : problem.reason || problem.text
-    : boardHidden && phase === "refactor" && !status?.goalMet
+    : smellsFirst
     ? "Find the smells yourselves first: read the code together and write each smell, with its line number, in smells.md."
     : currentStep && (phase === "refactor" || phase === "develop") && !status?.goalMet
     ? `Step ${currentStep.id}: ${sentence(stepHeadline(currentStep))}`
     : status?.goalMet
     ? "Everything is ticked: click Done below."
     : card.driver;
-  $: navigatorNumber = gameState.players.findIndex((p, i) => p && i !== gameState.driver) + 1;
+  $: navigatorNumber = (tickN, gameState.players).findIndex((p, i) => p && i !== gameState.driver) + 1;
   $: nextSmell = board.find((s) => !s.resolved);
   $: boardClear = board.length > 0 && !smellsLeft;
   const EFFECT_TEXT = { better: "better", same: "about the same", worse: "harder to read" };
@@ -251,8 +264,26 @@
     waiting = true;
     if (await refreshHelper()) await tick(); // the code as it is on disk now
     waiting = false;
-    if (!status?.goalMet) return;
+    if (!status?.goalMet) {
+      whyOpen = true; // a locked Done answers with the reasons
+      return;
+    }
     gameState.labDone(snapshot, options);
+    tickN++;
+    report();
+  };
+
+  // ---- "Why can't we go on?": each unticked item with how the app checked
+  // it, and "Go on anyway" when the app has it wrong (an override, for the teacher)
+  let whyOpen = false;
+  $: unticked = status?.lines.filter((l) => l.ok !== true) || [];
+  $: phase, (whyOpen = false); // a new phase: its own reasons, asked for afresh
+  $: if (!locked) whyOpen = false;
+  // options as for Done: {stayOnStep} for a worksheet step that takes another commit
+  const goOnAnyway = (options = {}) => {
+    if (!confirm("Go on anyway? The teacher sees this as an override.")) return;
+    gameState.labOverride(snapshot, unticked.map((l) => l.text), options);
+    whyOpen = false;
     tickN++;
     report();
   };
@@ -302,13 +333,13 @@
 
 <div class="labLine" role="img" aria-label="Round {lab?.round || 1}, {card?.title}">
   {#each shownPhases as p, i}
-    <span class="ph" class:on={!gameState.finished && p === phase}>[{LAB_CARDS[p].title.toUpperCase()}]</span
+    <span class="ph" class:on={!finished && p === phase}>[{LAB_CARDS[p].title.toUpperCase()}]</span
     >{#if i < shownPhases.length - 1}<span class="arrow"> ---> </span>{:else}<span class="arrow" title="Swap roles, next round"> --↺</span>{/if}
   {/each}
-  <span class="round">{gameState.finished ? "  Finished" : `  Round ${lab?.round || 1}`}</span>
+  <span class="round">{finished ? "  Finished" : `  Round ${lab?.round || 1}`}</span>
 </div>
 
-{#if gameState.finished}
+{#if finished}
   <div class="labCard" transition:fade>
     <p class="title aoc-heading">Lab finished</p>
     <Reflection {gameState} on:save={report} />
@@ -328,11 +359,11 @@
          to-do list and Done. Everything else is folded away at the bottom. -->
     <DoNow
       {driver}
-      driverNumber={gameState.driver + 1}
+      driverNumber={(tickN, gameState.driver) + 1}
       action={doNow}
       {navigators}
       {navigatorNumber}
-      navigatorAction={card.navigator}
+      navigatorAction={smellsFirst ? "Read along, and point out any smell the driver misses." : card.navigator}
       held={!!problem || broke}
     >
       <HowTo item={problem || card} />
@@ -351,8 +382,8 @@
           <span class="muted">(<Glossary name={nextSmell.refactoring} />)</span>
         </p>
       {/if}
-      {#if phase === "commit" && look?.commit_message}
-        <p class="muted">Suggested commit message: <strong>{look.commit_message}</strong></p>
+      {#if phase === "commit" && (look?.commit_message || lab.commitMessage)}
+        <p class="muted">Suggested commit message: <strong>{look?.commit_message || lab.commitMessage}</strong></p>
       {/if}
     </DoNow>
 
@@ -402,7 +433,7 @@
     {/if}
     {#if helperMissing}
       <p class="doneHint locked">Waiting for the helper</p>
-    {:else if status?.lines.length}
+    {:else if status?.lines.length && !smellsFirst}
       <ul class="todo">
         {#each status.lines as line}
           <li class:done={line.ok === true}>
@@ -416,10 +447,11 @@
         {/each}
       </ul>
     {/if}
-    {#if snapshot && phase !== "commit"}
+    {#if snapshot && phase !== "commit" && !smellsFirst}
       <PredictBox {gameState} {snapshot} navigator={navigators[0]} />
       <MessGuide mode="refactor" {phase} uncommitted={uncommittedFiles(snapshot)} failing={outcomeOf(snapshot) === "red"} />
     {/if}
+    {#if !smellsFirst}
     <div class="actions">
       {#if waiting}
         <button disabled>Checking<WaitingDots /></button>
@@ -435,8 +467,41 @@
         {:else}
           <button class:lockedDone={locked} aria-disabled={locked} on:click={() => done()}>{card.done}</button>
         {/if}
+        {#if locked && !helperMissing && !whyOpen}
+          <button class="quiet" on:click={() => (whyOpen = true)}>Why can't we go on?</button>
+        {/if}
       {/if}
     </div>
+    {#if whyOpen && !helperMissing}
+      <div class="whyBox">
+        <p><strong>Why the app won't let you go on yet:</strong></p>
+        <ul>
+          {#each unticked as line}
+            <li>
+              <strong>{tailor(line.text, $ide)}.</strong>
+              {tailor(line.why || line.reason || "Not done yet.", $ide)}
+            </li>
+          {/each}
+        </ul>
+        <p class="muted">
+          If you've done it and the app hasn't noticed, save your files and wait a few seconds. If it still has it
+          wrong, you can go on anyway: the teacher sees that you did.
+        </p>
+        <p class="developActions">
+          {#if phase === "commit" && currentStep}
+            <button class="quiet" on:click={() => goOnAnyway()}
+              >Go on anyway, {stepIndex < steps.length - 1 ? `on to step ${steps[stepIndex + 1].id}` : "last step"}</button
+            >
+            <button class="quiet" on:click={() => goOnAnyway({ stayOnStep: true })}
+              >Go on anyway, step {currentStep.id} isn't finished yet</button
+            >
+          {:else}
+            <button class="quiet" on:click={() => goOnAnyway()}>Go on anyway</button>
+          {/if}
+          <button class="quiet" on:click={() => (whyOpen = false)}>Close</button>
+        </p>
+      </div>
+    {/if}
     {#if phase === "develop" && !steps.length}
       <p class="finishRow">
         <button class="quiet" on:click={cancelDevelop}>Not changing behaviour after all: back to Refactor</button>
@@ -468,6 +533,7 @@
           </p>
         {/if}
       </div>
+    {/if}
     {/if}
     <!-- a clear board makes switching to TDD the next thing to do; until then it waits under More -->
     {#if boardClear && !steps.length}
@@ -693,6 +759,18 @@
   }
 
   .ownSmells p {
+    margin: 0.3em 0;
+  }
+
+  .whyBox {
+    margin-top: 0.8em;
+    padding: 0.3em 0.8em;
+    border: 1px solid var(--refactoring-blue);
+    font-size: 0.9em;
+  }
+
+  .whyBox p,
+  .whyBox li {
     margin: 0.3em 0;
   }
 
