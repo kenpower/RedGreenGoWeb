@@ -65,6 +65,14 @@
     "";
   let enforceRules = gameState.enforceRules ?? true;
 
+  // Set up already: a class code that came with the project (helper, README or
+  // link) and checks out, and a README that says what the pair is building,
+  // each fold to one line; "change" / "describe it yourselves" opens them again.
+  let editClass = false;
+  let editProblem = false;
+  $: classGiven = !editClass && classCheck.status == "ok" && !!SOURCES[classSource];
+  $: readmeGiven = !editProblem && !problem.trim() && !!$helper.data?.readme?.content?.trim();
+
   // With the helper connected and tests in the source but no results yet, wait
   // for a first run so the game starts from where the code really is. A project
   // with no tests (nothing to run) or no helper starts straight away.
@@ -186,6 +194,13 @@
             bind:value={thirdPlayer}
           /><br />
         </span>
+        {#if classGiven}
+          <p class="classStatus">
+            Class: <span class="ok">✓ {classCheck.name}</span>
+            <span class="muted">({classCode.trim().toUpperCase()}, {SOURCES[classSource]})</span>
+            <button class="retry" on:click={() => (editClass = true)}>Change</button>
+          </p>
+        {:else}
         <span>
           <label for="classCode">Class code (from your teacher)</label>
           <input
@@ -215,8 +230,15 @@
           <code>python rgg_server.py --class-code=YOURCODE</code>, or put a line
           <code>Class code: YOURCODE</code> in your project's README.md.
         </p>
+        {/if}
 
         <h2 class="aoc-heading">What are you building?</h2>
+        {#if readmeGiven}
+          <p class="classStatus">
+            <span class="ok">✓</span> The coach reads it from your project's README.md.
+            <button class="retry" on:click={() => (editProblem = true)}>Describe it yourselves</button>
+          </p>
+        {:else}
         <label class="block" for="problem">Describe the problem (optional)</label>
         <textarea
           id="problem"
@@ -229,6 +251,7 @@
           The coach uses this to suggest your next test. Leave it empty and it
           works it out from your code (or a README.md in your solution folder).
         </p>
+        {/if}
 
         <label class="checkbox">
           <input type="checkbox" bind:checked={enforceRules} />
