@@ -9,8 +9,10 @@
   import { tailor } from "../ide.js";
   import { snapshotOf, buildFailed, staleResults, failingTests, currentTests, uncommittedFiles } from "../rules.js";
   import { sendProgress, isCoached, askOrient, askLab, resolveProblem } from "../coach.js";
-  import { labStatus, productionChanged, codeChanged, ownSmellsListed, MIN_OWN_SMELLS, LAB_CARDS, LAB_PHASES } from "../lab.js";
-  import { nextStepsDue, runMark, codeKey } from "../content/steps.js";
+  import {
+    labStatus, productionChanged, codeChanged, ownSmellsListed, labLookDue, MIN_OWN_SMELLS, LAB_CARDS, LAB_PHASES,
+  } from "../lab.js";
+  import { runMark, codeKey } from "../content/steps.js";
   import { parseWorksheet, worksheetProblem, renderMarkdown, stepHeadline } from "../worksheet.js";
   import { hintRung, TOP_RUNG } from "../ladder.js";
   import WaitingDots from "./WaitingDots.svelte";
@@ -69,6 +71,7 @@
   let checkingOwn = false;
   const showBoard = async () => {
     checkingOwn = true;
+    ownSmellsNote = ""; // the last count is out of date while smells.md is read again
     const data = await refreshHelper(); // smells.md as it is on disk now
     checkingOwn = false;
     const { count, enough } = ownSmellsListed(lab.ownSmells.start, data?.smells?.content);
@@ -96,22 +99,39 @@
   $: shownSmells = showAllSmells ? board : board.filter((s) => !s.resolved).slice(0, BOARD_PREVIEW);
   $: hiddenSmells = board.length - shownSmells.length;
 
-  // a Look on each fresh run or build with changed code, at most once a minute
+  // a Look on each saved change (and on a fresh run after a Look at stale
+  // results), at most once a minute: lab.js labLookDue
   let lastLook = null;
   let look = null; // the coach's last answer for this round
+  let lookCode = null; // the code (codeKey) that answer is about
   let lookRound = 0;
   $: if (lab && lookRound !== lab.round) {
-    look = null;
+    look = lookCode = null;
     lookRound = lab.round;
   }
   // not in a Develop step: the lab's coach reviews refactorings, and would call a behaviour change broken
-  $: if (coached && snapshot && lab && !lab.develop && !gameState.finished && (buildFailed(snapshot) || !staleResults(snapshot)))
-    lookAt(snapshot);
-  const lookAt = async (current, { rescue = false } = {}) => {
+  $: lookable = coached && !!lab && !lab.develop && !gameState.finished;
+  $: if (lookable && snapshot) lookAt(snapshot);
+  let lookTimer;
+  onDestroy(() => clearTimeout(lookTimer));
+  let pending = null; // {code, promise}: the Look on its way, so Done can wait for it
+  const lookAt = (current, { rescue = false, force = false } = {}) => {
     const now = Date.now() / 1000;
     // keyed by round, not phase: Test and Commit don't each need a Look of their own
-    if (!rescue && !nextStepsDue(lastLook, lab.round, current, now)) return;
-    if (!rescue) lastLook = { step: lab.round, run: runMark(current), code: codeKey(current), at: now };
+    if (!rescue && !force) {
+      const { due, retryIn } = labLookDue(lastLook, lab.round, current, now);
+      clearTimeout(lookTimer);
+      // a change seen inside the minute: look at the code as it is then
+      if (retryIn > 0) lookTimer = setTimeout(() => lookable && snapshot && lookAt(snapshot), retryIn * 1000);
+      if (!due) return pending?.promise;
+    }
+    const code = codeKey(current);
+    if (!rescue) lastLook = { round: lab.round, run: runMark(current), code, stale: staleResults(current), at: now };
+    const promise = askAndShow(current, code, rescue);
+    if (!rescue) pending = { code, promise };
+    return promise;
+  };
+  const askAndShow = async (current, code, rescue) => {
     const round = lab.round;
     const { answer } = await askLab({
       problem: labProblem,
@@ -130,6 +150,7 @@
     if (!answer || gameState.lab?.round !== round) return;
     if (rescue) return (rescueShown = { code: answer.rescue_code, why: answer.rescue_why });
     look = answer;
+    lookCode = code;
     lookBuildTime = buildFailed(current) ? current.build.time : null;
     gameState.labReview(answer);
     tickN++;
@@ -208,7 +229,7 @@
   // a Develop round is DEVELOP ---> COMMIT
   $: shownPhases = lab?.develop ? ["develop", "commit"] : LAB_PHASES;
   $: snapshot = $helper.status === "connected" ? snapshotOf($helper.data) : null;
-  $: status = snapshot && lab ? labStatus(phase, lab.base, snapshot) : null;
+  $: status = snapshot && lab ? labStatus(phase, lab.base, snapshot, lab.start) : null;
   $: helperMissing = $helper.status !== "connected";
   $: locked = helperMissing || !status?.goalMet;
   // tickN: gameState mutates in place, so the roles swapped at a commit need it to show
@@ -266,13 +287,36 @@
     if ((await sendProgress(progress)) && progress.events.length) gameState.ackEvents(progress.events.length);
   };
 
+  // The coach's review of the code as it is now, before Done moves on: the one
+  // on its way, or a new one. Never longer than REVIEW_WAIT_MS: a slow or absent
+  // coach doesn't hold the pair (the rules alone gate Done).
+  const REVIEW_WAIT_MS = 30_000;
+  const reviewed = (current) =>
+    lookCode === codeKey(current) && !(lastLook?.stale && !staleResults(current) && runMark(current) > lastLook.run);
+  const freshReview = async () => {
+    if (!lookable || !snapshot || reviewed(snapshot)) return;
+    const code = codeKey(snapshot);
+    const promise = pending?.code === code ? pending.promise : lookAt(snapshot, { force: true });
+    await Promise.race([promise, new Promise((resolve) => setTimeout(resolve, REVIEW_WAIT_MS))]);
+  };
+  // The coach says the worksheet step is only partly done, about this code:
+  // "isn't finished yet" becomes the main button, with what is left.
+  $: partly = !!currentStep && look?.step_done === "partly" && !!snapshot && lookCode === codeKey(snapshot);
+  let partlyStopped = null; // the code (codeKey) a "next step" click was stopped for, once
+
   const done = async (options = {}) => {
     if (waiting || helperMissing) return;
     waiting = true;
     if (await refreshHelper()) await tick(); // the code as it is on disk now
+    if (status?.goalMet) await freshReview();
     waiting = false;
     if (!status?.goalMet) {
       whyOpen = true; // a locked Done answers with the reasons
+      return;
+    }
+    // on to the next step with this one half done: show what's left first, and go on at the second click
+    if (phase === "commit" && partly && !options.stayOnStep && partlyStopped !== codeKey(snapshot)) {
+      partlyStopped = codeKey(snapshot);
       return;
     }
     gameState.labDone(snapshot, options);
@@ -459,18 +503,35 @@
       <MessGuide mode="refactor" {phase} uncommitted={uncommittedFiles(snapshot)} failing={outcomeOf(snapshot) === "red"} />
     {/if}
     {#if !smellsFirst}
+    {#if partly && !waiting}
+      <p class="partlyNote">
+        <strong>Step {currentStep.id} isn't finished yet, the coach thinks.</strong>
+        {look.note}
+        {#if phase === "commit" && partlyStopped === codeKey(snapshot)}
+          <br />If the coach has it wrong, click the step button again to move on.
+        {/if}
+      </p>
+    {/if}
     <div class="actions">
       {#if waiting}
         <button disabled>Checking<WaitingDots /></button>
       {:else}
         {#if phase === "commit" && currentStep}
-          <!-- a worksheet step can take several commits (e.g. one kind of magic number each) -->
-          <button class:lockedDone={locked} aria-disabled={locked} on:click={() => done()}
+          <!-- a worksheet step can take several commits (e.g. one kind of magic number each);
+               the coach's "partly done" puts that button first -->
+          {#if partly}
+            <button class:lockedDone={locked} aria-disabled={locked} on:click={() => done({ stayOnStep: true })}
+              >Committed, but step {currentStep.id} isn't finished yet</button
+            >
+          {/if}
+          <button class:quiet={partly} class:lockedDone={locked} aria-disabled={locked} on:click={() => done()}
             >{stepIndex < steps.length - 1 ? `Done: committed, on to step ${steps[stepIndex + 1].id}` : "Done: committed, last step"}</button
           >
-          <button class="quiet" class:lockedDone={locked} aria-disabled={locked} on:click={() => done({ stayOnStep: true })}
-            >Committed, but step {currentStep.id} isn't finished yet</button
-          >
+          {#if !partly}
+            <button class="quiet" class:lockedDone={locked} aria-disabled={locked} on:click={() => done({ stayOnStep: true })}
+              >Committed, but step {currentStep.id} isn't finished yet</button
+            >
+          {/if}
         {:else}
           <button class:lockedDone={locked} aria-disabled={locked} on:click={() => done()}>{card.done}</button>
         {/if}
@@ -767,6 +828,13 @@
 
   .ownSmells p {
     margin: 0.3em 0;
+  }
+
+  .partlyNote {
+    margin: 0.8em 0 0 0;
+    padding: 0.3em 0.8em;
+    border-left: 3px solid var(--refactoring-blue);
+    font-size: 0.9em;
   }
 
   .whyBox {

@@ -316,7 +316,10 @@ export function buildLabRequest({
     tests: filesOfKind(after, "test"),
     code: filesOfKind(after, "production"),
     test_result: summariseResult(currentSnapshot(after)),
-    rule_findings: ruleFindings.slice(0, 20).map((f) => String(f).slice(0, 500)),
+    // a Look now also comes on a saved change, before any run: the results then don't describe it
+    rule_findings: (staleResults(after) ? [STALE_FINDING, ...ruleFindings] : ruleFindings)
+      .slice(0, 20)
+      .map((f) => String(f).slice(0, 500)),
     struggle: struggleFields({ rung }),
   };
   if (base) {

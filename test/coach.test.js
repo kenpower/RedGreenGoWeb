@@ -263,6 +263,15 @@ describe("buildRequest", () => {
     expect(look.struggle.rung).toBe(3);
   });
 
+  test("a lab Look at a saved change the tests haven't run on says the results are out of date", () => {
+    const now = { ...snapshot("v2"), runTime: 10, tests: [] };
+    now.files = now.files.map((f) => ({ ...f, mtime: 20 }));
+    const look = buildLabRequest({ problem: "Cart", base: snapshot("v1"), after: now, ruleFindings: ["held"] });
+    expect(look.rule_findings).toEqual([STALE_FINDING, "held"]);
+    const fresh = buildLabRequest({ problem: "Cart", base: snapshot("v1"), after: snapshot("v2"), ruleFindings: ["held"] });
+    expect(fresh.rule_findings).toEqual(["held"]);
+  });
+
   test("the baseline goes with every Look", () => {
     const look = buildRequest({ phase: "green", problem: "", before: snapshot("v1"), after: snapshot("v2") });
     expect(look.code_before).toEqual("// lib.cpp\nv1");

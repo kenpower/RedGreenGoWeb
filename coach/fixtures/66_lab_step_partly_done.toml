@@ -1,0 +1,91 @@
+description = "LAB LOOK, worksheet step half done: step 2.2 asks for the one-letter names in play() AND bestMoveFor(); only play() was renamed (battle test 2026-11-03)"
+lab = "refactor"
+phase = "refactor"
+lab_phase = "refactor"
+cycle = 2
+refactorings = ["Rename Function", "Rename Variable", "Replace Magic Number with Constant", "Extract Function"]
+problem = '''The lab's worksheet steps, in order:
+2.1 [Refactor] Rename move() to bestMoveFor()
+2.2 [Refactor] Rename the one-letter variables in play() and bestMoveFor()
+2.3 [Refactor] Name the two flag values: add constants NoMove and Empty
+
+The pair is on step 2.2 [Refactor]: Rename the one-letter variables in play() and bestMoveFor()
+Give each one a name that says what it means. Use the rename command for each one, but commit them together:
+
+| Where | Old | New |
+|-|-|-|
+| play() and bestMoveFor() parameters | c, p | column, player |
+| bestMoveFor() loops | i | column |
+| play() | r, b | row, newBoard |
+| bestMoveFor() | t | ? (Hint: it's the game after something has happened.) |
+
+Leave the r and c in winner() for now.'''
+tests_before = '''
+TEST(PlayTest, DropsPieceToBottomRow) { ConnectFour g(emptyBoard()); EXPECT_EQ(g.play(3, 'X').getBoard()[38], 'X'); }
+TEST(ChooseMoveTest, TakesWinningColumn) { ConnectFour g(nearWin()); EXPECT_EQ(g.bestMoveFor('X'), 4); }
+'''
+code_before = '''
+ConnectFour ConnectFour::play(int c, char p) const {
+    std::string b = board;
+    for (int r = 5; r >= 0; r--) {
+        if (b[r * NUM_COLS + c] == '-') {
+            b[r * NUM_COLS + c] = p;
+            break;
+        }
+    }
+    return ConnectFour(b);
+}
+
+int ConnectFour::bestMoveFor(char p) const {
+    for (int i = 0; i < NUM_COLS; i++) {
+        if (board[i] == '-') {
+            ConnectFour t = play(i, p);
+            if (t.winner() == p)
+                return i;
+        }
+    }
+    for (int i = 0; i < NUM_COLS; i++) {
+        if (board[i] == '-')
+            return i;
+    }
+    return -1;
+}
+'''
+tests = '''
+TEST(PlayTest, DropsPieceToBottomRow) { ConnectFour g(emptyBoard()); EXPECT_EQ(g.play(3, 'X').getBoard()[38], 'X'); }
+TEST(ChooseMoveTest, TakesWinningColumn) { ConnectFour g(nearWin()); EXPECT_EQ(g.bestMoveFor('X'), 4); }
+'''
+code = '''
+ConnectFour ConnectFour::play(int column, char player) const {
+    std::string newBoard = board;
+    for (int row = 5; row >= 0; row--) {
+        if (newBoard[row * NUM_COLS + column] == '-') {
+            newBoard[row * NUM_COLS + column] = player;
+            break;
+        }
+    }
+    return ConnectFour(newBoard);
+}
+
+int ConnectFour::bestMoveFor(char p) const {
+    for (int i = 0; i < NUM_COLS; i++) {
+        if (board[i] == '-') {
+            ConnectFour t = play(i, p);
+            if (t.winner() == p)
+                return i;
+        }
+    }
+    for (int i = 0; i < NUM_COLS; i++) {
+        if (board[i] == '-')
+            return i;
+    }
+    return -1;
+}
+'''
+test_result = "All 2 tests passed"
+
+[expect]
+decision = ["advance"]
+review_kept = true
+step_done = ["partly"]
+note_mentions = ["bestMoveFor"]

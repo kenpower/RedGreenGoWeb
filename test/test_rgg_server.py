@@ -204,6 +204,27 @@ class CMakeTests(unittest.TestCase):
         h.publish(h.check_result_files([path], {}), None, [], None, None)
         self.assertEqual(h.snapshot()["ide"], {"name": "clion", "compiler": "gcc"})
 
+    def test_a_run_tells_the_game_when_its_test_program_was_built(self):
+        h.state.update(tests={}, run=0, runTime=None, version=0, ide=None, cmakeBuild=None, binaryTime=None)
+        self.write("build/CMakeCache.txt", "")
+        results = self.write("build/test-results/S.A.xml", xml(("A", False)))
+        program = "build/connect4_tests" + (".exe" if os.name == "nt" else "")
+        path = self.write(program, "", age=60.0)
+        os.chmod(path, 0o755)
+        self.write("build/_deps/googletest-build/gtest_helper" + (".exe" if os.name == "nt" else ""), "", age=1.0)
+        h.publish(h.check_result_files([results], {}), None, [], None, None)
+        self.assertAlmostEqual(h.snapshot()["binaryTime"], os.path.getmtime(path), places=3)  # _deps is not it
+        # a build with no test run since: the rescan publishes the new program's time
+        self.write(program, "rebuilt", age=0.0)
+        self.assertTrue(h.rescan_sources(self.dir))
+        self.assertAlmostEqual(h.snapshot()["binaryTime"], os.path.getmtime(path), places=3)
+
+    def test_a_visual_studio_run_sends_no_program_time(self):
+        h.state.update(tests={}, run=0, runTime=None, version=0, ide=None, cmakeBuild=None, binaryTime=None)
+        path = self.write("Debug/XMLGoogleTestResults.xml", xml(("A", False)))
+        h.publish(h.check_result_files([path], {}), None, [], None, None)
+        self.assertIsNone(h.snapshot()["binaryTime"])
+
     def test_a_labs_smells_md_is_read_like_the_readme(self):
         self.assertIsNone(h.read_smells(self.dir))
         self.write("Smells.md", "# Smell log\nline 12  Magic number\n")

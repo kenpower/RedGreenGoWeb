@@ -312,7 +312,8 @@ export class GameState {
   startLab(refactorings, snapshot, smells = null, steps = []) {
     this.start();
     this.mode = "refactor";
-    this.lab = { phase: "refactor", round: 1, refactorings, rounds: 0, commits: 0, reverts: 0, base: snapshot, sawRed: false };
+    // `start`: the code as the lab began, which never moves (lab.js labTestChanges)
+    this.lab = { phase: "refactor", round: 1, refactorings, rounds: 0, commits: 0, reverts: 0, base: snapshot, start: snapshot, sawRed: false };
     this.lab.ownSmells = typeof smells === "string" ? { start: smells, shown: false } : null;
     this.lab.steps = (steps || []).map(({ id, hat, title }) => ({ id: String(id), hat, title: String(title || "").slice(0, 120) }));
     this.lab.step = this.lab.steps[0]?.id ?? null;

@@ -5,7 +5,26 @@
 //   Lab: refactor
 //   Refactorings: Extract Function, Rename Variable, Replace Magic Number with Constant
 // Everything here is the app's own rules: the lab works without the coach.
-import { testChanges, testBodies, buildFailed, staleResults, failingTests, currentTests, uncommittedFiles } from "./rules.js";
+import {
+  testChanges, testBodies, buildFailed, staleResults, failingTests, currentTests, uncommittedFiles, changedSinceRun,
+  oldTestProgram,
+} from "./rules.js";
+import { codeKey, runMark, NEXT_STEPS_GAP } from "./content/steps.js";
+
+// When the lab's coach should look again: {due, retryIn}. The TDD game waits
+// for a run (steps.js nextStepsDue); the lab looks at each saved change too,
+// so a half-done step or a broken change is reviewed before Done, not after
+// it. Again on a fresh run after a Look at stale results (the results then
+// say something new). At most once every `gap` seconds: retryIn says when a
+// change seen during the gap can be looked at. `last`: {round, code, run, stale, at}.
+export function labLookDue(last, round, snapshot, nowSec, gap = NEXT_STEPS_GAP) {
+  if (!snapshot) return { due: false, retryIn: 0 };
+  const changed = !last || last.round !== round || codeKey(snapshot) !== last.code ||
+    (last.stale && runMark(snapshot) > last.run && !staleResults(snapshot));
+  if (!changed) return { due: false, retryIn: 0 };
+  const wait = last ? gap - (nowSec - last.at) : 0;
+  return wait > 0 ? { due: false, retryIn: wait } : { due: true, retryIn: 0 };
+}
 
 export const LAB_PHASES = ["refactor", "test", "commit"];
 // when the README lists none
@@ -122,21 +141,28 @@ function followsCode(was, is, oldNames, newNames, code) {
 const namesIn = (code) => new Set(tokens(code).filter((t) => NAME.test(t)));
 
 // The tests the pair changed beyond following the code: {added, removed, changed}.
-export function labTestChanges(base, now) {
+// `start` is the code as the lab began: a test can follow a rename (or a new
+// constant) committed in an earlier round, e.g. a pair who renamed move() in
+// round 1 but only fixed the tests that still called it in round 2.
+export function labTestChanges(base, now, start = null) {
   const c = testChanges(base, now);
   if (!c.changed.length) return c;
-  const was = namesIn(productionCode(base));
   const code = stripComments(productionCode(now));
   const is = namesIn(code);
-  const oldNames = new Set([...was].filter((n) => !is.has(n)));
-  const newNames = new Set([...is].filter((n) => !was.has(n)));
+  const oldNames = new Set();
+  const newNames = new Set();
+  for (const from of start ? [base, start] : [base]) {
+    const was = namesIn(productionCode(from));
+    for (const n of was) if (!is.has(n)) oldNames.add(n);
+    for (const n of is) if (!was.has(n)) newNames.add(n);
+  }
   const before = testBodies(base);
   const after = testBodies(now);
   return { ...c, changed: c.changed.filter((name) => !followsCode(before[name], after[name], oldNames, newNames, code)) };
 }
 
-const testsUnchanged = (base, now) => {
-  const c = labTestChanges(base, now);
+const testsUnchanged = (base, now, start) => {
+  const c = labTestChanges(base, now, start);
   return !c.added.length && !c.removed.length && !c.changed.length;
 };
 
@@ -148,21 +174,38 @@ const testsUnchanged = (base, now) => {
 const WHY_UNCHANGED =
   "The app compares the production code (the .cpp and .h files that aren't tests) with the last commit " +
   "(or the start of the lab) and sees no difference. Saved your files? The helper picks up a save within about 5 seconds.";
+// A CMake project leaves no build log, so a failed build only shows as a test
+// program older than the code (rules.js oldTestProgram): say what that means.
+const OLD_PROGRAM_RAN =
+  "The last run used the test program from before your last saved change: it wasn't rebuilt " +
+  "(running the tests without building runs the old program), or the build failed. Build, then run the tests.";
+const OLD_PROGRAM_NO_RUN =
+  "The test results are older than your last saved change, and so is the test program. " +
+  "If you have run the tests since, the build probably failed: look at the build output for its first error.";
 const whyRun = (now) =>
   buildFailed(now)
     ? "The newest build log has errors."
     : !currentTests(now).length
     ? "The app hasn't seen any test results yet."
+    : staleResults(now) && oldTestProgram(now)
+    ? changedSinceRun(now) ? OLD_PROGRAM_NO_RUN : OLD_PROGRAM_RAN
     : staleResults(now)
     ? "The test results are older than your last saved change, so they don't show the code as it is now: run the tests again."
     : `The last run has failing tests: ${failingTests(now).join(", ")}.`;
+// The run line's short reason when the test program wasn't rebuilt, or null.
+const oldProgramReason = (now) =>
+  buildFailed(now) || !oldTestProgram(now) || !currentTests(now).length
+    ? null
+    : changedSinceRun(now)
+    ? "No new results yet. If the build failed, fix its first error (or undo the change)"
+    : "That run tested the old program: build, then run the tests again. If the build fails, fix its first error";
 
-export function labStatus(phase, base, now) {
+export function labStatus(phase, base, now, start = null) {
   if (!now) return null;
   const lines = [];
   const testsLine = { text: "Keep the tests the same (renames are fine)", ok: true };
-  if (!testsUnchanged(base, now)) {
-    const c = labTestChanges(base, now);
+  if (!testsUnchanged(base, now, start)) {
+    const c = labTestChanges(base, now, start);
     const changed = [
       ...c.added.map((n) => `${n} (added)`),
       ...c.removed.map((n) => `${n} (removed)`),
@@ -186,8 +229,12 @@ export function labStatus(phase, base, now) {
     const run = { text: "Run all the tests (Ctrl+R, A): every test passes", ok: true, howto: "run_tests" };
     if (buildFailed(now) || staleResults(now) || !currentTests(now).length || failingTests(now).length) run.why = whyRun(now);
     if (buildFailed(now)) Object.assign(run, { ok: false, reason: "The code doesn't build: fix it, or undo the last change" });
-    else if (staleResults(now) || !currentTests(now).length) run.ok = null;
-    else if (failingTests(now).length)
+    else if (staleResults(now) || !currentTests(now).length) {
+      run.ok = null;
+      // ran, but the old program: a problem to fix, not just a run still to do
+      const old = oldProgramReason(now);
+      if (old) Object.assign(run, { reason: old, ok: changedSinceRun(now) ? null : false });
+    } else if (failingTests(now).length)
       Object.assign(run, {
         ok: false,
         reason: `${failingTests(now).join(", ")} fails: undo the last change, then run the tests again`,
@@ -212,7 +259,10 @@ export function labStatus(phase, base, now) {
         ok: null,
         reason: "The code doesn't build yet. Expected if you wrote the tests first: carry on until it builds and every test passes.",
       });
-    else if (staleResults(now) || !currentTests(now).length || !codeChanged(base, now)) run.ok = null;
+    else if (staleResults(now) || !currentTests(now).length || !codeChanged(base, now)) {
+      run.ok = null;
+      if (changed && oldProgramReason(now)) run.reason = oldProgramReason(now);
+    }
     else if (failingTests(now).length)
       Object.assign(run, { ok: null, reason: `Still failing, as you expected: ${failingTests(now).join(", ")}. Carry on until every test passes.` });
     lines.push(run);

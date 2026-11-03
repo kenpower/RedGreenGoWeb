@@ -210,6 +210,22 @@ class Lab(unittest.TestCase):
         self.assertEqual(answer["smells_resolved"], ["long-price"])  # board ids only
         self.assertEqual(answer["move_review"]["refactoring"], "Extract Function")
         self.assertEqual((answer["rescue_code"], answer["rescue_why"]), ("", ""))  # no RESCUE asked
+        self.assertEqual(answer["step_done"], "n_a")  # not given: unknown
+        schema = client.calls[0]["output_config"]["format"]["schema"]
+        self.assertEqual(schema["properties"]["step_done"]["enum"], ["yes", "partly", "no", "n_a"])
+
+    def test_a_lab_look_says_how_much_of_the_worksheet_step_is_done(self):
+        answer = {"decision": "advance", "note": "bestMoveFor still has p, i and t.", "smells_resolved": [],
+                  "move_review": {"refactoring": "Rename Variable", "effect": "better", "behaviour_kept": True, "note": ""},
+                  "hint_question": "", "hint_kind": "", "driver_action": "", "commit_message": "", "rescue_code": "",
+                  "rescue_why": "", "build_help": "", "step_done": "partly"}
+        lab = dict(lab="refactor", refactorings=self.REFACTORINGS, board=self.BOARD, catalogue=None, code_before="int old();")
+        self.assertEqual(coach.ask_coach(self.answering(answer), step(**lab))[0]["step_done"], "partly")
+        self.assertEqual(coach.ask_coach(self.answering({**answer, "step_done": "maybe"}), step(**lab))[0]["step_done"], "n_a")
+        # nothing changed since the last commit: nothing of the step done yet to judge
+        code = "int same();"
+        unchanged = step(**{**lab, "code_before": code, "code": code})
+        self.assertEqual(coach.ask_coach(self.answering(answer), unchanged)[0]["step_done"], "n_a")
 
     def test_no_change_since_the_last_commit_gets_no_review_and_no_note(self):
         client = self.answering({"decision": "advance", "note": "All green, so the refactor kept behaviour.",

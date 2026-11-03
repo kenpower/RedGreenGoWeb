@@ -81,7 +81,8 @@ the folder, so students skip step 2: see the `rgg_server.py` snippet in
 [AUTHORING.md](AUTHORING.md#the-repo).
 
 Not yet with CMake: the game doesn't see **build errors**, because a CMake build leaves no log to
-read. A broken build shows as "run the tests" rather than as the build error, explained. And the
+read. It does see when the test program is older than the code (the build failed, or `ctest` ran
+without a build), and says so instead of passing the run, but it can't explain the error itself. And the
 game's own keyboard hints are Visual Studio's (e.g. **Ctrl+R, A** to run the tests).
 
 ## 4. During class

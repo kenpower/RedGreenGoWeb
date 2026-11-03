@@ -16,7 +16,9 @@ describe("tailor: Visual Studio's keys and menus, as the pair's IDE has them", (
     expect(tailor("Run all the tests (Ctrl+R, A): every test passes", "clion")).toBe(
       "Run all the tests (All CTest, Shift+F10): every test passes"
     );
-    expect(tailor("run all tests (Ctrl+R, A)", "commandline")).toBe("run all tests (ctest --test-dir build)");
+    expect(tailor("run all tests (Ctrl+R, A)", "commandline")).toBe(
+      "run all tests (cmake --build build, then ctest --test-dir build)"
+    );
   });
 
   test("renaming, Git and undoing", () => {

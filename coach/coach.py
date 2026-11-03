@@ -107,7 +107,10 @@ MAX_NEXT_STEPS = 4
 MAX_REFACTORINGS = 20
 MAX_SMELLS = 24  # a lab README can list a lot of refactoring steps (Connect Four: 17), plus the extras
 LAB_LOOK_FIELDS = ["decision", "note", "move_review", "smells_resolved", "hint_question", "hint_kind",
-                   "driver_action", "commit_message", "rescue_code", "rescue_why", "build_help"]
+                   "driver_action", "commit_message", "rescue_code", "rescue_why", "build_help", "step_done"]
+# step_done: how much of the current worksheet step the change since the last commit
+# does. The game offers "isn't finished yet" first on "partly" (LabGame.svelte).
+STEP_DONE = ["yes", "partly", "no", "n_a"]
 
 
 def lab_orient_schema():
@@ -140,6 +143,7 @@ def lab_look_schema(board):
             "rescue_code": {"type": "string"},
             "rescue_why": {"type": "string"},
             "build_help": {"type": "string"},
+            "step_done": {"type": "string", "enum": STEP_DONE},
         },
         "required": LAB_LOOK_FIELDS,
         "additionalProperties": False,
@@ -522,12 +526,14 @@ def _clean_lab_look(answer, step):
     cleaned["decision"] = answer.get("decision") if answer.get("decision") in ("advance", "redo") else "advance"
     cleaned["move_review"] = review
     cleaned["smells_resolved"] = [i for i in dict.fromkeys(answer.get("smells_resolved") or []) if i in board_ids]
+    cleaned["step_done"] = answer.get("step_done") if answer.get("step_done") in STEP_DONE else "n_a"
     # No change since the last commit: nothing to review, so no note either
     # (the model praised a refactor that hadn't happened). The hint still stands.
     if step.get("code_before") is not None and step["code_before"] == step["code"]:
         cleaned["move_review"] = {"refactoring": "", "effect": "none", "behaviour_kept": True, "note": ""}
         cleaned["note"] = ""
         cleaned["smells_resolved"] = []
+        cleaned["step_done"] = "n_a"
     if not step.get("rescue"):
         cleaned["rescue_code"] = cleaned["rescue_why"] = ""
     cleaned["build_help"] = _clean_build_help(answer.get("build_help"), step)

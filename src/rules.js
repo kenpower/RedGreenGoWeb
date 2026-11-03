@@ -365,6 +365,16 @@ export function changedSinceRun(snapshot) {
   return (snapshot.files || []).some((f) => typeof f.mtime === "number" && f.mtime > latest);
 }
 
+// A CMake project's test program is older than a saved source file: the build
+// failed or didn't run (ctest alone runs the program from the last build), so a
+// run tests the code from before. The helper sends `binaryTime` for CMake builds
+// only; a CMake build leaves no log, so this is all the app sees of a failed one.
+export function oldTestProgram(snapshot) {
+  const built = snapshot?.binaryTime;
+  if (typeof built !== "number") return false;
+  return (snapshot.files || []).some((f) => typeof f.mtime === "number" && f.mtime > built);
+}
+
 // The source files saved after the latest build or test run (file times from the helper).
 export function changedFiles(snapshot) {
   const latest = buildFailed(snapshot) ? snapshot.build.time : snapshot?.runTime;
@@ -386,7 +396,7 @@ const staleRunMessage = (snapshot) =>
 // run could fix it.
 export function staleResults(snapshot) {
   if (!snapshot || buildFailed(snapshot)) return false;
-  if (snapshot.runTime && changedSinceRun(snapshot)) return true;
+  if (snapshot.runTime && (changedSinceRun(snapshot) || oldTestProgram(snapshot))) return true;
   const names = testNames(snapshot);
   if (!names.size) return false;
   const ran = new Set((snapshot.tests || []).map((t) => t.name));
@@ -531,6 +541,6 @@ const LIVE = { red: liveRed, green: liveGreen, refactor: liveRefactor };
 // Keeps only what the rules and the coach need from the helper's data.
 export function snapshotOf(data) {
   if (!data) return null;
-  const { tests = [], build = null, runTime = null, files = [], git = null } = data;
-  return { tests, build, runTime, files, git };
+  const { tests = [], build = null, runTime = null, files = [], git = null, binaryTime = null } = data;
+  return { tests, build, runTime, files, git, binaryTime };
 }

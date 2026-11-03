@@ -33,8 +33,9 @@ const PHRASES = {
   },
   commandline: {
     name: "the command line",
-    runAll: "ctest --test-dir build",
-    runKeys: "ctest --test-dir build",
+    // ctest alone runs the test program from the last build: build first, every time
+    runAll: "cmake --build build, then ctest --test-dir build",
+    runKeys: "cmake --build build, then ctest --test-dir build",
     rename: "your editor's Rename",
     gitPanel: "git status",
     undoAll: "Run git restore . in the terminal",

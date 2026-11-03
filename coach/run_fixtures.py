@@ -39,6 +39,9 @@ ROOT = HERE.parent
 CODE_LIKE = re.compile(
     r"[{}]|==|!=|->|<<|#include|\)\s*;|\breturn\s+[^\s.,;]+\s*;"
     r"|\b[A-Za-z_]\w*\([^)]*\)|\b(?:EXPECT|ASSERT)_[A-Z]+\b|\bTEST(?:_F|_P)?\b")
+# A lab worksheet names functions as bestMoveFor(), and the coach's notes echo it:
+# an empty () after a name is the worksheet's way of naming it, not a call.
+LAB_CODE_LIKE = re.compile(CODE_LIKE.pattern.replace(r"\([^)]*\)", r"\([^)]+\)"))
 SHOWN = ("note", "driver_action", "navigator_action", "next_test", "hint_question", "hint_kind",
          "smell_question", "smell_detail", "build_help")
 MAX_BUILD_HELP_WORDS = 30
@@ -309,6 +312,8 @@ def score_lab(answer, expect, step):
                       ("commit_mentions", answer["commit_message"])):
         if key in expect:
             checks.append((key, any(w.lower() in text.lower() for w in expect[key]), text[:80] or '""'))
+    if "step_done" in expect:  # how much of the worksheet step the change does
+        checks.append(("step_done", answer["step_done"] in expect["step_done"], answer["step_done"]))
     if "resolved_include" in expect:
         checks.append(("resolved_include", all(i in answer["smells_resolved"] for i in expect["resolved_include"]),
                        answer["smells_resolved"]))
@@ -320,8 +325,8 @@ def score_lab(answer, expect, step):
     if answer["driver_action"]:
         checks.append(("single_action", single_action(answer["driver_action"]), answer["driver_action"]))
     coded = [f for f in ("note", "hint_question", "hint_kind", "commit_message", "build_help")
-             if CODE_LIKE.search(answer[f])]
-    coded += ["review note"] if CODE_LIKE.search(review["note"]) else []
+             if LAB_CODE_LIKE.search(answer[f])]
+    coded += ["review note"] if LAB_CODE_LIKE.search(review["note"]) else []
     checks.append(("lab_no_code", not coded, ", ".join(coded) or "none"))
     return checks + score_build_help(answer, expect, step)
 

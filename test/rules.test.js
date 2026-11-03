@@ -20,6 +20,7 @@ import {
   noRepo,
   staleResults,
   currentTests,
+  oldTestProgram,
 } from "../src/rules.js";
 import { stepById } from "../src/content/steps.js";
 
@@ -880,13 +881,31 @@ describe("changedSinceRun", () => {
 });
 
 describe("snapshotOf", () => {
-  test("keeps tests, build, runTime, files and git", () => {
+  test("keeps tests, build, runTime, files, git and the test program's build time", () => {
     const git = { repo: true, dirtySource: [] };
-    const data = { version: 3, run: 2, runTime: 9, tests: [{ name: "A.b" }], build: null, files: [], git, readme: "x" };
-    expect(snapshotOf(data)).toEqual({ tests: [{ name: "A.b" }], build: null, runTime: 9, files: [], git });
+    const data = { version: 3, run: 2, runTime: 9, tests: [{ name: "A.b" }], build: null, files: [], git, readme: "x", binaryTime: 8 };
+    expect(snapshotOf(data)).toEqual({ tests: [{ name: "A.b" }], build: null, runTime: 9, files: [], git, binaryTime: 8 });
   });
   test("fills in missing fields", () => {
-    expect(snapshotOf({})).toEqual({ tests: [], build: null, runTime: null, files: [], git: null });
+    expect(snapshotOf({})).toEqual({ tests: [], build: null, runTime: null, files: [], git: null, binaryTime: null });
+  });
+});
+
+describe("oldTestProgram: a CMake test program older than the code", () => {
+  const withProgram = (binaryTime, mtime, runTime = 30) => {
+    const s = snap({ source: ["A.b"], results: { "A.b": "passed" }, runTime });
+    s.files.forEach((f) => (f.mtime = 5));
+    s.files[0].mtime = mtime;
+    return { ...s, binaryTime };
+  };
+  test("saved after the last build: old; built since: not; no time (Visual Studio): never", () => {
+    expect(oldTestProgram(withProgram(10, 20))).toBe(true);
+    expect(oldTestProgram(withProgram(25, 20))).toBe(false);
+    expect(oldTestProgram(withProgram(null, 20))).toBe(false);
+  });
+  test("a run of the old program (ctest without a build) is stale, though it came after the save", () => {
+    expect(staleResults(withProgram(10, 20))).toBe(true);
+    expect(staleResults(withProgram(25, 20))).toBe(false);
   });
   test("no data", () => {
     expect(snapshotOf(null)).toBeNull();

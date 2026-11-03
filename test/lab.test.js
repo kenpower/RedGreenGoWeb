@@ -1,4 +1,5 @@
-import { parseLab, labStatus, labTestChanges, ownSmellsListed, DEFAULT_REFACTORINGS } from "../src/lab.js";
+import { parseLab, labStatus, labTestChanges, ownSmellsListed, labLookDue, DEFAULT_REFACTORINGS } from "../src/lab.js";
+import { codeKey, runMark } from "../src/content/steps.js";
 
 const TESTS = 'TEST(Price, Basic) {\n  EXPECT_EQ(10, priceFor(1));\n}\n';
 function snap({ tests = TESTS, code = "int priceFor(int n) { return n * 10; }", results = { "Price.Basic": "passed" }, build = null, runTime = 10, git } = {}) {
@@ -99,6 +100,19 @@ describe("labTestChanges: test edits that only follow the production code are al
     expect(labTestChanges(before, commented).changed).toEqual([]);
   });
 
+  test("a rename committed in an earlier round, the tests only fixed now (the lab's start code)", () => {
+    // round 1 renamed move() and was committed with the tests still calling move
+    const renamed = CODE.replaceAll("move(", "bestMoveFor(");
+    const round2Base = after(TEST, renamed);
+    const fixed = after(TEST.replace("g.move", "g.bestMoveFor"), renamed);
+    expect(labTestChanges(round2Base, fixed).changed).toHaveLength(1); // against the round's base alone
+    expect(labTestChanges(round2Base, fixed, base).changed).toEqual([]);
+    expect(labStatus("test", round2Base, fixed, base).goalMet).toBe(true);
+    // a real change to what the test checks still counts
+    const worse = after(TEST.replace("g.move('X')", "g.bestMoveFor('O')"), renamed);
+    expect(labTestChanges(round2Base, worse, base).changed).toHaveLength(1);
+  });
+
   test("still a change: a different expected value, a constant with another value, a name the code didn't gain", () => {
     expect(labTestChanges(base, after(TEST.replace("-1", "0"), CODE)).changed).toEqual(["ChooseMoveTest.FullBoardHasNoMove"]);
     const wrong = CODE.replace("public:", "public:\n  static const int NoMove = -2;");
@@ -108,6 +122,33 @@ describe("labTestChanges: test edits that only follow the production code are al
     // a rename plus a changed argument
     const renamed = CODE.replaceAll("move(", "bestMoveFor(");
     expect(labTestChanges(base, after(TEST.replace("g.move('X')", "g.bestMoveFor('O')"), renamed)).changed).toHaveLength(1);
+  });
+});
+
+describe("labLookDue: the lab's coach looks at each saved change, at most once a minute", () => {
+  const first = snap();
+  const seen = (s, at, stale = false) => ({ round: 1, code: codeKey(s), run: runMark(s), stale, at });
+
+  test("the first Look of a round, then only when the code changed", () => {
+    expect(labLookDue(null, 1, first, 100)).toEqual({ due: true, retryIn: 0 });
+    expect(labLookDue(seen(first, 0), 1, first, 100).due).toBe(false);
+    expect(labLookDue(seen(first, 0), 2, first, 100).due).toBe(true); // a new round
+  });
+
+  test("a saved change is looked at without waiting for a run", () => {
+    const edited = snap({ code: "int priceFor(int n) { return n * 10 + 0; }" });
+    expect(labLookDue(seen(first, 0), 1, edited, 100)).toEqual({ due: true, retryIn: 0 });
+  });
+
+  test("inside the minute: not yet, and when to try again", () => {
+    const edited = snap({ code: "int priceFor(int n) { return n * 10 + 0; }" });
+    expect(labLookDue(seen(first, 80), 1, edited, 100)).toEqual({ due: false, retryIn: 40 });
+  });
+
+  test("a fresh run after a Look at stale results is worth another Look; another run of the same code isn't", () => {
+    const rerun = snap({ runTime: 50 });
+    expect(labLookDue(seen(first, 0, true), 1, rerun, 100).due).toBe(true);
+    expect(labLookDue(seen(first, 0, false), 1, rerun, 100).due).toBe(false);
   });
 });
 
@@ -160,6 +201,31 @@ describe("labStatus: each phase's Done gate", () => {
     });
     const broken = labStatus("test", base, snap({ build: { status: "failed", time: 20, errors: ["e"] } }));
     expect(broken.lines[1].ok).toBe(false);
+  });
+
+  test("TEST, CMake: a test program older than the code is not a pass (ctest without a build, or a failed build)", () => {
+    // ctest run after the save, but the program was built before it: the old code was tested
+    const ranOld = { ...snap({ runTime: 30 }), binaryTime: 10 };
+    ranOld.files[1].mtime = 20;
+    const line = labStatus("test", base, ranOld).lines[1];
+    expect(line.ok).toBe(false);
+    expect(line.reason).toMatch(/tested the old program: build/);
+    expect(line.why).toMatch(/wasn't rebuilt/);
+    // saved, a build that failed, no new run: no build log with CMake, so say what may have happened
+    const notRun = { ...snap({ runTime: 10 }), binaryTime: 10 };
+    notRun.files[1].mtime = 20;
+    const waiting = labStatus("test", base, notRun).lines[1];
+    expect(waiting.ok).toBe(null);
+    expect(waiting.reason).toMatch(/If the build failed, fix its first error/);
+    expect(waiting.why).toMatch(/build probably failed/);
+    // rebuilt and run after the save: a pass
+    const fresh = { ...snap({ runTime: 30 }), binaryTime: 25 };
+    fresh.files[1].mtime = 20;
+    expect(labStatus("test", base, fresh).goalMet).toBe(true);
+    // Visual Studio (no binaryTime): as before
+    const vs = snap({ runTime: 30 });
+    vs.files[1].mtime = 20;
+    expect(labStatus("test", base, vs).goalMet).toBe(true);
   });
 
   test("COMMIT: Done when HEAD moved and nothing is left uncommitted", () => {
