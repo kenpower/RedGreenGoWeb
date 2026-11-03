@@ -561,6 +561,21 @@ def reload_from_disk(clear):
                 read_git(config["project"]), read_smells(config["project"]))
 
 
+def rescan_sources(project_dir):
+    """Between builds and test runs: publish the files and smells.md when they changed (a
+    change saved but not built yet, as in the lab's Refactor step, or a smells.md the pair
+    is writing), else only git (e.g. a commit made in VS between test runs).
+    Returns whether the files or smells.md changed."""
+    files, smells = read_sources(project_dir), read_smells(project_dir)
+    with changed:
+        same = files == state["files"] and smells == state["smells"]
+    if same:
+        update_git(read_git(project_dir))
+        return False
+    publish([], None, files, read_readme(project_dir), read_git(project_dir), smells)
+    return True
+
+
 def watch(beep_on_results):
     """Poll result files and build logs. Whatever is on disk at startup is reported too:
     it is the project's latest state, and the app can tell its age from the times."""
@@ -589,7 +604,7 @@ def watch(beep_on_results):
                 if runs and beep_on_results:
                     beep(runs)
             elif rescan:
-                update_git(read_git(config["project"]))  # e.g. a commit made in VS between test runs
+                rescan_sources(config["project"])
         except OSError as e:
             print(f"watch error: {e}", flush=True)
         time.sleep(POLL_SECONDS)
