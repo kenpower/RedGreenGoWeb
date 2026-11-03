@@ -41,6 +41,31 @@ A refactor lab can include **Develop** steps (behaviour changes, tests first) an
 - **`README.md`** at the repo root (or one folder down). Up to 60,000 characters are read.
 - **`rgg_server.py`** at the root is optional: commit a copy, or students download it. A
   committed copy doesn't update itself; copy it again from this repo after each RGG release.
+  A CMake project can fetch the latest one instead, each time CMake configures (Visual Studio,
+  VS Code and CLion configure when they open the folder). Put this in `CMakeLists.txt` and
+  `.gitignore` `rgg_server.py`:
+
+  ```cmake
+  # RedGreenGo: fetch the latest rgg_server.py each time CMake configures (the IDE does that
+  # when it opens the folder). Offline, the copy already here is kept.
+  option(RGG_UPDATE_HELPER "Download the latest rgg_server.py when configuring" ON)
+  if(RGG_UPDATE_HELPER)
+    file(DOWNLOAD https://kenpower.github.io/RedGreenGoWeb/build/rgg_server.py
+         ${CMAKE_BINARY_DIR}/rgg_server.py.download TIMEOUT 10 STATUS rgg_status)
+    list(GET rgg_status 0 rgg_code)
+    if(rgg_code EQUAL 0)
+      execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                      ${CMAKE_BINARY_DIR}/rgg_server.py.download ${CMAKE_SOURCE_DIR}/rgg_server.py)
+    else()
+      list(GET rgg_status 1 rgg_error)
+      message(WARNING "RedGreenGo: couldn't update rgg_server.py (${rgg_error}); keeping the copy here")
+    endif()
+  endif()
+  ```
+
+  A failed download only warns; configure still succeeds. `-DRGG_UPDATE_HELPER=OFF` turns it
+  off (e.g. for an autograder). A helper that is already running keeps the old code until
+  it's restarted.
 - **Sources**: the helper reads `.cpp`, `.cc`, `.h`, `.hpp` files (at most 50, each under
   100 KB), skipping build folders (any folder with a `CMakeCache.txt`, `build`, `out`,
   `cmake-build-*`, `_deps`, `Debug`, `Release`, `x64`…), dot folders and `pch`/`stdafx` files.
@@ -251,4 +276,5 @@ The checker can't see:
 - [ ] A `solution` branch, one green commit per step; `scripts/check_exercise.mjs` says
       "No problems" and "every step done".
 - [ ] The class exists on the coach server (`rgg-coach-admin add-class`).
-- [ ] If `rgg_server.py` is committed, it's the copy from the latest RGG release.
+- [ ] If `rgg_server.py` is committed, it's the copy from the latest RGG release (or CMake
+      fetches it, and it's in `.gitignore`).

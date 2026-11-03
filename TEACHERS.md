@@ -76,6 +76,10 @@ through CTest is seen: Visual Studio's Test Explorer, VS Code's Testing view, CL
 configuration, and `ctest` on the command line. Running the test program directly (CLion's green
 ▶ beside a test, or `./build/my_tests`) isn't seen, so tell CLion users to use **All CTest**.
 
+A CMake starter project can also download the latest `rgg_server.py` each time the IDE opens
+the folder, so students skip step 2: see the `rgg_server.py` snippet in
+[AUTHORING.md](AUTHORING.md#the-repo).
+
 Not yet with CMake: the game doesn't see **build errors**, because a CMake build leaves no log to
 read. A broken build shows as "run the tests" rather than as the build error, explained. And the
 game's own keyboard hints are Visual Studio's (e.g. **Ctrl+R, A** to run the tests).
