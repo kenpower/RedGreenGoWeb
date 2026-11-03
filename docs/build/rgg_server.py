@@ -145,6 +145,8 @@ state = {
     "ide": None,  # {name, compiler}, see detect_ide(): from where the latest results came from
     "git": None,  # see read_git()
     "project": None,  # {path, name, vsName}: the folder being watched, so the app can show a wrong one
+    "cmakeBuild": None,  # the CMake build folder the latest results came from (not sent to the app)
+    "binaryTime": None,  # newest test program in that folder: older than the code means not rebuilt
 }
 VS_PROJECT_EXTENSIONS = (".slnx", ".sln", ".vcxproj")  # solutions first; find_vs_project relies on it
 
@@ -366,6 +368,35 @@ def cmake_build_root(path, project_dir):
     return None
 
 
+BINARY_SKIP_DIRS = {"_deps", "CMakeFiles", "Testing", RESULT_DIR}
+
+
+def test_binary_time(build_root):
+    """The modification time of the newest program in a CMake build folder (its top two
+    levels: Ninja puts it at the top, multi-config generators in Debug/ etc.), or None.
+    A CMake build leaves no log, so this is how the app tells a build that failed or
+    never ran (ctest alone runs the old program) from a fresh one: the program is
+    older than the code."""
+    if not build_root:
+        return None
+    newest = None
+    for depth in ("*", os.path.join("*", "*")):
+        for path in glob.glob(os.path.join(build_root, depth)):
+            parts = os.path.relpath(path, build_root).replace("\\", "/").split("/")
+            if any(p in BINARY_SKIP_DIRS or p.startswith(".") for p in parts[:-1]) or not os.path.isfile(path):
+                continue
+            name = parts[-1]
+            program = name.lower().endswith(".exe") if os.name == "nt" else (
+                "." not in name and os.access(path, os.X_OK))
+            if program:
+                try:
+                    mtime = os.path.getmtime(path)
+                except OSError:
+                    continue
+                newest = mtime if newest is None else max(newest, mtime)
+    return newest
+
+
 def detect_ide(project_dir, results_path=None):
     """Which IDE (and compiler) the pair works in, so the game can give its keys and menus:
     {name: visualstudio|vscode|clion|commandline|None, compiler: msvc|gcc|clang|None}.
@@ -522,6 +553,8 @@ def publish(runs, build, files, readme, git, smells=None):
                 state["tests"][r["name"]] = {**r, "run": state["run"], "file": file, "latest": True}
         if runs:
             state["ide"] = detect_ide(config["project"], runs[-1][2])
+            state["cmakeBuild"] = cmake_build_root(runs[-1][2], config["project"])
+        state["binaryTime"] = test_binary_time(state["cmakeBuild"])
         if build:
             state["build"] = build
         state["files"] = files
@@ -568,7 +601,8 @@ def rescan_sources(project_dir):
     Returns whether the files or smells.md changed."""
     files, smells = read_sources(project_dir), read_smells(project_dir)
     with changed:
-        same = files == state["files"] and smells == state["smells"]
+        binary = test_binary_time(state["cmakeBuild"])  # a CMake build with no test run since
+        same = files == state["files"] and smells == state["smells"] and binary == state["binaryTime"]
     if same:
         update_git(read_git(project_dir))
         return False
@@ -624,6 +658,7 @@ def snapshot():
             "ide": state["ide"],
             "git": state["git"],
             "project": state["project"],
+            "binaryTime": state["binaryTime"],
         }
 
 
