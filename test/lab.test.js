@@ -107,7 +107,7 @@ describe("labTestChanges: test edits that only follow the production code are al
     const fixed = after(TEST.replace("g.move", "g.bestMoveFor"), renamed);
     expect(labTestChanges(round2Base, fixed).changed).toHaveLength(1); // against the round's base alone
     expect(labTestChanges(round2Base, fixed, base).changed).toEqual([]);
-    expect(labStatus("test", round2Base, fixed, base).goalMet).toBe(true);
+    expect(labStatus("test", round2Base, fixed, { start: base }).goalMet).toBe(true);
     // a real change to what the test checks still counts
     const worse = after(TEST.replace("g.move('X')", "g.bestMoveFor('O')"), renamed);
     expect(labTestChanges(round2Base, worse, base).changed).toHaveLength(1);
@@ -229,12 +229,41 @@ describe("labStatus: each phase's Done gate", () => {
   });
 
   test("COMMIT: Done when HEAD moved and nothing is left uncommitted", () => {
+    const named = "Replace Magic Number with Constant: UNIT in priceFor";
     expect(labStatus("commit", base, snap({ git: { repo: true, head: "aaa", dirtySource: ["price.cpp"] } })).goalMet).toBe(false);
-    const half = labStatus("commit", base, snap({ git: { repo: true, head: "bbb", dirtySource: ["price.cpp"] } }));
+    const half = labStatus("commit", base, snap({ git: { repo: true, head: "bbb", headMessage: named, dirtySource: ["price.cpp"] } }));
     expect(oks(half)).toEqual([true, false]);
-    expect(labStatus("commit", base, snap({ git: { repo: true, head: "bbb", dirtySource: [] } })).goalMet).toBe(true);
+    expect(labStatus("commit", base, snap({ git: { repo: true, head: "bbb", headMessage: named, dirtySource: [] } })).goalMet).toBe(true);
     // no git: the commit can't be checked, so it doesn't hold them
     expect(labStatus("commit", base, snap({ git: { repo: false } })).goalMet).toBe(true);
+  });
+
+  test("COMMIT: the message names the refactoring; a Develop round's says what changed", () => {
+    const commit = (headMessage, options) =>
+      labStatus("commit", base, snap({ git: { repo: true, head: "bbb", headMessage, dirtySource: [] } }), options).lines[0];
+    const lab = { refactorings: ["Rename Variable", "Merge Loops"] };
+    expect(commit("fixed stuff", lab)).toMatchObject({ ok: false, howto: "amend", reason: expect.stringMatching(/doesn't say which refactoring/) });
+    expect(commit("fixed stuff", lab).why).toMatch(/Rename Variable, Merge Loops/);
+    expect(commit("Rename Variable: c and p in play", lab).ok).toBe(true);
+    expect(commit("2.3 merge loops in bestMoveFor", lab).ok).toBe(true); // anywhere, any case
+    expect(commit("Rename move to bestMoveFor", lab).ok).toBe(true); // the glossary's one-word name, at the start
+    expect(commit("Extract Function: indexOf", lab).ok).toBe(true); // the glossary's, though not the lab's
+    expect(commit("magic number fixed", lab).ok).toBe(false); // a smell isn't a refactoring
+    const develop = commit("simplify the default move", { ...lab, develop: true });
+    expect(develop).toMatchObject({ ok: true, text: "Commit, with a message that says what changed" });
+  });
+
+  test("DEVELOP: tests that check the old behaviour are changed, not deleted", () => {
+    const two = TESTS + "TEST(Price, Two) {\n  EXPECT_EQ(20, priceFor(2));\n}\n";
+    const devBase = snap({ tests: two, results: { "Price.Basic": "passed", "Price.Two": "passed" } });
+    const changedCode = "int priceFor(int n) { return n * 11; }";
+    const deleted = labStatus("develop", devBase, snap({ code: changedCode }));
+    const line = deleted.lines.find((l) => /don't delete them/.test(l.text));
+    expect(line).toMatchObject({ ok: false, reason: expect.stringMatching(/Deleted: Price\.Two/) });
+    expect(deleted.goalMet).toBe(false);
+    // renamed (one out, one in): fine
+    const renamed = snap({ code: changedCode, tests: two.replace("Price, Two", "Price, TwoItems").replace("20", "22") });
+    expect(labStatus("develop", devBase, renamed).lines.some((l) => /don't delete them/.test(l.text))).toBe(false);
   });
 
   test("a test hold is marked, so the game can offer a Develop step", () => {

@@ -109,8 +109,8 @@
     look = lookCode = null;
     lookRound = lab.round;
   }
-  // not in a Develop step: the lab's coach reviews refactorings, and would call a behaviour change broken
-  $: lookable = coached && !!lab && !lab.develop && !gameState.finished;
+  // a Develop step too: there the coach reviews the test changes against the step (coach/lab.md)
+  $: lookable = coached && !!lab && !gameState.finished;
   $: if (lookable && snapshot) lookAt(snapshot);
   let lookTimer;
   onDestroy(() => clearTimeout(lookTimer));
@@ -229,7 +229,10 @@
   // a Develop round is DEVELOP ---> COMMIT
   $: shownPhases = lab?.develop ? ["develop", "commit"] : LAB_PHASES;
   $: snapshot = $helper.status === "connected" ? snapshotOf($helper.data) : null;
-  $: status = snapshot && lab ? labStatus(phase, lab.base, snapshot, lab.start) : null;
+  $: status =
+    snapshot && lab
+      ? labStatus(phase, lab.base, snapshot, { start: lab.start, develop: !!lab.develop, refactorings: lab.refactorings })
+      : null;
   $: helperMissing = $helper.status !== "connected";
   $: locked = helperMissing || !status?.goalMet;
   // tickN: gameState mutates in place, so the roles swapped at a commit need it to show
@@ -266,6 +269,12 @@
     ? "Find the smells yourselves first: read the code together and write each smell, with its line number, in smells.md."
     : currentStep && (phase === "refactor" || phase === "develop") && !status?.goalMet
     ? `Step ${currentStep.id}: ${sentence(stepHeadline(currentStep))}`
+    : status?.goalMet && partly
+    ? phase === "commit"
+      ? `The coach says step ${currentStep.id} has more to do: choose "Committed, but step ${currentStep.id} isn't finished yet".`
+      : `Finish step ${currentStep.id} first: the coach says it isn't done yet (see below).`
+    : status?.goalMet && phase === "refactor" && outcomeOf(snapshot) === "red"
+    ? "The last test run is red: fix the change or undo it, then click Done."
     : status?.goalMet
     ? "Everything is ticked: click Done below."
     : card.driver;
@@ -499,7 +508,7 @@
       </ul>
     {/if}
     {#if snapshot && phase !== "commit" && !smellsFirst}
-      <PredictBox {gameState} {snapshot} navigator={navigators[0]} />
+      <PredictBox {gameState} {snapshot} navigator={navigators[0]} step={(tickN, gameState.stepNumber)} />
       <MessGuide mode="refactor" {phase} uncommitted={uncommittedFiles(snapshot)} failing={outcomeOf(snapshot) === "red"} />
     {/if}
     {#if !smellsFirst}

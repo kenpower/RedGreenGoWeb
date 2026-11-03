@@ -49,7 +49,7 @@ describe("gameState: the navigator's predictions", () => {
     g.start();
     g.predict("red", 10);
     expect(g.settlePrediction(10, "green")).toBeNull(); // the same run as the guess: not yet
-    expect(g.settlePrediction(30, "red")).toEqual({ guess: "red", outcome: "red", right: true });
+    expect(g.settlePrediction(30, "red")).toMatchObject({ guess: "red", outcome: "red", right: true, run: 30 });
     g.predict("green", 30);
     expect(g.settlePrediction(40, "red").right).toBe(false);
     expect(g.progress()).toMatchObject({ predictions_right: 1, predictions_total: 2 });
@@ -70,5 +70,22 @@ describe("gameState: the navigator's predictions", () => {
     expect(g.prediction).toBeNull();
     expect(g.predictions).toEqual({ right: 1, total: 1 });
     expect(g.lastPrediction.outcome).toBe("green");
+  });
+
+  test("the guesser's name is kept with the guess and its result", () => {
+    const g = new GameState();
+    g.start();
+    g.predict("green", 10, { code: "k1", by: "Sam" });
+    expect(g.prediction.by).toBe("Sam");
+    expect(g.settlePrediction(20, "green", "k1")).toMatchObject({ right: true, by: "Sam", step: g.stepNumber });
+  });
+
+  test("a run of other code than the guess was about counts for nothing (a CMake build that failed leaves no run)", () => {
+    const g = new GameState();
+    g.start();
+    g.predict("red", 10, { code: "broken", by: "Sam" });
+    expect(g.settlePrediction(20, "green", "fixed")).toBeNull();
+    expect(g.prediction).toBeNull();
+    expect(g.predictions).toEqual({ right: 0, total: 0 });
   });
 });

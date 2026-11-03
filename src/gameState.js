@@ -166,7 +166,7 @@ export class GameState {
       this.mode = "tdd"; // "tdd" | "refactor" (the refactor lab, chosen by the README: lab.js)
       this.lab = null; // the lab's state, see startLab
       this.prediction = null; // the navigator's guess for the next run: {mark, guess} (guess null: skipped)
-      this.lastPrediction = null; // the last one settled: {guess, outcome, right}
+      this.lastPrediction = null; // the last one settled: {guess, outcome, right, by, run, step}
       this.predictions = { right: 0, total: 0 };
       this.reflection = null; // the pair's answer to the closing question: {question, answer}
     }
@@ -684,25 +684,30 @@ export class GameState {
   }
 
   // The navigator's prediction for the next run (predict.js): "green", "red",
-  // or null to skip this run. `mark` is the latest run (steps.runMark) as they guess.
-  predict(guess, mark) {
-    this.prediction = { mark, guess };
+  // or null to skip this run. `mark` is the latest run (steps.runMark) as they
+  // guess; `code` (steps.codeKey) the code the guess is about; `by` who guessed.
+  predict(guess, mark, { code = null, by = "" } = {}) {
+    this.prediction = { mark, guess, code, by: String(by || "").slice(0, 40) };
     this.#save();
   }
 
   // A fresh run newer than the guess settles it: counted for the teacher and
   // kept to show. Returns the result, or null (nothing to settle, or skipped).
-  settlePrediction(mark, outcome) {
+  // A run of other code than the guess was about doesn't count either way: a
+  // CMake build that failed leaves no run, so the next run is of the fixed code,
+  // and "red" for the broken code would be scored wrong (battle test 2026-11-03).
+  settlePrediction(mark, outcome, code = null) {
     const p = this.prediction;
     if (!p || !outcome || mark <= p.mark) return null;
     this.prediction = null;
-    if (!p.guess) {
+    if (!p.guess || (p.code && code && code !== p.code)) {
       this.#save();
       return null;
     }
     const right = p.guess === outcome;
     this.predictions = { right: this.predictions.right + (right ? 1 : 0), total: this.predictions.total + 1 };
-    this.lastPrediction = { guess: p.guess, outcome, right };
+    // `run` and `step`: shown only while it's about the latest run of this step
+    this.lastPrediction = { guess: p.guess, outcome, right, by: p.by || "", run: mark, step: this.stepNumber };
     this.addEvent("prediction", `${p.guess} -> ${outcome}: ${right ? "right" : "wrong"}`);
     return this.lastPrediction;
   }

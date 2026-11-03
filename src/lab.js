@@ -10,6 +10,7 @@ import {
   oldTestProgram,
 } from "./rules.js";
 import { codeKey, runMark, NEXT_STEPS_GAP } from "./content/steps.js";
+import { namesRefactoring } from "./content/glossary.js";
 
 // When the lab's coach should look again: {due, retryIn}. The TDD game waits
 // for a run (steps.js nextStepsDue); the lab looks at each saved change too,
@@ -200,7 +201,10 @@ const oldProgramReason = (now) =>
     ? "No new results yet. If the build failed, fix its first error (or undo the change)"
     : "That run tested the old program: build, then run the tests again. If the build fails, fix its first error";
 
-export function labStatus(phase, base, now, start = null) {
+// Options: `start` (the code as the lab began, labTestChanges), `develop` (a
+// Develop round: its commit says what changed rather than naming a
+// refactoring) and `refactorings` (the lab's list, for the commit message).
+export function labStatus(phase, base, now, { start = null, develop = false, refactorings = [] } = {}) {
   if (!now) return null;
   const lines = [];
   const testsLine = { text: "Keep the tests the same (renames are fine)", ok: true };
@@ -250,6 +254,18 @@ export function labStatus(phase, base, now, start = null) {
       ok: changed || null,
       ...(changed ? {} : { why: WHY_UNCHANGED.replace("that aren't tests", "and the tests") }),
     });
+    // a test that checks the old behaviour is changed, not deleted: fewer tests
+    // than at the last commit means some went (a rename is one out, one in)
+    const { added, removed } = testChanges(base, now);
+    if (removed.length > added.length)
+      lines.push({
+        text: "Keep the tests: change the ones that check the old behaviour, don't delete them",
+        ok: false,
+        reason: `Deleted: ${removed.slice(0, 3).join(", ")}${removed.length > 3 ? "…" : ""}. Put it back and change what it checks`,
+        why:
+          `Compared with the last commit, ${removed.length} test${removed.length === 1 ? " is" : "s are"} gone and ` +
+          `${added.length} new. A test for behaviour the step changes should check the new behaviour, not disappear.`,
+      });
     const run = { text: "Run all the tests (Ctrl+R, A): every test passes again", ok: true, howto: "run_tests" };
     if (buildFailed(now) || staleResults(now) || !currentTests(now).length || failingTests(now).length || !changed)
       run.why = changed ? whyRun(now) : "Nothing has changed since the last commit yet, so a run says nothing about this step.";
@@ -271,11 +287,22 @@ export function labStatus(phase, base, now, start = null) {
     if (!git?.repo) lines.push({ text: "Commit if you can (no git repository, so it can't be checked)", ok: true });
     else {
       const moved = !!git.head && git.head !== base?.git?.head;
-      const commit = { text: "Commit, with a message that names the refactoring", ok: moved || null, howto: "commit" };
+      const text = develop ? "Commit, with a message that says what changed" : "Commit, with a message that names the refactoring";
+      const commit = { text, ok: moved || null, howto: "commit" };
       if (!moved)
         commit.why =
           `git's newest commit is still the one this round started from (${String(base?.git?.head || "none").slice(0, 8)}). ` +
           "Committed in another folder or repository, or not pushed the commit button yet? The helper checks git every 5 seconds.";
+      // "fixed stuff" passed before (battle test 2026-11-03): the message has to name the refactoring
+      else if (!develop && !namesRefactoring(git.headMessage, refactorings))
+        Object.assign(commit, {
+          ok: false,
+          reason: `"${String(git.headMessage || "").slice(0, 60)}" doesn't say which refactoring: reword the commit`,
+          howto: "amend",
+          why:
+            "The message should start with the refactoring's name, then where, e.g. \"Rename Variable: c and p in play\". " +
+            `This lab's refactorings: ${refactorings.join(", ") || "see the start page"}.`,
+        });
       lines.push(commit);
       const dirty = uncommittedFiles(now);
       const left = { text: "Leave nothing uncommitted", ok: !dirty.length || (moved ? false : null) };

@@ -19,6 +19,11 @@ export const HOWTO = {
     title: "Commit",
     steps: "View > Git Changes (Ctrl+0, Ctrl+G). Type a message in the box, then click Commit All.",
   },
+  amend: {
+    title: "Reword the last commit",
+    steps:
+      "Open Git Changes (Ctrl+0, Ctrl+G), tick Amend above the message box, type the new message and click Amend.",
+  },
   undo: {
     title: "Undo changes since the last commit",
     steps:
@@ -66,6 +71,7 @@ const OTHER_IDES = {
     run_tests: "Open the Testing view (the flask icon in the left bar) and click Run Tests. The results appear there.",
     build: "Click Build in the status bar, or press F7. Compile errors appear in the Problems panel (Ctrl+Shift+M).",
     commit: "Open Source Control (Ctrl+Shift+G). Type a message in the box, then click Commit (yes to staging all changes).",
+    amend: "In Source Control (Ctrl+Shift+G), open the ... menu > Commit > Commit (Amend), then type the new message.",
     undo: "Open Source Control (Ctrl+Shift+G), hover over the changed file and click Discard Changes. To undo just your last edit, press Ctrl+Z in the editor.",
     rename: "Click on the name, press F2, type the new name and press Enter.",
     extract: "Select the lines, press Ctrl+. (Quick Fix) and choose Extract to function, or right-click > Refactor.",
@@ -75,6 +81,7 @@ const OTHER_IDES = {
     run_tests: "Choose All CTest in the run configuration list (top right) and click Run (Shift+F10). The results appear in the Run window.",
     build: "Build > Build Project (Ctrl+F9). Compile errors appear in the Build window.",
     commit: "Open the Commit tool window (Alt+0). Tick the changed files, type a message, then click Commit.",
+    amend: "Open the Commit tool window (Alt+0), tick Amend, type the new message and click Commit.",
     undo: "Open the Commit tool window (Alt+0), right-click the changed file and choose Rollback. To undo just your last edit, press Ctrl+Z in the editor.",
     rename: "Click on the name, press Shift+F6, type the new name and press Enter.",
     extract: "Select the lines and press Ctrl+Alt+M (Refactor > Extract Method).",
@@ -85,6 +92,7 @@ const OTHER_IDES = {
     run_tests: "cmake --build build, then ctest --test-dir build --output-on-failure.",
     build: "cmake --build build. Compile errors appear in the terminal.",
     commit: 'git add -A, then git commit -m "your message".',
+    amend: 'git commit --amend -m "Rename Variable: c and p in play" (your refactoring and where).',
     undo: "git restore . throws away every change since the last commit; git restore <file> just that file.",
     rename: "Use your editor's Rename command, so every use changes, not find-and-replace.",
     extract: "Use your editor's Extract Function command, or cut the lines into a new function by hand.",

@@ -762,7 +762,7 @@
       >
         <div slot="tools">
           {#if snapshot && CHECKED_PHASES.includes(step.stateName)}
-            <PredictBox {gameState} {snapshot} navigator={step.navigators[0]} />
+            <PredictBox {gameState} {snapshot} navigator={step.navigators[0]} step={gameState.stepNumber} />
             <MessGuide
               mode="tdd"
               phase={step.stateName}

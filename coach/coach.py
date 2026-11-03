@@ -294,8 +294,8 @@ def _validate_lab(step):
         raise BadStep('lab must be "refactor"')
     if not _short_strings(step.get("refactorings", []), MAX_REFACTORINGS, 60) or not step.get("refactorings"):
         raise BadStep(f"refactorings must be 1 to {MAX_REFACTORINGS} names of at most 60 characters")
-    if step.get("lab_phase", "refactor") not in ("refactor", "test", "commit"):
-        raise BadStep("lab_phase must be refactor, test or commit")
+    if step.get("lab_phase", "refactor") not in ("refactor", "test", "commit", "develop"):
+        raise BadStep("lab_phase must be refactor, test, commit or develop")
     board = step.get("board", [])
     if not isinstance(board, list) or len(board) > MAX_SMELLS or not all(
             isinstance(s, dict) and set(s) <= {"id", "where", "what", "refactoring", "resolved", "from_readme"}

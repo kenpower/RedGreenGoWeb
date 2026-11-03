@@ -138,7 +138,9 @@ if (!hasRef(solution)) {
     // refactor -> test -> commit, or develop -> commit: each phase's Done gate, as the card checks it
     for (;;) {
       const phase = g.lab.phase;
-      const status = labStatus(phase, g.lab.base, snap, g.lab.start);
+      const status = labStatus(phase, g.lab.base, snap, {
+        start: g.lab.start, develop: !!g.lab.develop, refactorings: g.lab.refactorings,
+      });
       gates.push(status.goalMet ? `${phase} ok` : `${phase} HELD`);
       if (!status.goalMet) {
         const held = status.lines.filter((l) => l.ok !== true).map((l) => l.reason || l.text);

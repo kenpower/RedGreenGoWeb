@@ -1,0 +1,84 @@
+description = "LAB LOOK, Develop step 3.4: the over-specified test was 'fixed' by swapping its expected value (1 to 6) instead of the looser check the step asks for; the note names the test (battle test 2026-11-03)"
+lab = "refactor"
+phase = "refactor"
+lab_phase = "develop"
+cycle = 9
+refactorings = ["Rename Function", "Rename Variable", "Replace Magic Number with Constant", "Extract Function", "Merge Loops"]
+problem = '''The lab's worksheet steps, in order:
+3.3 [Refactor] Fuse.
+3.4 [Develop] Change of hat. Simplify the default move.
+3.5 [Refactor] One variable, one exit.
+
+The pair is on step 3.4 [Develop]: Change of hat. Simplify the default move.
+The rules only say "if you can't win, play any legal move". We don't care which one. So the defaultMove == NoMove guard is doing work nobody asked for. Delete it (keep canPlayIn(column)).
+This changes behaviour: defaultMove is now the last playable column instead of the first. Run the tests.
+Two tests are expected to go red here: ChooseMoveTest.NoWinPicksFirstOpenColumn and ChooseMoveTest.SkipsFullColumn. Don't undo.
+The code still obeys the rules, so why are the tests failing? The tests check for one particular legal move when the rules allow any legal move. That's an over-specified test.
+Fix the tests, not the code. Rename NoWinPicksFirstOpenColumn to NoWinPicksAValidColumn. Store the move in a variable, then check it's a real column:
+int move = game.bestMoveFor('X');
+EXPECT_GE(move, 0);
+EXPECT_LT(move, 7);
+In SkipsFullColumn, do the same, and also check the move is not column 0 (EXPECT_NE(move, 0)).
+Green again? Commit.'''
+tests_before = '''
+TEST(ChooseMoveTest, NoWinPicksFirstOpenColumn) {
+    ConnectFour game(emptyBoard());
+    EXPECT_EQ(game.bestMoveFor('X'), 0);
+}
+TEST(ChooseMoveTest, SkipsFullColumn) {
+    ConnectFour game(rows("X------", "O------", "X------", "O------", "X------", "O------"));
+    EXPECT_EQ(game.bestMoveFor('X'), 1);
+}
+'''
+code_before = '''
+int ConnectFour::bestMoveFor(char player) const {
+    int winningMove = NoMove;
+    int defaultMove = NoMove;
+    for (int column = 0; column < 7; column++) {
+        if (canPlayIn(column) && winningMove == NoMove) {
+            ConnectFour afterMove = play(column, player);
+            if (afterMove.winner() == player)
+                winningMove = column;
+        }
+        if (canPlayIn(column) && defaultMove == NoMove)
+            defaultMove = column;
+    }
+    if (winningMove != NoMove)
+        return winningMove;
+    return defaultMove;
+}
+'''
+tests = '''
+TEST(ChooseMoveTest, NoWinPicksFirstOpenColumn) {
+    ConnectFour game(emptyBoard());
+    EXPECT_EQ(game.bestMoveFor('X'), 6);
+}
+TEST(ChooseMoveTest, SkipsFullColumn) {
+    ConnectFour game(rows("X------", "O------", "X------", "O------", "X------", "O------"));
+    EXPECT_EQ(game.bestMoveFor('X'), 6);
+}
+'''
+code = '''
+int ConnectFour::bestMoveFor(char player) const {
+    int winningMove = NoMove;
+    int defaultMove = NoMove;
+    for (int column = 0; column < 7; column++) {
+        if (canPlayIn(column) && winningMove == NoMove) {
+            ConnectFour afterMove = play(column, player);
+            if (afterMove.winner() == player)
+                winningMove = column;
+        }
+        if (canPlayIn(column))
+            defaultMove = column;
+    }
+    if (winningMove != NoMove)
+        return winningMove;
+    return defaultMove;
+}
+'''
+test_result = "All 2 tests passed"
+
+[expect]
+decision = ["advance"]
+note_mentions = ["NoWinPicksFirstOpenColumn", "SkipsFullColumn", "over-specified", "any valid", "valid column", "real column", "range"]
+step_done = ["partly", "no"]

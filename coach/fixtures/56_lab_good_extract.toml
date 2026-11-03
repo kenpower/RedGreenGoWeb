@@ -46,3 +46,4 @@ review_effect = ["better"]
 review_kept = true
 review_mentions = ["Extract"]
 resolved_include = ["tax-calc"]
+commit_mentions = ["Extract"]  # suggested in the Test phase already, so it's there before the commit

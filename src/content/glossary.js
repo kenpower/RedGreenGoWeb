@@ -154,6 +154,20 @@ export function canonicalRefactoring(name, preferred = []) {
   );
 }
 
+// Whether a commit message names a refactoring anywhere in its first line, from
+// `preferred` (the lab's list) or the glossary's refactorings (not its smells):
+// "Extract Function: indexOf", "2.4 extract function indexOf", "Rename move to
+// bestMoveFor" (a one-word name only at the start). "fixed stuff" doesn't.
+const REFACTORING_NAMES = GLOSSARY.slice(0, GLOSSARY.findIndex((e) => e.names.includes("Poor name"))).flatMap((e) => e.names);
+export function namesRefactoring(message, preferred = []) {
+  const words = ` ${key(String(message || "").split("\n")[0].replace(/:/g, " "))} `;
+  return [...preferred, ...REFACTORING_NAMES].some((n) => {
+    const k = key(n);
+    if (!k) return false;
+    return k.includes(" ") ? words.includes(` ${k} `) : words.startsWith(` ${k} `);
+  });
+}
+
 // The refactoring a commit message names first ("Extract Function: indexOf",
 // "Rename Variable t to afterMove"), from `preferred` or the glossary; "" if none.
 // A one-word alias ("Rename move to bestMoveFor") only with `loose`: it says

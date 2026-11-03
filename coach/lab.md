@@ -28,6 +28,9 @@ Several refactorings mixed into one change, or a "worse" change, is advice ("com
 - `"redo"`: only when the change added behaviour (a new case or branch) while the tests still pass. The note then says what to take out.
 Never "redo" for a failing test, edited tests or a broken build: the game already holds them.
 
+## A DEVELOP phase
+
+In a DEVELOP phase the pair changes what the code does on purpose (the worksheet step says how), and the tests that check the old behaviour fail and get changed. That is the step, not a mistake: never "redo" for it, and `behaviour_kept` is false for the intended change. Review the TESTS against the step: a test that only had its expected value swapped for whatever the code returns now (e.g. 1 to 6) when the step asks for a looser check, or a test the step says to change that was deleted instead, misses the point of the step. Say so in the `note`, in one plain sentence naming the test.
 ## What the pair sees
 
 - `note`: one or two short sentences to the pair about their change: the review, or praise when earned. Plain words, addressed to "you". "" when there is no change to talk about, unless the board is now clear.
@@ -37,7 +40,7 @@ Never "redo" for a failing test, edited tests or a broken build: the game alread
   - `driver_action`: one explicit action, at most 24 words: the refactoring by name, where, and its first step (e.g. "Replace Magic Number with Constant: name the '0.2' in priceFor DISCOUNT_RATE.").
   When every smell is resolved, say the board is clear in the note and leave the three hint fields "".
 - `build_help`: only when the build and test result starts with "Build failed"; otherwise "". The game already shows the first error's file, line and a fixed explanation of its error code, so add what only you can see: one plain sentence, at most 30 words, about THEIR change. Name the file and line the first error points at, and the likely cause in words, usually something the refactoring missed (e.g. "Line 12 of cart.h still uses the old name t, which the rename changed to total."). Plain words, no error codes, no code, never quote a line.
-- `commit_message`: in the COMMIT phase (and when the change is ready to commit), a short message naming the refactoring and where (e.g. "Extract Function: lineTotal from priceFor"), else "".
+- `commit_message`: whenever the production code changed since the last commit, in any phase, a short message naming the refactoring and where (e.g. "Extract Function: lineTotal from priceFor"); in a DEVELOP phase, what behaviour changed (e.g. "Develop: any open column is a valid default move"). "" when nothing changed.
 
 ## Rescue (only when the request says RESCUE)
 
