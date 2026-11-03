@@ -58,6 +58,13 @@
   // "Smells first": with a smells.md, the board (and the hints and next smell
   // that come from it) wait until the pair has listed smells of their own
   $: boardHidden = !!lab?.ownSmells && !lab.ownSmells.shown;
+  // where smells.md is: the watched project folder, then the file's path in it (the helper's, with / separators)
+  const joinPath = (dir, rel) => {
+    const sep = dir.includes("\\") ? "\\" : "/";
+    return dir.replace(/[\\/]+$/, "") + sep + rel.replace(/\//g, sep);
+  };
+  $: smellsDir = $helper.data?.project?.path || "";
+  $: smellsFull = smellsDir ? joinPath(smellsDir, $helper.data?.smells?.path || "smells.md") : "smells.md";
   let ownSmellsNote = "";
   let checkingOwn = false;
   const showBoard = async () => {
@@ -553,7 +560,7 @@
         <p>
           <strong>Smells first.</strong> The coach has a smell board ready, but find the smells yourselves
           first: read the code together and write each smell, with its line number, in
-          <strong>{$helper.data?.smells?.path || "smells.md"}</strong>. Save it, then compare your list with the
+          <strong>{smellsFull}</strong>{#if !$helper.data?.smells} (not found yet){/if}. Save it, then compare your list with the
           coach's.
         </p>
         {#if smellsSection?.intro}
