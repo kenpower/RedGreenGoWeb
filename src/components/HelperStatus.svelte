@@ -3,7 +3,7 @@
     helper, ide, enableHelper, disableHelper, BLOCKED_HELP, OFFLINE_HELP, HELPER_PAGE, onGithubPages, helperDownloadUrl,
   } from "../helper.js";
   import { tailor } from "../ide.js";
-  import { testNames } from "../rules.js";
+  import { testNames, staleResults } from "../rules.js";
 
   let open = false;
   let helperEl;
@@ -36,6 +36,9 @@
   $: failed = tests.filter((t) => t.status === "failed").length;
   $: passed = tests.filter((t) => t.status === "passed").length;
   $: buildFailed = data?.build?.status === "failed";
+  // results that don't describe the code now (saved since, or an old CMake
+  // program): the counts stay, marked old, so they don't read as a pass
+  $: old = $helper.status === "connected" && !buildFailed && tests.length > 0 && staleResults(data);
   // {repo: true, branch, headMessage, dirtySource, ...} | {repo: false} | null
   $: git = data?.git;
   // first line, trimmed; the full text is in the tooltip
@@ -63,7 +66,7 @@
       : buildFailed
       ? "Build failed — click for details"
       : tests.length
-      ? `${passed} passed, ${failed} failed — click for details`
+      ? `${passed} passed, ${failed} failed${old ? " (before your last change)" : ""} — click for details`
       : "No test results yet — click for details";
 
   const HELPER_URL = helperDownloadUrl();
@@ -103,6 +106,7 @@
     {:else}
       <span class="pass">All {passed} passing ✓</span>
     {/if}
+    {#if !label && old}<span class="sep">·</span><span class="old">old: run the tests</span>{/if}
   </button>
 
   {#if open}
@@ -271,6 +275,10 @@
 
   .badge .none {
     color: var(--text-muted);
+  }
+
+  .badge .old {
+    color: var(--amber);
   }
 
   .panel {

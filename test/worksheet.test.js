@@ -1,4 +1,34 @@
-import { parseWorksheet, worksheetProblem, renderMarkdown, stepHeadline, plainText } from "../src/worksheet.js";
+import { parseWorksheet, worksheetProblem, renderMarkdown, stepHeadline, plainText, stepWarnings } from "../src/worksheet.js";
+
+describe("stepWarnings: a step's warnings, shown again at its top", () => {
+  test("⚠️ notes, Careful! and 'Leave … for now' paragraphs; not code, not ordinary text", () => {
+    const body = [
+      "Simplify to a single result variable:",
+      "",
+      "```cpp",
+      "// careful: not a warning, it's code",
+      "",
+      "int result = NoMove;",
+      "```",
+      "",
+      "> ⚠️ **Start `result` at `NoMove`**, not at `0`.",
+      "> On a full board no column is playable.",
+      "",
+      "> **Careful!** Is that `4` the same thing as `WinLength`?",
+      "",
+      "Leave the `r` and `c` in `winner()` for now.",
+      "",
+      "Run the tests: green? Commit.",
+    ].join("\n");
+    expect(stepWarnings(body)).toEqual([
+      "> ⚠️ **Start `result` at `NoMove`**, not at `0`.\n> On a full board no column is playable.",
+      "> **Careful!** Is that `4` the same thing as `WinLength`?",
+      "Leave the `r` and `c` in `winner()` for now.",
+    ]);
+    expect(stepWarnings("Rename it.\n\nRun the tests.")).toEqual([]);
+    expect(stepWarnings(undefined)).toEqual([]);
+  });
+});
 
 // A small worksheet in both step formats, like the Connect Four lab's README.
 const README = `Class code: X

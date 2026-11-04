@@ -98,6 +98,27 @@ export const plainText = (md) =>
 // The step's one-line headline: the heading title, or a checklist item's text.
 export const stepHeadline = (step) => plainText(step?.title || "");
 
+// A step's warnings ("⚠️ Start result at NoMove…", "Careful! …", "Leave the r
+// and c in winner() for now."): its paragraphs that start with one, outside
+// code blocks. Worksheets put them after the code to type, so a pair skimming
+// top-down has typed the mistake before reading them (play test 2026-11-03);
+// the game shows them again at the top of the step.
+const WARNING = /^\s*(?:>\s*)?(?:⚠|\**careful\b|\**leave\b.*\bfor now\b)/i;
+export function stepWarnings(body) {
+  const blocks = [];
+  let block = [];
+  let fence = false;
+  for (const line of String(body || "").split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) fence = !fence;
+    if (!fence && !line.trim()) {
+      if (block.length) blocks.push(block);
+      block = [];
+    } else block.push(line);
+  }
+  if (block.length) blocks.push(block);
+  return blocks.filter((b) => WARNING.test(b[0])).map((b) => b.join("\n"));
+}
+
 // What the coach is told about the lab: every step's headline, and the current
 // step in full. Much shorter than the README (the coach's problem text is at
 // most 8000 characters).

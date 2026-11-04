@@ -1,0 +1,51 @@
+description = "LAB LOOK, rename not carried into the tests: move() renamed to bestMoveFor in the class, test.cpp still calls move (the results are from the old program); say the build will fail, step not done (play test 2026-11-03)"
+lab = "refactor"
+phase = "refactor"
+lab_phase = "refactor"
+cycle = 1
+refactorings = ["Rename Function", "Rename Variable", "Replace Magic Number with Constant", "Extract Function"]
+problem = '''The lab's worksheet steps, in order:
+2.1 [Refactor] Rename move() to bestMoveFor()
+2.2 [Refactor] Rename the one-letter variables in play() and bestMoveFor()
+
+The pair is on step 2.1 [Refactor]: Rename move() to bestMoveFor()
+move() doesn't say what it does. Rename it to bestMoveFor().'''
+rule_findings = ["Test results are out of date; run the tests again."]
+tests_before = '''
+TEST(ChooseMoveTest, TakesWinningColumn) { ConnectFour game(nearWin()); EXPECT_EQ(game.move('X'), 4); }
+TEST(ChooseMoveTest, FullBoardHasNoMove) { ConnectFour game(fullBoard()); EXPECT_EQ(game.move('X'), -1); }
+'''
+code_before = '''
+class ConnectFour {
+public:
+    int move(char p) const;
+};
+int ConnectFour::move(char p) const {
+    for (int i = 0; i < NUM_COLS; i++) {
+        if (board[i] == '-') return i;
+    }
+    return -1;
+}
+'''
+tests = '''
+TEST(ChooseMoveTest, TakesWinningColumn) { ConnectFour game(nearWin()); EXPECT_EQ(game.move('X'), 4); }
+TEST(ChooseMoveTest, FullBoardHasNoMove) { ConnectFour game(fullBoard()); EXPECT_EQ(game.move('X'), -1); }
+'''
+code = '''
+class ConnectFour {
+public:
+    int bestMoveFor(char p) const;
+};
+int ConnectFour::bestMoveFor(char p) const {
+    for (int i = 0; i < NUM_COLS; i++) {
+        if (board[i] == '-') return i;
+    }
+    return -1;
+}
+'''
+test_result = "All 2 tests passed"
+
+[expect]
+decision = ["advance"]
+note_mentions = ["test", "build"]
+step_done = ["partly", "no"]

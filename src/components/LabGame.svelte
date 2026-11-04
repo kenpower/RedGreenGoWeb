@@ -13,7 +13,7 @@
     labStatus, productionChanged, codeChanged, ownSmellsListed, labLookDue, MIN_OWN_SMELLS, LAB_CARDS, LAB_PHASES,
   } from "../lab.js";
   import { runMark, codeKey } from "../content/steps.js";
-  import { parseWorksheet, worksheetProblem, renderMarkdown, stepHeadline } from "../worksheet.js";
+  import { parseWorksheet, worksheetProblem, renderMarkdown, stepHeadline, stepWarnings } from "../worksheet.js";
   import { hintRung, TOP_RUNG } from "../ladder.js";
   import WaitingDots from "./WaitingDots.svelte";
   import PredictBox from "./PredictBox.svelte";
@@ -205,6 +205,7 @@
   $: stepIndex = steps.findIndex((s) => s.id === lab?.step);
   $: currentStep = worksheet.steps.find((s) => s.id === lab?.step) || steps[stepIndex] || null;
   $: worksheetDone = steps.length > 0 && lab?.step === null;
+  $: warnings = stepWarnings(currentStep?.body);
   $: smellsSection = worksheet.sections.find((s) => s.number === 1);
   // the coach gets the step list and the current step, not the whole README
   $: labProblem = steps.length
@@ -449,6 +450,12 @@
 
     {#if currentStep && !boardHidden}
       <Fold title="Step {currentStep.id} in full" note="from the README" open={true}>
+        {#if warnings.length}
+          <div class="readFirst">
+            <p class="marker">Read this first</p>
+            {#each warnings as warning}<div class="stepBody">{@html renderMarkdown(warning)}</div>{/each}
+          </div>
+        {/if}
         <div class="stepBody">
           {#if currentStep.body}{@html renderMarkdown(currentStep.body)}{:else}<p>{@html renderMarkdown(currentStep.title)}</p>{/if}
         </div>
@@ -696,7 +703,11 @@
     {/if}
 
     {#if (review && !broke) || (look?.note && !broke)}
-      <Fold title="Coach on your change" note={review && !broke ? EFFECT_TEXT[review.effect] : ""}>
+      <!-- open: folded, the careless pair never read it (play test 2026-11-03) -->
+      <Fold title="Coach on your change" note={review && !broke ? EFFECT_TEXT[review.effect] : ""} open={true}>
+        {#if lookCode && snapshot && lookCode !== codeKey(snapshot)}
+          <p class="muted">About your code before your last change: the coach looks again within a minute.</p>
+        {/if}
         {#if review}
           <p class="review effect-{review.effect}">
             <Glossary name={review.refactoring} />{review.refactoring ? ", " : ""}{EFFECT_TEXT[review.effect]}.
@@ -837,6 +848,17 @@
 
   .ownSmells p {
     margin: 0.3em 0;
+  }
+
+  .readFirst {
+    margin: 0.3em 0 0.6em 0;
+    padding: 0.2em 0.8em;
+    border-left: 3px solid var(--amber);
+  }
+
+  .readFirst .marker {
+    margin: 0.2em 0;
+    color: var(--amber);
   }
 
   .partlyNote {
