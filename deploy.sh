@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Deploys the coach proxy (coach/) to compucore3.
-# The web app itself is still published to GitHub Pages with `npm run publish`.
+# The web app itself is still published to GitHub Pages with `npm run deploy:web`.
 #
 # Usage: ./deploy.sh [--yes] [--pwd] [--copy-key]
 #   --yes       don't ask "Deploy?"

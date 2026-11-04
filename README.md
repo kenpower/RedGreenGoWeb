@@ -59,12 +59,12 @@ python coach/run_fixtures.py                                     # the coach's a
 
 ## Release
 
-`npm run release` (`./release.sh`; add `--pwd` to type the server's sudo password) ships
+`npm run deploy:all` (`./release.sh`; add `--pwd` to type the server's sudo password) ships
 everything from a clean `main`. It runs the tests, pushes, deploys the coach
 ([deploy.sh](deploy.sh)), then builds the web app and publishes it to GitHub Pages (`docs/`).
 The coach goes first, so a new web app never talks to an old coach.
 
-Just the web app: `npm run publish`. Just the coach: `./deploy.sh`.
+Just the web app (GitHub Pages): `npm run deploy:web`. Just the coach (compucore3): `npm run deploy:coach` (`./deploy.sh`).
 
 A new `rgg_server.py` reaches students only when they download it again, or when a CMake
 exercise fetches it on configure (see [AUTHORING.md](AUTHORING.md)). A running helper keeps

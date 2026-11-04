@@ -6,9 +6,10 @@
     "build": "rollup -c",
     "dev": "rollup -c -w",
     "start": "sirv public --no-clear --cors",
-    "publish": "npm run build && cp -a public/. docs && git add docs && git commit -m \"Deploying to Github Pages\" && git push",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watchAll",
-    "release": "./release.sh"
+    "deploy:web": "npm run build && cp -a public/. docs && git add docs && git commit -m \"Deploying to Github Pages\" && git push",
+    "deploy:coach": "./deploy.sh",
+    "deploy:all": "./release.sh",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watchAll"
   },
   "type": "module",
   "devDependencies": {

@@ -2,7 +2,7 @@
 
 # Ships everything in one go: tests, push, the coach server, then the web app.
 #
-# Usage: ./release.sh [--pwd]      (or: npm run release)
+# Usage: ./release.sh [--pwd]      (or: npm run deploy:all)
 #   --pwd   ask for the sudo password here (passed on to deploy.sh)
 #
 #   1. checks the working tree is committed (deploy.sh ships HEAD only)
