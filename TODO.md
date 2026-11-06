@@ -28,3 +28,5 @@ endif()
 - [ ] investigate asking for a change, then asking to undo that change -maybe coach should have context of previous suggestion
 
 - [ ] have a "problem" button, student can press when app is wierd, save a screen shot/appstate/student code/ and asks student for a comment why they pressed it
+- [ ] a clear indicator of progress (maybe % done, or visual trail of some kind)
+- [ ] The only problem I had was with the commit comments not registering with the app and it being very annoying about how much it wanted us to change the comments.
