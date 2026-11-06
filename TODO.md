@@ -24,3 +24,7 @@ endif()
 - [ ] Strike through disabled buttons in coach
  
 - [ ] if a new rgg_server.py is downloaded, do not commit it, do not have it in unstaged , student should not be able to commit by accident
+
+- [ ] investigate asking for a change, then asking to undo that change -maybe coach should have context of previous suggestion
+
+- [ ] have a "problem" button, student can press when app is wierd, save a screen shot/appstate/student code/ and asks student for a comment why they pressed it
